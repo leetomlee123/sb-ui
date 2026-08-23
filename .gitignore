@@ -48,3 +48,5 @@ app.*.map.json
 .widget_preview/
 cache.db
 *.db
+C:\*
+*.bat
