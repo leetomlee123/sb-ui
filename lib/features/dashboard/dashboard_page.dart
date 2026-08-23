@@ -32,76 +32,78 @@ class DashboardPage extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Row 1: Hero Bento Grid (Power Hub + Mode Controller)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Hero Tile: Core Power Station
-              Expanded(
-                flex: 5,
-                child: DoubleBezelCard(
-                  padding: const EdgeInsets.all(24),
-                  isSelected: isRunning,
-                  child: Row(
-                    children: [
-                      // Concentric Tactile Switch Button
-                      GestureDetector(
-                        onTap: () {
-                          ref.read(coreProvider.notifier).toggleCore();
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 400),
-                          curve: Curves.easeOutCubic,
-                          width: 86,
-                          height: 86,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isRunning
-                                ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                                : const Color(0xFF1E293B).withValues(alpha: 0.5),
-                            border: Border.all(
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Hero Tile: Core Power Station
+                Expanded(
+                  flex: 5,
+                  child: DoubleBezelCard(
+                    padding: const EdgeInsets.all(22),
+                    isSelected: isRunning,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Concentric Tactile Switch Button
+                        GestureDetector(
+                          onTap: () {
+                            ref.read(coreProvider.notifier).toggleCore();
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 400),
+                            curve: Curves.easeOutCubic,
+                            width: 86,
+                            height: 86,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
                               color: isRunning
-                                  ? const Color(0xFF10B981)
-                                  : const Color(0xFF334155),
-                              width: 2,
-                            ),
-                            boxShadow: isRunning
-                                ? [
-                                    BoxShadow(
-                                      color: const Color(0xFF10B981).withValues(alpha: 0.4),
-                                      blurRadius: 24,
-                                      spreadRadius: 2,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Center(
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              width: 62,
-                              height: 62,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: isRunning
-                                    ? const LinearGradient(
-                                        colors: [Color(0xFF10B981), Color(0xFF059669)],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      )
-                                    : const LinearGradient(
-                                        colors: [Color(0xFF334155), Color(0xFF1E293B)],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
+                                  ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                                  : const Color(0xFF1E293B).withValues(alpha: 0.5),
+                              border: Border.all(
+                                color: isRunning
+                                    ? const Color(0xFF10B981)
+                                    : const Color(0xFF334155),
+                                width: 2,
                               ),
-                              child: Icon(
-                                Icons.power_settings_new_rounded,
-                                size: 32,
-                                color: isRunning ? Colors.white : const Color(0xFF94A3B8),
+                              boxShadow: isRunning
+                                  ? [
+                                      BoxShadow(
+                                        color: const Color(0xFF10B981).withValues(alpha: 0.4),
+                                        blurRadius: 24,
+                                        spreadRadius: 2,
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Center(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                width: 62,
+                                height: 62,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: isRunning
+                                      ? const LinearGradient(
+                                          colors: [Color(0xFF10B981), Color(0xFF059669)],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        )
+                                      : const LinearGradient(
+                                          colors: [Color(0xFF334155), Color(0xFF1E293B)],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                ),
+                                child: Icon(
+                                  Icons.power_settings_new_rounded,
+                                  size: 32,
+                                  color: isRunning ? Colors.white : const Color(0xFF94A3B8),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
                       const SizedBox(width: 24),
                       // Core Status Details
                       Expanded(
@@ -259,6 +261,7 @@ class DashboardPage extends ConsumerWidget {
               ),
             ],
           ),
+        ),
 
           const SizedBox(height: 16),
 
@@ -363,43 +366,47 @@ class _SpeedMetricsStrip extends ConsumerWidget {
     }));
     final tr = ref.watch(translationsProvider);
 
-    return Row(
-      children: [
-        _buildMetricCard(
-          context,
-          title: tr.downloadSpeed,
-          value: ByteFormatter.formatSpeed(currentDown),
-          total: '${tr.totalDownload}: ${ByteFormatter.formatBytes(totalDown)}',
-          icon: Icons.arrow_downward_rounded,
-          color: const Color(0xFF38BDF8),
-        ),
-        const SizedBox(width: 12),
-        _buildMetricCard(
-          context,
-          title: tr.uploadSpeed,
-          value: ByteFormatter.formatSpeed(currentUp),
-          total: '${tr.totalUpload}: ${ByteFormatter.formatBytes(totalUp)}',
-          icon: Icons.arrow_upward_rounded,
-          color: const Color(0xFF818CF8),
-        ),
-        const SizedBox(width: 12),
-        _buildMetricCard(
-          context,
-          title: tr.totalTraffic,
-          value: ByteFormatter.formatBytes(totalCombined),
-          total: isRunning ? (tr.isZh ? '实时累计流量' : 'Session Total') : tr.standby,
-          icon: Icons.data_usage_rounded,
-          color: const Color(0xFF10B981),
-        ),
-        const SizedBox(width: 12),
-        _buildActiveNodeCard(
-          context,
-          title: tr.activeOutbound,
-          nodeName: currentNodeName,
-          isRunning: isRunning,
-          notConnectedStr: tr.notConnected,
-        ),
-      ],
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildMetricCard(
+            context,
+            title: tr.downloadSpeed,
+            value: ByteFormatter.formatSpeed(currentDown),
+            total: '${tr.totalDownload}: ${ByteFormatter.formatBytes(totalDown)}',
+            icon: Icons.arrow_downward_rounded,
+            color: const Color(0xFF38BDF8),
+          ),
+          const SizedBox(width: 12),
+          _buildMetricCard(
+            context,
+            title: tr.uploadSpeed,
+            value: ByteFormatter.formatSpeed(currentUp),
+            total: '${tr.totalUpload}: ${ByteFormatter.formatBytes(totalUp)}',
+            icon: Icons.arrow_upward_rounded,
+            color: const Color(0xFF818CF8),
+          ),
+          const SizedBox(width: 12),
+          _buildMetricCard(
+            context,
+            title: tr.totalTraffic,
+            value: ByteFormatter.formatBytes(totalCombined),
+            total: isRunning ? (tr.isZh ? '实时累计流量' : 'Session Total') : tr.standby,
+            icon: Icons.data_usage_rounded,
+            color: const Color(0xFF10B981),
+          ),
+          const SizedBox(width: 12),
+          _buildActiveNodeCard(
+            context,
+            title: tr.activeOutbound,
+            nodeName: currentNodeName,
+            isRunning: isRunning,
+            notConnectedStr: tr.notConnected,
+            routingStatus: isRunning ? (tr.isZh ? '直连路由链' : 'Direct Routing') : tr.standby,
+          ),
+        ],
+      ),
     );
   }
 
@@ -413,8 +420,9 @@ class _SpeedMetricsStrip extends ConsumerWidget {
   }) {
     return Expanded(
       child: DoubleBezelCard(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
               padding: const EdgeInsets.all(10),
@@ -424,7 +432,7 @@ class _SpeedMetricsStrip extends ConsumerWidget {
               ),
               child: Icon(icon, color: color, size: 20),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -443,7 +451,7 @@ class _SpeedMetricsStrip extends ConsumerWidget {
                   Text(
                     value,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.2,
                     ),
@@ -457,6 +465,8 @@ class _SpeedMetricsStrip extends ConsumerWidget {
                       fontSize: 11,
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -473,11 +483,13 @@ class _SpeedMetricsStrip extends ConsumerWidget {
     required String nodeName,
     required bool isRunning,
     required String notConnectedStr,
+    required String routingStatus,
   }) {
     return Expanded(
       child: DoubleBezelCard(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
               padding: const EdgeInsets.all(10),
@@ -487,7 +499,7 @@ class _SpeedMetricsStrip extends ConsumerWidget {
               ),
               child: const Icon(Icons.hub_rounded, color: Color(0xFF10B981), size: 20),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -507,7 +519,7 @@ class _SpeedMetricsStrip extends ConsumerWidget {
                     isRunning ? nodeName : notConnectedStr,
                     style: const TextStyle(
                       fontSize: 15,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w800,
                       letterSpacing: -0.2,
                     ),
                     maxLines: 1,
@@ -515,11 +527,13 @@ class _SpeedMetricsStrip extends ConsumerWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    isRunning ? 'Clash API Direct Routing' : 'Standby',
+                    routingStatus,
                     style: TextStyle(
                       fontSize: 11,
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
