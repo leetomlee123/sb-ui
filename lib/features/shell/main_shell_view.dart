@@ -25,15 +25,6 @@ class MainShellView extends ConsumerStatefulWidget {
 class _MainShellViewState extends ConsumerState<MainShellView> {
   int _selectedIndex = 0;
 
-  static const List<Widget> _pages = [
-    DashboardPage(),
-    ProxiesPage(),
-    ProfilesPage(),
-    ConnectionsPage(),
-    LogsPage(),
-    SettingsPage(),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final tr = ref.watch(translationsProvider);
@@ -107,7 +98,14 @@ class _MainShellViewState extends ConsumerState<MainShellView> {
                     color: isDark ? const Color(0xFF070A12) : const Color(0xFFF8FAFC),
                     child: IndexedStack(
                       index: _selectedIndex,
-                      children: _pages,
+                      children: [
+                        const DashboardPage(),
+                        const ProxiesPage(),
+                        const ProfilesPage(),
+                        ConnectionsPage(isVisible: _selectedIndex == 3),
+                        const LogsPage(),
+                        const SettingsPage(),
+                      ],
                     ),
                   ),
                 ),

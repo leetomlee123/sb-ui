@@ -42,23 +42,21 @@ class ConnectionsState {
   final bool isLoading;
   final String searchQuery;
 
-  // Cached aggregations
+  // Cached aggregations (only computed on-demand when analytics tab is viewed!)
   final List<DomainTrafficStat> topDomains;
   final List<OutboundTrafficStat> topOutbounds;
   final Map<String, int> protocolBreakdown;
 
-  ConnectionsState({
+  const ConnectionsState({
     this.connections = const [],
     this.downloadTotal = 0,
     this.uploadTotal = 0,
     this.isLoading = false,
     this.searchQuery = '',
-    List<DomainTrafficStat>? topDomains,
-    List<OutboundTrafficStat>? topOutbounds,
-    Map<String, int>? protocolBreakdown,
-  })  : topDomains = topDomains ?? _computeTopDomains(connections),
-        topOutbounds = topOutbounds ?? _computeTopOutbounds(connections),
-        protocolBreakdown = protocolBreakdown ?? _computeProtocolBreakdown(connections);
+    this.topDomains = const [],
+    this.topOutbounds = const [],
+    this.protocolBreakdown = const {},
+  });
 
   int get combinedTotal => downloadTotal + uploadTotal;
 
@@ -71,6 +69,51 @@ class ConnectionsState {
           c.rule.toLowerCase().contains(q) ||
           c.chains.any((chain) => chain.toLowerCase().contains(q));
     }).toList();
+  }
+
+  ConnectionsState copyWith({
+    List<ActiveConnection>? connections,
+    int? downloadTotal,
+    int? uploadTotal,
+    bool? isLoading,
+    String? searchQuery,
+    List<DomainTrafficStat>? topDomains,
+    List<OutboundTrafficStat>? topOutbounds,
+    Map<String, int>? protocolBreakdown,
+  }) {
+    return ConnectionsState(
+      connections: connections ?? this.connections,
+      downloadTotal: downloadTotal ?? this.downloadTotal,
+      uploadTotal: uploadTotal ?? this.uploadTotal,
+      isLoading: isLoading ?? this.isLoading,
+      searchQuery: searchQuery ?? this.searchQuery,
+      topDomains: topDomains ?? this.topDomains,
+      topOutbounds: topOutbounds ?? this.topOutbounds,
+      protocolBreakdown: protocolBreakdown ?? this.protocolBreakdown,
+    );
+  }
+}
+
+class _TempTraffic {
+  int upload = 0;
+  int download = 0;
+  int count = 0;
+}
+
+class ConnectionsNotifier extends StateNotifier<ConnectionsState> {
+  final Ref _ref;
+
+  ConnectionsNotifier(this._ref) : super(const ConnectionsState()) {
+    _ref.listen<CoreState>(coreProvider, (prev, next) {
+      if (!next.isRunning) {
+        state = state.copyWith(
+          connections: [],
+          topDomains: [],
+          topOutbounds: [],
+          protocolBreakdown: {},
+        );
+      }
+    });
   }
 
   static List<DomainTrafficStat> _computeTopDomains(List<ActiveConnection> conns) {
@@ -137,64 +180,45 @@ class ConnectionsState {
     return map;
   }
 
-  ConnectionsState copyWith({
-    List<ActiveConnection>? connections,
-    int? downloadTotal,
-    int? uploadTotal,
-    bool? isLoading,
-    String? searchQuery,
-  }) {
-    final nextConns = connections ?? this.connections;
-    final connsChanged = connections != null && connections != this.connections;
-
-    return ConnectionsState(
-      connections: nextConns,
-      downloadTotal: downloadTotal ?? this.downloadTotal,
-      uploadTotal: uploadTotal ?? this.uploadTotal,
-      isLoading: isLoading ?? this.isLoading,
-      searchQuery: searchQuery ?? this.searchQuery,
-      topDomains: connsChanged ? _computeTopDomains(nextConns) : topDomains,
-      topOutbounds: connsChanged ? _computeTopOutbounds(nextConns) : topOutbounds,
-      protocolBreakdown: connsChanged ? _computeProtocolBreakdown(nextConns) : protocolBreakdown,
-    );
-  }
-}
-
-class _TempTraffic {
-  int upload = 0;
-  int download = 0;
-  int count = 0;
-}
-
-class ConnectionsNotifier extends StateNotifier<ConnectionsState> {
-  final Ref _ref;
-
-  ConnectionsNotifier(this._ref) : super(ConnectionsState()) {
-    _ref.listen<CoreState>(coreProvider, (prev, next) {
-      if (next.isRunning && (prev == null || !prev.isRunning)) {
-        refresh();
-      } else if (!next.isRunning) {
-        state = state.copyWith(connections: []);
-      }
-    });
-  }
-
-  Future<void> refresh({bool silent = false}) async {
+  Future<void> refresh({bool silent = false, bool computeAnalytics = false}) async {
     final client = _ref.read(clashApiClientProvider);
     if (client == null) return;
 
     if (!silent) state = state.copyWith(isLoading: true);
     try {
       final data = await client.getConnectionsData();
+
+      List<DomainTrafficStat>? nextTopDomains;
+      List<OutboundTrafficStat>? nextTopOutbounds;
+      Map<String, int>? nextProtocolBreakdown;
+
+      if (computeAnalytics) {
+        nextTopDomains = _computeTopDomains(data.connections);
+        nextTopOutbounds = _computeTopOutbounds(data.connections);
+        nextProtocolBreakdown = _computeProtocolBreakdown(data.connections);
+      }
+
       state = state.copyWith(
         connections: data.connections,
         downloadTotal: data.downloadTotal > 0 ? data.downloadTotal : state.downloadTotal,
         uploadTotal: data.uploadTotal > 0 ? data.uploadTotal : state.uploadTotal,
+        topDomains: nextTopDomains ?? state.topDomains,
+        topOutbounds: nextTopOutbounds ?? state.topOutbounds,
+        protocolBreakdown: nextProtocolBreakdown ?? state.protocolBreakdown,
         isLoading: false,
       );
     } catch (_) {
       if (!silent) state = state.copyWith(isLoading: false);
     }
+  }
+
+  void computeAnalyticsNow() {
+    if (state.connections.isEmpty) return;
+    state = state.copyWith(
+      topDomains: _computeTopDomains(state.connections),
+      topOutbounds: _computeTopOutbounds(state.connections),
+      protocolBreakdown: _computeProtocolBreakdown(state.connections),
+    );
   }
 
   void setSearchQuery(String query) {
@@ -219,7 +243,12 @@ class ConnectionsNotifier extends StateNotifier<ConnectionsState> {
 
     final success = await client.closeAllConnections();
     if (success) {
-      state = state.copyWith(connections: []);
+      state = state.copyWith(
+        connections: [],
+        topDomains: [],
+        topOutbounds: [],
+        protocolBreakdown: {},
+      );
     }
     return success;
   }

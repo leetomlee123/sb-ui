@@ -10,7 +10,8 @@ import '../../core/utils/byte_formatter.dart';
 import '../../shared/widgets/double_bezel_card.dart';
 
 class ConnectionsPage extends ConsumerStatefulWidget {
-  const ConnectionsPage({super.key});
+  final bool isVisible;
+  const ConnectionsPage({super.key, this.isVisible = true});
 
   @override
   ConsumerState<ConnectionsPage> createState() => _ConnectionsPageState();
@@ -18,24 +19,57 @@ class ConnectionsPage extends ConsumerStatefulWidget {
 
 class _ConnectionsPageState extends ConsumerState<ConnectionsPage> {
   int _selectedTab = 0; // 0: Active Connections, 1: Traffic Analytics
+  int _refreshIntervalSeconds = 5; // 0: Paused, 5: 5s, 10: 10s
   Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(connectionsProvider.notifier).refresh();
-      _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-        if (mounted) {
-          ref.read(connectionsProvider.notifier).refresh(silent: true);
-        }
-      });
+      if (widget.isVisible) {
+        _startPolling();
+      }
     });
   }
 
   @override
-  void dispose() {
+  void didUpdateWidget(ConnectionsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isVisible != oldWidget.isVisible) {
+      if (widget.isVisible) {
+        _startPolling();
+      } else {
+        _stopPolling();
+      }
+    }
+  }
+
+  void _startPolling() {
+    _stopPolling();
+    if (!widget.isVisible || _refreshIntervalSeconds <= 0) return;
+
+    ref.read(connectionsProvider.notifier).refresh(
+      computeAnalytics: _selectedTab == 1,
+    );
+
+    _pollTimer = Timer.periodic(Duration(seconds: _refreshIntervalSeconds), (_) {
+      if (mounted && widget.isVisible && _refreshIntervalSeconds > 0) {
+        ref.read(connectionsProvider.notifier).refresh(
+          silent: true,
+          computeAnalytics: _selectedTab == 1,
+        );
+      }
+    });
+  }
+
+  void _stopPolling() {
     _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _stopPolling();
     super.dispose();
   }
 
@@ -103,6 +137,72 @@ class _ConnectionsPageState extends ConsumerState<ConnectionsPage> {
                 selected: {_selectedTab},
                 onSelectionChanged: (val) {
                   setState(() => _selectedTab = val.first);
+                  if (_selectedTab == 1) {
+                    ref.read(connectionsProvider.notifier).computeAnalyticsNow();
+                  }
+                  _startPolling();
+                },
+              ),
+
+              const SizedBox(width: 12),
+
+              // Auto-refresh interval selector
+              PopupMenuButton<int>(
+                tooltip: tr.isZh ? '自动刷新频率' : 'Auto-refresh interval',
+                initialValue: _refreshIntervalSeconds,
+                onSelected: (val) {
+                  setState(() => _refreshIntervalSeconds = val);
+                  _startPolling();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _refreshIntervalSeconds > 0
+                        ? const Color(0xFF6366F1).withValues(alpha: 0.12)
+                        : const Color(0xFF1E293B).withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _refreshIntervalSeconds > 0
+                          ? const Color(0xFF6366F1).withValues(alpha: 0.3)
+                          : const Color(0xFF334155),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _refreshIntervalSeconds > 0 ? Icons.sync_rounded : Icons.pause_circle_outline_rounded,
+                        size: 14,
+                        color: _refreshIntervalSeconds > 0 ? const Color(0xFF818CF8) : const Color(0xFF94A3B8),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        _refreshIntervalSeconds > 0 ? '${_refreshIntervalSeconds}s 刷新' : (tr.isZh ? '已暂停' : 'Paused'),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: _refreshIntervalSeconds > 0 ? const Color(0xFF818CF8) : const Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                itemBuilder: (context) => [
+                  PopupMenuItem(value: 0, child: Text(tr.isZh ? '⏸️ 暂停自动刷新' : '⏸️ Pause auto-refresh')),
+                  PopupMenuItem(value: 5, child: Text(tr.isZh ? '⚡ 5 秒低频刷新 (推荐)' : '⚡ 5s (Recommended)')),
+                  PopupMenuItem(value: 10, child: Text(tr.isZh ? '🌿 10 秒极低功耗刷新' : '🌿 10s Low power')),
+                ],
+              ),
+
+              const SizedBox(width: 6),
+
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                tooltip: tr.refresh,
+                onPressed: () {
+                  ref.read(connectionsProvider.notifier).refresh(
+                    computeAnalytics: _selectedTab == 1,
+                  );
                 },
               ),
 
