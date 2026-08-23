@@ -127,9 +127,10 @@ class _BottomStatusRibbon extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isRunning = ref.watch(coreProvider.select((s) => s.isRunning));
-    final trafficState = ref.watch(trafficProvider);
-    final profilesState = ref.watch(profilesProvider);
-    final settings = ref.watch(settingsProvider);
+    final currentDown = ref.watch(trafficProvider.select((s) => s.currentDown));
+    final currentUp = ref.watch(trafficProvider.select((s) => s.currentUp));
+    final activeProfileName = ref.watch(profilesProvider.select((s) => s.activeProfile?.name));
+    final routingMode = ref.watch(settingsProvider.select((s) => s.routingMode));
     final tr = ref.watch(translationsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -170,7 +171,7 @@ class _BottomStatusRibbon extends ConsumerWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                profilesState.activeProfile?.name ?? tr.noActiveProfile,
+                activeProfileName ?? tr.noActiveProfile,
                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
               ),
               const SizedBox(width: 12),
@@ -182,9 +183,9 @@ class _BottomStatusRibbon extends ConsumerWidget {
                   border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.3)),
                 ),
                 child: Text(
-                  settings.routingMode == RoutingMode.rule
+                  routingMode == RoutingMode.rule
                       ? tr.modeRule.toUpperCase()
-                      : (settings.routingMode == RoutingMode.global
+                      : (routingMode == RoutingMode.global
                           ? tr.modeGlobal.toUpperCase()
                           : tr.modeDirect.toUpperCase()),
                   style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.5, color: Color(0xFF818CF8)),
@@ -199,14 +200,14 @@ class _BottomStatusRibbon extends ConsumerWidget {
               const Icon(Icons.arrow_downward_rounded, size: 13, color: Color(0xFF38BDF8)),
               const SizedBox(width: 3),
               Text(
-                ByteFormatter.formatSpeed(trafficState.currentDown),
+                ByteFormatter.formatSpeed(currentDown),
                 style: const TextStyle(fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold, color: Color(0xFF38BDF8)),
               ),
               const SizedBox(width: 14),
               const Icon(Icons.arrow_upward_rounded, size: 13, color: Color(0xFF818CF8)),
               const SizedBox(width: 3),
               Text(
-                ByteFormatter.formatSpeed(trafficState.currentUp),
+                ByteFormatter.formatSpeed(currentUp),
                 style: const TextStyle(fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
               ),
             ],

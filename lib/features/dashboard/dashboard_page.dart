@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/i18n/translations.dart';
 import '../../core/models/app_settings.dart';
-import '../../core/providers/connections_provider.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/providers/proxies_provider.dart';
 import '../../core/providers/settings_provider.dart';
@@ -351,25 +350,25 @@ class _SpeedMetricsStrip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isRunning = ref.watch(coreProvider.select((s) => s.isRunning));
-    final trafficState = ref.watch(trafficProvider);
-    final connState = ref.watch(connectionsProvider);
-    final proxiesState = ref.watch(proxiesProvider);
-    final tr = ref.watch(translationsProvider);
-
-    final totalDown = connState.downloadTotal > 0 ? connState.downloadTotal : trafficState.totalDown;
-    final totalUp = connState.uploadTotal > 0 ? connState.uploadTotal : trafficState.totalUp;
+    final currentDown = ref.watch(trafficProvider.select((s) => s.currentDown));
+    final currentUp = ref.watch(trafficProvider.select((s) => s.currentUp));
+    final totalDown = ref.watch(trafficProvider.select((s) => s.totalDown));
+    final totalUp = ref.watch(trafficProvider.select((s) => s.totalUp));
     final totalCombined = totalDown + totalUp;
 
     // Get current active proxy node
-    final activeGroup = proxiesState.groups['Proxy'] ?? (proxiesState.groups.isNotEmpty ? proxiesState.groups.values.first : null);
-    final currentNodeName = activeGroup?.current ?? 'Auto';
+    final currentNodeName = ref.watch(proxiesProvider.select((s) {
+      final grp = s.groups['Proxy'] ?? (s.groups.isNotEmpty ? s.groups.values.first : null);
+      return (grp != null && grp.current.isNotEmpty) ? grp.current : 'Auto';
+    }));
+    final tr = ref.watch(translationsProvider);
 
     return Row(
       children: [
         _buildMetricCard(
           context,
           title: tr.downloadSpeed,
-          value: ByteFormatter.formatSpeed(trafficState.currentDown),
+          value: ByteFormatter.formatSpeed(currentDown),
           total: '${tr.totalDownload}: ${ByteFormatter.formatBytes(totalDown)}',
           icon: Icons.arrow_downward_rounded,
           color: const Color(0xFF38BDF8),
@@ -378,7 +377,7 @@ class _SpeedMetricsStrip extends ConsumerWidget {
         _buildMetricCard(
           context,
           title: tr.uploadSpeed,
-          value: ByteFormatter.formatSpeed(trafficState.currentUp),
+          value: ByteFormatter.formatSpeed(currentUp),
           total: '${tr.totalUpload}: ${ByteFormatter.formatBytes(totalUp)}',
           icon: Icons.arrow_upward_rounded,
           color: const Color(0xFF818CF8),
@@ -711,6 +710,7 @@ class _TelemetryGraphCard extends ConsumerWidget {
                           ),
                         ],
                       ),
+                      duration: Duration.zero,
                     ),
                   ),
           ),

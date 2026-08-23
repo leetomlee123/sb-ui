@@ -54,6 +54,8 @@ class _LogsPageState extends ConsumerState<LogsPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.isVisible) return const SizedBox.shrink();
+
     final logsState = ref.watch(logsProvider);
     final tr = ref.watch(translationsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;

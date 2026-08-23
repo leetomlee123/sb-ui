@@ -75,9 +75,12 @@ class _ConnectionsPageState extends ConsumerState<ConnectionsPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.isVisible) return const SizedBox.shrink();
+
     final isRunning = ref.watch(coreProvider.select((s) => s.isRunning));
     final connState = ref.watch(connectionsProvider);
-    final trafficState = ref.watch(trafficProvider);
+    final totalDown = ref.watch(trafficProvider.select((s) => s.totalDown));
+    final totalUp = ref.watch(trafficProvider.select((s) => s.totalUp));
     final tr = ref.watch(translationsProvider);
 
     if (!isRunning) {
@@ -102,9 +105,9 @@ class _ConnectionsPageState extends ConsumerState<ConnectionsPage> {
     }
 
     final connections = connState.filteredConnections;
-    final totalDown = connState.downloadTotal > 0 ? connState.downloadTotal : trafficState.totalDown;
-    final totalUp = connState.uploadTotal > 0 ? connState.uploadTotal : trafficState.totalUp;
-    final combinedTotal = totalDown + totalUp;
+    final effectiveTotalDown = connState.downloadTotal > 0 ? connState.downloadTotal : totalDown;
+    final effectiveTotalUp = connState.uploadTotal > 0 ? connState.uploadTotal : totalUp;
+    final combinedTotal = effectiveTotalDown + effectiveTotalUp;
 
     return Padding(
       padding: const EdgeInsets.all(24),
