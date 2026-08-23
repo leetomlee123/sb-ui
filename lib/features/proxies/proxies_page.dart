@@ -62,7 +62,6 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
 
     final filteredNodes = proxiesState.filteredNodes;
     final autoGroup = groups['auto'] ?? groups['Auto'];
-    final proxyGroup = groups['Proxy'];
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -264,9 +263,8 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
                       final node = filteredNodes[index];
                       final isAutoNode = node.type == OutboundType.urltest || node.name.toLowerCase() == 'auto';
                       
-                      // Active check: in Proxy group or urltest group
-                      final isSelectedInGroup = activeGroup?.current == node.name ||
-                          (proxyGroup != null && proxyGroup.current == node.name);
+                      // Active check: in currently selected strategy group
+                      final isSelectedInGroup = activeGroup?.current == node.name;
 
                       return DoubleBezelCard(
                         padding: const EdgeInsets.all(12),

@@ -74,6 +74,28 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
     _populateFromActiveProfile();
   }
 
+  static String? findBestDefaultGroup(Map<String, ProxyGroup> groups) {
+    if (groups.isEmpty) return null;
+
+    // 1. First priority: Primary Selector groups
+    const primarySelectorNames = ['节点选择', 'Proxy', 'proxy', 'GLOBAL', '漏网之鱼', '国外流量', 'default'];
+    for (final name in primarySelectorNames) {
+      if (groups.containsKey(name) && groups[name]!.type == OutboundType.selector) {
+        return name;
+      }
+    }
+
+    // 2. Any other Selector group
+    for (final entry in groups.entries) {
+      if (entry.value.type == OutboundType.selector) {
+        return entry.key;
+      }
+    }
+
+    // 3. Fallback to any group (e.g. urltest)
+    return groups.keys.first;
+  }
+
   void _populateFromActiveProfile() {
     try {
       final activeProfile = _ref.read(profilesProvider).activeProfile;
@@ -105,19 +127,25 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
           }
         }
 
+        // If no selector group exists in profile, synthesize the primary Proxy group so UI is immediately actionable
+        final hasSelector = groups.values.any((g) => g.type == OutboundType.selector);
+        if (!hasSelector && (nodes.isNotEmpty || groups.isNotEmpty)) {
+          final allTargets = [
+            ...groups.keys,
+            ...nodes.keys,
+            'direct',
+          ];
+          groups['Proxy'] = ProxyGroup(
+            name: 'Proxy',
+            type: OutboundType.selector,
+            current: groups.keys.isNotEmpty ? groups.keys.first : (nodes.keys.isNotEmpty ? nodes.keys.first : 'direct'),
+            all: allTargets,
+            raw: {'type': 'selector', 'tag': 'Proxy', 'outbounds': allTargets},
+          );
+        }
+
         if (groups.isNotEmpty || nodes.isNotEmpty) {
-          String? initialGroup = state.selectedGroup;
-          if (initialGroup == null || !groups.containsKey(initialGroup)) {
-            if (groups.containsKey('Proxy')) {
-              initialGroup = 'Proxy';
-            } else if (groups.containsKey('Auto')) {
-              initialGroup = 'Auto';
-            } else if (groups.containsKey('auto')) {
-              initialGroup = 'auto';
-            } else if (groups.isNotEmpty) {
-              initialGroup = groups.keys.first;
-            }
-          }
+          String? initialGroup = findBestDefaultGroup(groups);
 
           state = state.copyWith(
             groups: groups,
@@ -163,16 +191,10 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
       }
 
       String? activeGroup = state.selectedGroup;
-      if (activeGroup == null || !groups.containsKey(activeGroup)) {
-        if (groups.containsKey('Proxy')) {
-          activeGroup = 'Proxy';
-        } else if (groups.containsKey('Auto')) {
-          activeGroup = 'Auto';
-        } else if (groups.containsKey('auto')) {
-          activeGroup = 'auto';
-        } else if (groups.isNotEmpty) {
-          activeGroup = groups.keys.first;
-        }
+      if (activeGroup == null ||
+          !groups.containsKey(activeGroup) ||
+          (groups[activeGroup]?.type != OutboundType.selector && groups.values.any((g) => g.type == OutboundType.selector))) {
+        activeGroup = findBestDefaultGroup(groups);
       }
 
       state = state.copyWith(
@@ -198,36 +220,41 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
   Future<bool> selectNode(String groupName, String nodeName) async {
     final client = _ref.read(clashApiClientProvider);
 
-    // 1. Optimistic UI update: immediately switch current node in local groups
+    // Determine target selector groups:
+    final List<String> targetGroups = [];
+
+    // If current group is a selector, target it
+    if (state.groups.containsKey(groupName) && state.groups[groupName]!.type == OutboundType.selector) {
+      targetGroups.add(groupName);
+    } else {
+      // User clicked a node inside a URLTest group: find primary selector group (e.g. Proxy) and switch it
+      final primarySelector = findBestDefaultGroup(state.groups);
+      if (primarySelector != null && !targetGroups.contains(primarySelector)) {
+        targetGroups.add(primarySelector);
+      }
+    }
+
+    // Also include any other selector groups that have this node as an option (e.g. Proxy, GLOBAL)
+    for (final entry in state.groups.entries) {
+      if (entry.value.type == OutboundType.selector &&
+          entry.value.all.contains(nodeName) &&
+          !targetGroups.contains(entry.key)) {
+        targetGroups.add(entry.key);
+      }
+    }
+
+    // 1. Optimistic UI update: immediately switch current node in local selector groups
     final updatedGroups = Map<String, ProxyGroup>.from(state.groups);
-    if (updatedGroups.containsKey(groupName) && updatedGroups[groupName]!.type == OutboundType.selector) {
-      updatedGroups[groupName] = updatedGroups[groupName]!.copyWith(current: nodeName);
-    }
-    if (updatedGroups.containsKey('Proxy')) {
-      updatedGroups['Proxy'] = updatedGroups['Proxy']!.copyWith(current: nodeName);
-    }
-    if (updatedGroups.containsKey('GLOBAL')) {
-      updatedGroups['GLOBAL'] = updatedGroups['GLOBAL']!.copyWith(current: nodeName);
+    for (final grpName in targetGroups) {
+      if (updatedGroups.containsKey(grpName)) {
+        updatedGroups[grpName] = updatedGroups[grpName]!.copyWith(current: nodeName);
+      }
     }
     state = state.copyWith(groups: updatedGroups);
 
     if (client == null) return true;
 
-    // 2. Identify all selector groups in Clash API that need to be switched
-    final List<String> targetGroups = [];
-    if (state.groups.containsKey(groupName) && state.groups[groupName]!.type == OutboundType.selector) {
-      targetGroups.add(groupName);
-    }
-    for (final entry in state.groups.entries) {
-      if (entry.value.type == OutboundType.selector && entry.value.all.contains(nodeName) && !targetGroups.contains(entry.key)) {
-        targetGroups.add(entry.key);
-      }
-    }
-    if (targetGroups.isEmpty) {
-      if (state.groups.containsKey('Proxy')) targetGroups.add('Proxy');
-      if (state.groups.containsKey('GLOBAL')) targetGroups.add('GLOBAL');
-    }
-
+    // 2. Dispatch PUT /proxies/{group} to Clash API for all target selector groups
     bool anySuccess = false;
     for (final grp in targetGroups) {
       try {

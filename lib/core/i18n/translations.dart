@@ -163,7 +163,7 @@ class Translations {
   String get coreNewBadge => isZh ? '有新版本' : 'New Version';
   String get releaseNotesLabel => isZh ? '版本更新说明' : 'Release Notes';
 
-  String get secGeoAssets => isZh ? 'GEO 规则与分流数据库 (仿 v2rayNG)' : 'GEO ASSETS & ROUTING DATABASES';
+  String get secGeoAssets => isZh ? 'GEO 规则与分流数据库' : 'GEO ASSETS & ROUTING DATABASES';
   String get geoAssetsDesc => isZh ? '维护本地离线 GeoIP 与 GeoSite 二进制分流规则库，支持高速 CDN 一键更新' : 'Manage and update offline GeoIP & GeoSite binary routing datasets';
   String get updateAllGeo => isZh ? '更新全部 Geo 规则' : 'Update All Geo Assets';
   String get updatingGeo => isZh ? '正在更新 Geo 规则库...' : 'Updating Geo Assets...';
