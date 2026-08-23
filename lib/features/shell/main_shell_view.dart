@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/i18n/translations.dart';
+import '../../core/models/app_settings.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/providers/profiles_provider.dart';
 import '../../core/providers/settings_provider.dart';
@@ -38,6 +40,7 @@ class _MainShellViewState extends ConsumerState<MainShellView> {
     final trafficState = ref.watch(trafficProvider);
     final profilesState = ref.watch(profilesProvider);
     final settings = ref.watch(settingsProvider);
+    final tr = ref.watch(translationsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -62,36 +65,36 @@ class _MainShellViewState extends ConsumerState<MainShellView> {
                   minWidth: 80,
                   useIndicator: true,
                   indicatorColor: const Color(0xFF6366F1).withValues(alpha: 0.15),
-                  destinations: const [
+                  destinations: [
                     NavigationRailDestination(
-                      icon: Icon(Icons.speed_rounded),
-                      selectedIcon: Icon(Icons.speed_rounded, color: Color(0xFF818CF8)),
-                      label: Text('Dashboard'),
+                      icon: const Icon(Icons.speed_rounded),
+                      selectedIcon: const Icon(Icons.speed_rounded, color: Color(0xFF818CF8)),
+                      label: Text(tr.navDashboard),
                     ),
                     NavigationRailDestination(
-                      icon: Icon(Icons.alt_route_rounded),
-                      selectedIcon: Icon(Icons.alt_route_rounded, color: Color(0xFF818CF8)),
-                      label: Text('Proxies'),
+                      icon: const Icon(Icons.alt_route_rounded),
+                      selectedIcon: const Icon(Icons.alt_route_rounded, color: Color(0xFF818CF8)),
+                      label: Text(tr.navProxies),
                     ),
                     NavigationRailDestination(
-                      icon: Icon(Icons.folder_shared_rounded),
-                      selectedIcon: Icon(Icons.folder_shared_rounded, color: Color(0xFF818CF8)),
-                      label: Text('Profiles'),
+                      icon: const Icon(Icons.folder_shared_rounded),
+                      selectedIcon: const Icon(Icons.folder_shared_rounded, color: Color(0xFF818CF8)),
+                      label: Text(tr.navProfiles),
                     ),
                     NavigationRailDestination(
-                      icon: Icon(Icons.compare_arrows_rounded),
-                      selectedIcon: Icon(Icons.compare_arrows_rounded, color: Color(0xFF818CF8)),
-                      label: Text('Sessions'),
+                      icon: const Icon(Icons.compare_arrows_rounded),
+                      selectedIcon: const Icon(Icons.compare_arrows_rounded, color: Color(0xFF818CF8)),
+                      label: Text(tr.navConnections),
                     ),
                     NavigationRailDestination(
-                      icon: Icon(Icons.terminal_rounded),
-                      selectedIcon: Icon(Icons.terminal_rounded, color: Color(0xFF818CF8)),
-                      label: Text('Logs'),
+                      icon: const Icon(Icons.terminal_rounded),
+                      selectedIcon: const Icon(Icons.terminal_rounded, color: Color(0xFF818CF8)),
+                      label: Text(tr.navLogs),
                     ),
                     NavigationRailDestination(
-                      icon: Icon(Icons.tune_rounded),
-                      selectedIcon: Icon(Icons.tune_rounded, color: Color(0xFF818CF8)),
-                      label: Text('Settings'),
+                      icon: const Icon(Icons.tune_rounded),
+                      selectedIcon: const Icon(Icons.tune_rounded, color: Color(0xFF818CF8)),
+                      label: Text(tr.navSettings),
                     ),
                   ],
                 ),
@@ -154,7 +157,7 @@ class _MainShellViewState extends ConsumerState<MainShellView> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      profilesState.activeProfile?.name ?? 'No Active Profile',
+                      profilesState.activeProfile?.name ?? tr.noActiveProfile,
                       style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(width: 12),
@@ -166,7 +169,11 @@ class _MainShellViewState extends ConsumerState<MainShellView> {
                         border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.3)),
                       ),
                       child: Text(
-                        settings.routingMode.displayName.toUpperCase(),
+                        settings.routingMode == RoutingMode.rule
+                            ? tr.modeRule.toUpperCase()
+                            : (settings.routingMode == RoutingMode.global
+                                ? tr.modeGlobal.toUpperCase()
+                                : tr.modeDirect.toUpperCase()),
                         style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.5, color: Color(0xFF818CF8)),
                       ),
                     ),

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 import 'app/theme.dart';
+import 'core/i18n/translations.dart';
 import 'core/providers/core_provider.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/providers/storage_provider.dart';
@@ -75,6 +76,7 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
   Future<void> _initTray() async {
     try {
       if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        final tr = ref.read(translationsProvider);
         final iconPath = Platform.isWindows
             ? 'assets/icons/app_icon.ico'
             : 'assets/icons/app_icon.png';
@@ -88,17 +90,17 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
           items: [
             MenuItem(
               key: 'show_window',
-              label: 'Open Dashboard',
+              label: tr.trayOpen,
             ),
             MenuItem.separator(),
             MenuItem(
               key: 'toggle_core',
-              label: 'Toggle Connection',
+              label: tr.trayToggle,
             ),
             MenuItem.separator(),
             MenuItem(
               key: 'exit_app',
-              label: 'Quit',
+              label: tr.trayQuit,
             ),
           ],
         );

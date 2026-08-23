@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 enum RoutingMode {
   rule,
   global,
@@ -28,6 +30,7 @@ class AppSettings {
   final bool startMinimized;
   final bool closeToTray;
   final String themeMode; // 'dark', 'light', 'system'
+  final String language; // 'zh', 'en', 'system'
   final String customSingboxPath;
   final String remoteDns;
   final String directDns;
@@ -46,6 +49,7 @@ class AppSettings {
     this.startMinimized = false,
     this.closeToTray = false,
     this.themeMode = 'dark',
+    this.language = 'zh',
     this.customSingboxPath = '',
     this.remoteDns = 'https://1.1.1.1/dns-query',
     this.directDns = '223.5.5.5',
@@ -66,6 +70,7 @@ class AppSettings {
       'startMinimized': startMinimized,
       'closeToTray': closeToTray,
       'themeMode': themeMode,
+      'language': language,
       'customSingboxPath': customSingboxPath,
       'remoteDns': remoteDns,
       'directDns': directDns,
@@ -90,6 +95,7 @@ class AppSettings {
       startMinimized: json['startMinimized'] as bool? ?? false,
       closeToTray: json['closeToTray'] as bool? ?? false,
       themeMode: json['themeMode'] as String? ?? 'dark',
+      language: json['language'] as String? ?? 'zh',
       customSingboxPath: json['customSingboxPath'] as String? ?? '',
       remoteDns: json['remoteDns'] as String? ?? 'https://1.1.1.1/dns-query',
       directDns: json['directDns'] as String? ?? '223.5.5.5',
@@ -110,6 +116,7 @@ class AppSettings {
     bool? startMinimized,
     bool? closeToTray,
     String? themeMode,
+    String? language,
     String? customSingboxPath,
     String? remoteDns,
     String? directDns,
@@ -128,10 +135,16 @@ class AppSettings {
       startMinimized: startMinimized ?? this.startMinimized,
       closeToTray: closeToTray ?? this.closeToTray,
       themeMode: themeMode ?? this.themeMode,
+      language: language ?? this.language,
       customSingboxPath: customSingboxPath ?? this.customSingboxPath,
       remoteDns: remoteDns ?? this.remoteDns,
       directDns: directDns ?? this.directDns,
       allowLan: allowLan ?? this.allowLan,
     );
   }
+
+  String toJsonString() => jsonEncode(toJson());
+
+  factory AppSettings.fromJsonString(String str) =>
+      AppSettings.fromJson(jsonDecode(str) as Map<String, dynamic>);
 }

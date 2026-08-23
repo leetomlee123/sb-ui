@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/i18n/translations.dart';
 import '../../core/providers/connections_provider.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/utils/byte_formatter.dart';
@@ -12,6 +13,7 @@ class ConnectionsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final coreState = ref.watch(coreProvider);
     final connState = ref.watch(connectionsProvider);
+    final tr = ref.watch(translationsProvider);
 
     if (!coreState.isRunning) {
       return Center(
@@ -20,14 +22,14 @@ class ConnectionsPage extends ConsumerWidget {
           children: [
             Icon(Icons.link_off_rounded, size: 64, color: const Color(0xFF64748B).withValues(alpha: 0.5)),
             const SizedBox(height: 16),
-            const Text(
-              'sing-box Core is Offline',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              tr.coreOfflineTitle,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Active network connections will appear here once connected',
-              style: TextStyle(color: Color(0xFF94A3B8)),
+            Text(
+              tr.coreOfflineHint,
+              style: const TextStyle(color: Color(0xFF94A3B8)),
             ),
           ],
         ),
@@ -47,9 +49,9 @@ class ConnectionsPage extends ConsumerWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'ACTIVE CONNECTIONS',
-                    style: TextStyle(
+                  Text(
+                    tr.activeConnections,
+                    style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.0,
@@ -58,7 +60,7 @@ class ConnectionsPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Tracking ${connState.connections.length} live TCP / UDP sessions',
+                    '${tr.trackingSessions} ${connState.connections.length} ${tr.sessionsSuffix}',
                     style: TextStyle(
                       fontSize: 13,
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
@@ -72,11 +74,11 @@ class ConnectionsPage extends ConsumerWidget {
                 width: 250,
                 height: 40,
                 child: TextField(
-                  decoration: const InputDecoration(
-                    hintText: 'Search host, IP, or rule...',
-                    hintStyle: TextStyle(fontSize: 12),
-                    prefixIcon: Icon(Icons.search_rounded, size: 16),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                  decoration: InputDecoration(
+                    hintText: tr.searchConnections,
+                    hintStyle: const TextStyle(fontSize: 12),
+                    prefixIcon: const Icon(Icons.search_rounded, size: 16),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                   ),
                   onChanged: (val) {
                     ref.read(connectionsProvider.notifier).setSearchQuery(val);
@@ -92,7 +94,7 @@ class ConnectionsPage extends ConsumerWidget {
                       },
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
                 icon: const Icon(Icons.close_fullscreen_rounded, size: 16),
-                label: const Text('Close All', style: TextStyle(fontSize: 12)),
+                label: Text(tr.closeAll, style: const TextStyle(fontSize: 12)),
               ),
             ],
           ),
@@ -102,10 +104,10 @@ class ConnectionsPage extends ConsumerWidget {
           // Connections Data Table in DoubleBezelCard
           Expanded(
             child: connections.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
-                      'No active connections matching filter',
-                      style: TextStyle(color: Color(0xFF64748B)),
+                      tr.noConnectionsMatching,
+                      style: const TextStyle(color: Color(0xFF64748B)),
                     ),
                   )
                 : DoubleBezelCard(
@@ -146,13 +148,13 @@ class ConnectionsPage extends ConsumerWidget {
                             subtitle: Row(
                               children: [
                                 Text(
-                                  'Rule: ${conn.rule.isEmpty ? "Match" : conn.rule}',
+                                  '${tr.rulePrefix}${conn.rule.isEmpty ? "Match" : conn.rule}',
                                   style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                                 ),
                                 const SizedBox(width: 12),
                                 if (conn.chains.isNotEmpty)
                                   Text(
-                                    'Route: ${conn.chains.join(" → ")}',
+                                    '${tr.routePrefix}${conn.chains.join(" → ")}',
                                     style: const TextStyle(fontSize: 11, color: Color(0xFF818CF8)),
                                   ),
                               ],
@@ -177,7 +179,7 @@ class ConnectionsPage extends ConsumerWidget {
                                 const SizedBox(width: 12),
                                 IconButton(
                                   icon: const Icon(Icons.close_rounded, size: 18),
-                                  tooltip: 'Kill Connection',
+                                  tooltip: tr.killSession,
                                   hoverColor: const Color(0xFFF43F5E).withValues(alpha: 0.15),
                                   onPressed: () {
                                     ref.read(connectionsProvider.notifier).closeConnection(conn.id);

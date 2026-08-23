@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/i18n/translations.dart';
 import '../../core/models/proxy_node.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/providers/proxies_provider.dart';
@@ -12,6 +13,8 @@ class ProxiesPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final coreState = ref.watch(coreProvider);
     final proxiesState = ref.watch(proxiesProvider);
+    final tr = ref.watch(translationsProvider);
+
     final groups = proxiesState.groups;
     final selectedGroupName = proxiesState.selectedGroup;
 
@@ -22,14 +25,14 @@ class ProxiesPage extends ConsumerWidget {
           children: [
             Icon(Icons.power_off_rounded, size: 64, color: const Color(0xFF64748B).withValues(alpha: 0.5)),
             const SizedBox(height: 16),
-            const Text(
-              'sing-box Core is Offline',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              tr.coreOfflineTitle,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Start connection on Dashboard to manage proxies and test latency',
-              style: TextStyle(color: Color(0xFF94A3B8)),
+            Text(
+              tr.coreOfflineHint,
+              style: const TextStyle(color: Color(0xFF94A3B8)),
             ),
           ],
         ),
@@ -86,7 +89,7 @@ class ProxiesPage extends ConsumerWidget {
                 height: 40,
                 child: TextField(
                   decoration: InputDecoration(
-                    hintText: 'Filter nodes...',
+                    hintText: tr.filterNodes,
                     hintStyle: const TextStyle(fontSize: 12),
                     prefixIcon: const Icon(Icons.search_rounded, size: 16),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12),
@@ -110,7 +113,7 @@ class ProxiesPage extends ConsumerWidget {
                   ref.read(proxiesProvider.notifier).testAllInSelectedGroup();
                 },
                 icon: const Icon(Icons.speed_rounded, size: 16),
-                label: const Text('Ping All', style: TextStyle(fontSize: 12)),
+                label: Text(tr.pingAll, style: const TextStyle(fontSize: 12)),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 ),
@@ -121,7 +124,7 @@ class ProxiesPage extends ConsumerWidget {
               // Refresh
               IconButton(
                 icon: const Icon(Icons.refresh_rounded, size: 20),
-                tooltip: 'Refresh list',
+                tooltip: tr.refresh,
                 onPressed: () {
                   ref.read(proxiesProvider.notifier).fetchProxies();
                 },
@@ -134,10 +137,10 @@ class ProxiesPage extends ConsumerWidget {
           // Nodes Grid (Asymmetrical Double-Bezel Cards)
           Expanded(
             child: filteredNodes.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
-                      'No proxy nodes found',
-                      style: TextStyle(color: Color(0xFF64748B)),
+                      tr.noNodesFound,
+                      style: const TextStyle(color: Color(0xFF64748B)),
                     ),
                   )
                 : GridView.builder(
@@ -203,6 +206,7 @@ class ProxiesPage extends ConsumerWidget {
                                 // Latency Ping chip
                                 _buildDelayBadge(
                                   node: node,
+                                  tr: tr,
                                   onTest: () {
                                     ref.read(proxiesProvider.notifier).testNodeDelay(node.name);
                                   },
@@ -270,6 +274,7 @@ class ProxiesPage extends ConsumerWidget {
 
   Widget _buildDelayBadge({
     required ProxyNode node,
+    required Translations tr,
     required VoidCallback onTest,
   }) {
     if (['direct', 'block', 'dns', 'Auto'].contains(node.name)) {
@@ -280,11 +285,11 @@ class ProxiesPage extends ConsumerWidget {
     String delayText = '—';
 
     if (node.isTesting) {
-      delayText = 'pinging...';
+      delayText = tr.pinging;
       delayColor = const Color(0xFFF59E0B);
     } else if (node.delay != null) {
       if (node.delay! <= 0) {
-        delayText = 'Timeout';
+        delayText = tr.timeout;
         delayColor = const Color(0xFFF43F5E);
       } else {
         delayText = '${node.delay} ms';

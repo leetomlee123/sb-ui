@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/i18n/translations.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../shared/widgets/double_bezel_card.dart';
@@ -71,6 +72,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   void _saveSettings() {
     final settingsNotifier = ref.read(settingsProvider.notifier);
     final current = ref.read(settingsProvider);
+    final tr = ref.read(translationsProvider);
 
     final updated = current.copyWith(
       mixedPort: int.tryParse(_mixedPortCtrl.text) ?? current.mixedPort,
@@ -83,7 +85,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
     settingsNotifier.updateSettings(updated);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Settings saved successfully')),
+      SnackBar(content: Text(tr.savedSuccess)),
     );
   }
 
@@ -91,6 +93,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final coreState = ref.watch(coreProvider);
+    final tr = ref.watch(translationsProvider);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -104,9 +107,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'CONFIGURATION & PREFERENCES',
-                    style: TextStyle(
+                  Text(
+                    tr.settingsHeader,
+                    style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.0,
@@ -115,7 +118,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Customize network inbounds, DNS resolvers, and desktop behavioral parameters',
+                    tr.settingsHeaderDesc,
                     style: TextStyle(
                       fontSize: 13,
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
@@ -126,7 +129,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               ElevatedButton.icon(
                 onPressed: _saveSettings,
                 icon: const Icon(Icons.save_rounded, size: 16),
-                label: const Text('Save Changes'),
+                label: Text(tr.saveChanges),
               ),
             ],
           ),
@@ -134,14 +137,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 24),
 
           // Core & Proxy Mode Section
-          _buildSectionHeader('ROUTING & NETWORK ADAPTERS'),
+          _buildSectionHeader(tr.secRouting),
           DoubleBezelCard(
             padding: EdgeInsets.zero,
             child: Column(
               children: [
                 SwitchListTile(
-                  title: const Text('System Proxy', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: const Text('Automatically configure OS HTTP/SOCKS system proxy endpoints', style: TextStyle(fontSize: 12)),
+                  title: Text(tr.optSysProxyTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  subtitle: Text(tr.optSysProxySubtitle, style: const TextStyle(fontSize: 12)),
                   value: settings.systemProxyEnabled,
                   onChanged: (val) async {
                     await ref.read(settingsProvider.notifier).toggleSystemProxy(val);
@@ -152,8 +155,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
                 Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
                 SwitchListTile(
-                  title: const Text('TUN Virtual Adapter Mode', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: const Text('Route all system IP packets through transparent TUN virtual interface', style: TextStyle(fontSize: 12)),
+                  title: Text(tr.optTunTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  subtitle: Text(tr.optTunSubtitle, style: const TextStyle(fontSize: 12)),
                   value: settings.tunModeEnabled,
                   onChanged: (val) async {
                     await ref.read(settingsProvider.notifier).toggleTunMode(val);
@@ -164,8 +167,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
                 Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
                 SwitchListTile(
-                  title: const Text('Allow Local Network Access (LAN)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: const Text('Bind inbound mixed proxy to 0.0.0.0 allowing LAN devices to connect', style: TextStyle(fontSize: 12)),
+                  title: Text(tr.optLanTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  subtitle: Text(tr.optLanSubtitle, style: const TextStyle(fontSize: 12)),
                   value: settings.allowLan,
                   onChanged: (val) async {
                     await ref.read(settingsProvider.notifier).toggleAllowLan(val);
@@ -178,7 +181,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 24),
 
           // Ports & Core Inbound
-          _buildSectionHeader('INBOUND PORTS & CONTROLLER API'),
+          _buildSectionHeader(tr.secPorts),
           DoubleBezelCard(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -189,8 +192,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       child: TextField(
                         controller: _mixedPortCtrl,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Mixed Inbound Port (HTTP / SOCKS5)',
+                        decoration: InputDecoration(
+                          labelText: tr.mixedPortLabel,
                           hintText: '2080',
                         ),
                       ),
@@ -200,8 +203,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       child: TextField(
                         controller: _clashPortCtrl,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Clash API External Controller Port',
+                        decoration: InputDecoration(
+                          labelText: tr.clashPortLabel,
                           hintText: '9090',
                         ),
                       ),
@@ -211,9 +214,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: _clashSecretCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Clash API Authorization Secret (Optional)',
-                    hintText: 'Leave empty for no authentication token',
+                  decoration: InputDecoration(
+                    labelText: tr.clashSecretLabel,
+                    hintText: tr.clashSecretHint,
                   ),
                 ),
               ],
@@ -223,23 +226,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 24),
 
           // DNS Configuration
-          _buildSectionHeader('ENCRYPTED & LOCAL DNS RESOLVERS'),
+          _buildSectionHeader(tr.secDns),
           DoubleBezelCard(
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
                 TextField(
                   controller: _remoteDnsCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Remote DNS (DoH / DoT / HTTPS / UDP)',
+                  decoration: InputDecoration(
+                    labelText: tr.remoteDnsLabel,
                     hintText: 'https://1.1.1.1/dns-query',
                   ),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _directDnsCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Direct / Domestic DNS',
+                  decoration: InputDecoration(
+                    labelText: tr.directDnsLabel,
                     hintText: '223.5.5.5',
                   ),
                 ),
@@ -250,7 +253,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 24),
 
           // sing-box Binary & System
-          _buildSectionHeader('SING-BOX CORE EXECUTABLE'),
+          _buildSectionHeader(tr.secBinary),
           DoubleBezelCard(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -261,9 +264,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     Expanded(
                       child: TextField(
                         controller: _binaryPathCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Custom Core Binary Path (Optional)',
-                          hintText: 'Auto-detected from PATH or bundled sidecar',
+                        decoration: InputDecoration(
+                          labelText: tr.customBinaryLabel,
+                          hintText: tr.customBinaryHint,
                         ),
                         onChanged: (_) => _checkBinaryVersion(),
                       ),
@@ -272,7 +275,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     OutlinedButton.icon(
                       onPressed: _checkBinaryVersion,
                       icon: const Icon(Icons.refresh_rounded, size: 16),
-                      label: const Text('Test Core'),
+                      label: Text(tr.testCore),
                     ),
                   ],
                 ),
@@ -282,7 +285,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     const Icon(Icons.verified_rounded, size: 16, color: Color(0xFF10B981)),
                     const SizedBox(width: 6),
                     Text(
-                      'Detected Core: ${_detectedVersion ?? "Detecting..."}',
+                      '${tr.detectedCore}${_detectedVersion ?? "Detecting..."}',
                       style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Color(0xFF94A3B8)),
                     ),
                   ],
@@ -294,22 +297,30 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 24),
 
           // General & Desktop Behavior
-          _buildSectionHeader('DESKTOP ENVIRONMENT PREFERENCES'),
+          _buildSectionHeader(tr.secDesktop),
           DoubleBezelCard(
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                SwitchListTile(
-                  title: const Text('Minimize to System Tray on Close', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: const Text('Keep core active in background when clicking window close button', style: TextStyle(fontSize: 12)),
-                  value: settings.closeToTray,
-                  onChanged: (val) {
-                    ref.read(settingsProvider.notifier).updateSettings(settings.copyWith(closeToTray: val));
-                  },
+                // Language selector
+                ListTile(
+                  title: Text(tr.languageTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  subtitle: Text(settings.language == 'zh' ? '简体中文' : 'English', style: const TextStyle(fontSize: 12, color: Color(0xFF818CF8))),
+                  trailing: SegmentedButton<String>(
+                    segments: [
+                      ButtonSegment(value: 'zh', label: Text(tr.langZh, style: const TextStyle(fontSize: 12))),
+                      ButtonSegment(value: 'en', label: Text(tr.langEn, style: const TextStyle(fontSize: 12))),
+                    ],
+                    selected: {settings.language},
+                    onSelectionChanged: (set) {
+                      ref.read(settingsProvider.notifier).setLanguage(set.first);
+                    },
+                  ),
                 ),
                 Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
+                // Theme selector
                 ListTile(
-                  title: const Text('Application Color Theme', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  title: Text(tr.themeTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                   subtitle: Text(settings.themeMode.toUpperCase(), style: const TextStyle(fontSize: 12, color: Color(0xFF818CF8))),
                   trailing: SegmentedButton<String>(
                     segments: const [
@@ -321,6 +332,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       ref.read(settingsProvider.notifier).setThemeMode(set.first);
                     },
                   ),
+                ),
+                Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
+                SwitchListTile(
+                  title: Text(tr.closeToTrayTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  subtitle: Text(tr.closeToTraySubtitle, style: const TextStyle(fontSize: 12)),
+                  value: settings.closeToTray,
+                  onChanged: (val) {
+                    ref.read(settingsProvider.notifier).updateSettings(settings.copyWith(closeToTray: val));
+                  },
                 ),
               ],
             ),

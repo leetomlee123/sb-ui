@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/i18n/translations.dart';
 import '../../core/models/profile.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/providers/profiles_provider.dart';
@@ -18,6 +19,7 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
   Widget build(BuildContext context) {
     final profilesState = ref.watch(profilesProvider);
     final coreState = ref.watch(coreProvider);
+    final tr = ref.watch(translationsProvider);
     final profiles = profilesState.profiles;
 
     return Padding(
@@ -32,9 +34,9 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'SUBSCRIPTIONS & PROFILES',
-                    style: TextStyle(
+                  Text(
+                    tr.subAndProfiles,
+                    style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.0,
@@ -43,7 +45,7 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Manage remote subscription sources and local sing-box JSON schemas',
+                    tr.subDesc,
                     style: TextStyle(
                       fontSize: 13,
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
@@ -52,9 +54,9 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                 ],
               ),
               ElevatedButton.icon(
-                onPressed: () => _showAddProfileDialog(context),
+                onPressed: () => _showAddProfileDialog(context, tr),
                 icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Add Profile'),
+                label: Text(tr.addProfile),
               ),
             ],
           ),
@@ -70,20 +72,20 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                       children: [
                         Icon(Icons.folder_open_rounded, size: 64, color: const Color(0xFF64748B).withValues(alpha: 0.5)),
                         const SizedBox(height: 16),
-                        const Text(
-                          'No Profiles Configured',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        Text(
+                          tr.noProfilesTitle,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          'Import a subscription link or local config to begin routing',
-                          style: TextStyle(color: Color(0xFF94A3B8)),
+                        Text(
+                          tr.noProfilesHint,
+                          style: const TextStyle(color: Color(0xFF94A3B8)),
                         ),
                         const SizedBox(height: 20),
                         ElevatedButton.icon(
-                          onPressed: () => _showAddProfileDialog(context),
+                          onPressed: () => _showAddProfileDialog(context, tr),
                           icon: const Icon(Icons.add, size: 16),
-                          label: const Text('Import Subscription'),
+                          label: Text(tr.importSubscription),
                         ),
                       ],
                     ),
@@ -99,6 +101,7 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                         context,
                         profile: profile,
                         isActive: isActive,
+                        tr: tr,
                         onSelect: () async {
                           await ref.read(profilesProvider.notifier).setActiveProfile(profile.id);
                           if (coreState.isRunning) {
@@ -111,8 +114,8 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                             ref.read(coreProvider.notifier).restartCore();
                           }
                         },
-                        onEdit: () => _showEditProfileDialog(context, profile),
-                        onDelete: () => _confirmDeleteProfile(context, profile),
+                        onEdit: () => _showEditProfileDialog(context, profile, tr),
+                        onDelete: () => _confirmDeleteProfile(context, profile, tr),
                       );
                     },
                   ),
@@ -126,6 +129,7 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
     BuildContext context, {
     required Profile profile,
     required bool isActive,
+    required Translations tr,
     required VoidCallback onSelect,
     required VoidCallback onRefresh,
     required VoidCallback onEdit,
@@ -191,14 +195,14 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
                             ),
-                            child: const Row(
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.check_circle_rounded, size: 10, color: Color(0xFF10B981)),
-                                SizedBox(width: 4),
+                                const Icon(Icons.check_circle_rounded, size: 10, color: Color(0xFF10B981)),
+                                const SizedBox(width: 4),
                                 Text(
-                                  'ACTIVE',
-                                  style: TextStyle(
+                                  tr.activeBadge,
+                                  style: const TextStyle(
                                     fontSize: 9,
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: 0.5,
@@ -212,7 +216,7 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      profile.url ?? profile.filePath ?? 'Manual Raw Configuration',
+                      profile.url ?? profile.filePath ?? (tr.isZh ? '手动本地配置' : 'Manual Raw Configuration'),
                       style: TextStyle(
                         fontSize: 12,
                         color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
@@ -230,17 +234,17 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                   if (profile.type == ProfileType.remote)
                     IconButton(
                       icon: const Icon(Icons.refresh_rounded, size: 20),
-                      tooltip: 'Update Subscription',
+                      tooltip: tr.updateSub,
                       onPressed: onRefresh,
                     ),
                   IconButton(
                     icon: const Icon(Icons.code_rounded, size: 20),
-                    tooltip: 'Edit Config',
+                    tooltip: tr.editConfig,
                     onPressed: onEdit,
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                    tooltip: 'Delete',
+                    tooltip: tr.deleteProfile,
                     hoverColor: const Color(0xFFF43F5E).withValues(alpha: 0.15),
                     onPressed: onDelete,
                   ),
@@ -253,7 +257,7 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                         foregroundColor: const Color(0xFFE2E8F0),
                       ),
                       onPressed: onSelect,
-                      child: const Text('Use', style: TextStyle(fontSize: 12)),
+                      child: Text(tr.useProfile, style: const TextStyle(fontSize: 12)),
                     ),
                 ],
               ),
@@ -270,7 +274,7 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'TRAFFIC USAGE',
+                      tr.trafficUsage,
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
@@ -310,15 +314,15 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
             children: [
               Row(
                 children: [
-                  _buildMetaChip(Icons.hub_rounded, '${profile.nodeCount} nodes'),
+                  _buildMetaChip(Icons.hub_rounded, '${profile.nodeCount} ${tr.nodesCount}'),
                   const SizedBox(width: 16),
-                  _buildMetaChip(Icons.access_time_rounded, 'Updated: ${ByteFormatter.formatDate(profile.updatedAt)}'),
+                  _buildMetaChip(Icons.access_time_rounded, '${tr.updatedPrefix}${ByteFormatter.formatDate(profile.updatedAt)}'),
                 ],
               ),
               if (profile.expireDate != null)
                 _buildMetaChip(
                   Icons.event_outlined,
-                  'Expires: ${ByteFormatter.formatDate(profile.expireDate)}',
+                  '${tr.expiresPrefix}${ByteFormatter.formatDate(profile.expireDate)}',
                 ),
             ],
           ),
@@ -338,7 +342,7 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
     );
   }
 
-  void _showAddProfileDialog(BuildContext context) {
+  void _showAddProfileDialog(BuildContext context, Translations tr) {
     final nameCtrl = TextEditingController();
     final urlCtrl = TextEditingController();
     final rawCtrl = TextEditingController();
@@ -349,16 +353,16 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           return AlertDialog(
-            title: const Text('Add Profile / Subscription', style: TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(tr.addProfile, style: const TextStyle(fontWeight: FontWeight.bold)),
             content: SizedBox(
               width: 520,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   SegmentedButton<int>(
-                    segments: const [
-                      ButtonSegment(value: 0, label: Text('Remote URL')),
-                      ButtonSegment(value: 1, label: Text('Raw Config / URI')),
+                    segments: [
+                      ButtonSegment(value: 0, label: Text(tr.tabRemoteUrl)),
+                      ButtonSegment(value: 1, label: Text(tr.tabRawConfig)),
                     ],
                     selected: {tabIndex},
                     onSelectionChanged: (set) {
@@ -368,14 +372,14 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                   const SizedBox(height: 20),
                   TextField(
                     controller: nameCtrl,
-                    decoration: const InputDecoration(labelText: 'Profile Alias', hintText: 'e.g. My Provider'),
+                    decoration: InputDecoration(labelText: tr.profileAlias, hintText: tr.isZh ? '例如：我的订阅服务' : 'e.g. My Provider'),
                   ),
                   const SizedBox(height: 16),
                   if (tabIndex == 0)
                     TextField(
                       controller: urlCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Subscription URL',
+                      decoration: InputDecoration(
+                        labelText: tr.subUrl,
                         hintText: 'https://...',
                       ),
                     )
@@ -383,9 +387,9 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                     TextField(
                       controller: rawCtrl,
                       maxLines: 8,
-                      decoration: const InputDecoration(
-                        labelText: 'Configuration Payload',
-                        hintText: 'Paste sing-box JSON, Clash YAML, or Shadowsocks/Vmess/Vless/Trojan/Hy2 URLs',
+                      decoration: InputDecoration(
+                        labelText: tr.configPayload,
+                        hintText: tr.configPayloadHint,
                       ),
                       style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                     ),
@@ -393,7 +397,7 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr.cancel)),
               ElevatedButton(
                 onPressed: () async {
                   final name = nameCtrl.text.trim();
@@ -404,7 +408,7 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                       final success = await ref.read(profilesProvider.notifier).addProfileFromUrl(name: name, url: url);
                       if (context.mounted && !success) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Failed to download subscription URL')),
+                          SnackBar(content: Text(tr.downloadSubFailed)),
                         );
                       }
                     }
@@ -416,7 +420,7 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                     }
                   }
                 },
-                child: const Text('Import'),
+                child: Text(tr.importSubscription),
               ),
             ],
           );
@@ -425,13 +429,13 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
     );
   }
 
-  void _showEditProfileDialog(BuildContext context, Profile profile) {
+  void _showEditProfileDialog(BuildContext context, Profile profile, Translations tr) {
     final ctrl = TextEditingController(text: profile.rawConfig);
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Edit Profile: ${profile.name}', style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Text('${tr.editConfig}: ${profile.name}', style: const TextStyle(fontWeight: FontWeight.bold)),
         content: SizedBox(
           width: 720,
           height: 480,
@@ -447,34 +451,34 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr.cancel)),
           ElevatedButton(
             onPressed: () async {
               await ref.read(profilesProvider.notifier).updateProfileContent(profile.id, ctrl.text);
               if (ctx.mounted) Navigator.pop(ctx);
             },
-            child: const Text('Save Changes'),
+            child: Text(tr.saveChanges),
           ),
         ],
       ),
     );
   }
 
-  void _confirmDeleteProfile(BuildContext context, Profile profile) {
+  void _confirmDeleteProfile(BuildContext context, Profile profile, Translations tr) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Profile'),
-        content: Text('Are you sure you want to delete "${profile.name}"?'),
+        title: Text(tr.deleteProfile),
+        content: Text('${tr.confirmDelete} ("${profile.name}")'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr.cancel)),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
             onPressed: () async {
               await ref.read(profilesProvider.notifier).deleteProfile(profile.id);
               if (ctx.mounted) Navigator.pop(ctx);
             },
-            child: const Text('Delete'),
+            child: Text(tr.delete),
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/i18n/translations.dart';
 import '../../core/models/log_entry.dart';
 import '../../core/providers/logs_provider.dart';
 import 'package:intl/intl.dart';
@@ -35,6 +36,7 @@ class _LogsPageState extends ConsumerState<LogsPage> {
   @override
   Widget build(BuildContext context) {
     final logsState = ref.watch(logsProvider);
+    final tr = ref.watch(translationsProvider);
     final logs = logsState.filteredLogs;
 
     // Trigger auto scroll after build
@@ -51,9 +53,9 @@ class _LogsPageState extends ConsumerState<LogsPage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'SYSTEM LOG STREAM',
-                    style: TextStyle(
+                  Text(
+                    tr.logStream,
+                    style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.0,
@@ -62,7 +64,7 @@ class _LogsPageState extends ConsumerState<LogsPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Real-time core diagnostics and WebSocket log pipeline',
+                    tr.logStreamDesc,
                     style: TextStyle(
                       fontSize: 13,
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
@@ -87,7 +89,7 @@ class _LogsPageState extends ConsumerState<LogsPage> {
                   items: LogLevel.values.map((level) {
                     return DropdownMenuItem(
                       value: level,
-                      child: Text('Level: ${level.nameStr}', style: const TextStyle(fontSize: 12)),
+                      child: Text('${tr.levelPrefix}${level.nameStr}', style: const TextStyle(fontSize: 12)),
                     );
                   }).toList(),
                   onChanged: (val) {
@@ -105,11 +107,11 @@ class _LogsPageState extends ConsumerState<LogsPage> {
                 width: 180,
                 height: 38,
                 child: TextField(
-                  decoration: const InputDecoration(
-                    hintText: 'Search logs...',
-                    hintStyle: TextStyle(fontSize: 12),
-                    prefixIcon: Icon(Icons.search_rounded, size: 16),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                  decoration: InputDecoration(
+                    hintText: tr.searchLogs,
+                    hintStyle: const TextStyle(fontSize: 12),
+                    prefixIcon: const Icon(Icons.search_rounded, size: 16),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10),
                   ),
                   onChanged: (val) {
                     ref.read(logsProvider.notifier).setSearchQuery(val);
@@ -125,7 +127,7 @@ class _LogsPageState extends ConsumerState<LogsPage> {
                   logsState.isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
                   color: logsState.isPaused ? const Color(0xFF10B981) : null,
                 ),
-                tooltip: logsState.isPaused ? 'Resume live update' : 'Pause logs',
+                tooltip: logsState.isPaused ? tr.resumeLogs : tr.pauseLogs,
                 onPressed: () {
                   ref.read(logsProvider.notifier).togglePause();
                 },
@@ -134,12 +136,12 @@ class _LogsPageState extends ConsumerState<LogsPage> {
               // Copy All
               IconButton(
                 icon: const Icon(Icons.copy_rounded, size: 18),
-                tooltip: 'Copy all to clipboard',
+                tooltip: tr.copyAll,
                 onPressed: () {
                   final text = logs.map((l) => '[${l.level.nameStr}] ${l.message}').join('\n');
                   Clipboard.setData(ClipboardData(text: text));
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Logs copied to clipboard')),
+                    SnackBar(content: Text(tr.logsCopied)),
                   );
                 },
               ),
@@ -147,7 +149,7 @@ class _LogsPageState extends ConsumerState<LogsPage> {
               // Clear
               IconButton(
                 icon: const Icon(Icons.delete_sweep_rounded, size: 20),
-                tooltip: 'Clear logs',
+                tooltip: tr.clearLogs,
                 onPressed: () {
                   ref.read(logsProvider.notifier).clearLogs();
                 },
@@ -174,10 +176,10 @@ class _LogsPageState extends ConsumerState<LogsPage> {
                 ],
               ),
               child: logs.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text(
-                        'No core log events captured yet',
-                        style: TextStyle(color: Color(0xFF64748B), fontFamily: 'monospace'),
+                        tr.noLogsYet,
+                        style: const TextStyle(color: Color(0xFF64748B), fontFamily: 'monospace'),
                       ),
                     )
                   : ListView.builder(

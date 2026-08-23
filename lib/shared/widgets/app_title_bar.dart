@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
+import '../../core/i18n/translations.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/providers/settings_provider.dart';
 import 'status_badge.dart';
@@ -12,6 +13,7 @@ class AppTitleBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final coreState = ref.watch(coreProvider);
+    final tr = ref.watch(translationsProvider);
     final isDesktop = Platform.isLinux || Platform.isWindows || Platform.isMacOS;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -61,7 +63,7 @@ class AppTitleBar extends ConsumerWidget {
                   letterSpacing: -0.2,
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                 decoration: BoxDecoration(
@@ -110,14 +112,14 @@ class AppTitleBar extends ConsumerWidget {
                 _buildWindowButton(
                   icon: Icons.remove_rounded,
                   size: 16,
-                  tooltip: 'Minimize',
+                  tooltip: tr.minimize,
                   onTap: () => windowManager.minimize(),
                 ),
                 const SizedBox(width: 4),
                 _buildWindowButton(
                   icon: Icons.crop_square_rounded,
                   size: 14,
-                  tooltip: 'Maximize',
+                  tooltip: tr.maximize,
                   onTap: () async {
                     if (await windowManager.isMaximized()) {
                       windowManager.unmaximize();
@@ -130,7 +132,7 @@ class AppTitleBar extends ConsumerWidget {
                 _buildWindowButton(
                   icon: Icons.close_rounded,
                   size: 16,
-                  tooltip: 'Close',
+                  tooltip: tr.close,
                   hoverColor: const Color(0xFFF43F5E).withValues(alpha: 0.2),
                   onTap: () async {
                     final settings = ref.read(settingsProvider);

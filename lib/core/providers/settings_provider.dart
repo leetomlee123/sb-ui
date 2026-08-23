@@ -41,6 +41,10 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     await updateSettings(state.copyWith(themeMode: mode));
   }
 
+  Future<void> setLanguage(String language) async {
+    await updateSettings(state.copyWith(language: language));
+  }
+
   Future<void> setCustomSingboxPath(String path) async {
     await updateSettings(state.copyWith(customSingboxPath: path));
   }

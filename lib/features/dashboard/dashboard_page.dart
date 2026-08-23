@@ -1,6 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/i18n/translations.dart';
 import '../../core/models/app_settings.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/providers/proxies_provider.dart';
@@ -18,6 +19,7 @@ class DashboardPage extends ConsumerWidget {
     final trafficState = ref.watch(trafficProvider);
     final settings = ref.watch(settingsProvider);
     final proxiesState = ref.watch(proxiesProvider);
+    final tr = ref.watch(translationsProvider);
 
     final isRunning = coreState.isRunning;
 
@@ -111,7 +113,7 @@ class DashboardPage extends ConsumerWidget {
                             Row(
                               children: [
                                 Text(
-                                  isRunning ? 'CONNECTED' : 'DISCONNECTED',
+                                  isRunning ? tr.connected : tr.disconnected,
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w900,
@@ -141,8 +143,8 @@ class DashboardPage extends ConsumerWidget {
                             const SizedBox(height: 6),
                             Text(
                               isRunning
-                                  ? 'Profile: ${coreState.activeProfileName ?? "Default"}'
-                                  : (coreState.errorMessage ?? 'Click the power button to start sing-box'),
+                                  ? '${tr.isZh ? "当前配置" : "Profile"}: ${coreState.activeProfileName ?? (tr.isZh ? "默认配置" : "Default")}'
+                                  : (coreState.errorMessage ?? tr.clickToConnect),
                               style: TextStyle(
                                 fontSize: 13,
                                 color: coreState.errorMessage != null
@@ -163,8 +165,8 @@ class DashboardPage extends ConsumerWidget {
                                 const SizedBox(width: 6),
                                 Text(
                                   isRunning
-                                      ? 'Uptime ${ByteFormatter.formatDuration(coreState.uptime)}'
-                                      : 'Standby mode',
+                                      ? '${tr.uptime} ${ByteFormatter.formatDuration(coreState.uptime)}'
+                                      : tr.standby,
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontFamily: 'monospace',
@@ -191,9 +193,9 @@ class DashboardPage extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'ROUTING POLICY',
-                        style: TextStyle(
+                      Text(
+                        tr.routingPolicy,
+                        style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1.0,
@@ -202,10 +204,10 @@ class DashboardPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 12),
                       SegmentedButton<RoutingMode>(
-                        segments: const [
-                          ButtonSegment(value: RoutingMode.rule, label: Text('Rule', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-                          ButtonSegment(value: RoutingMode.global, label: Text('Global', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-                          ButtonSegment(value: RoutingMode.direct, label: Text('Direct', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+                        segments: [
+                          ButtonSegment(value: RoutingMode.rule, label: Text(tr.modeRule, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+                          ButtonSegment(value: RoutingMode.global, label: Text(tr.modeGlobal, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+                          ButtonSegment(value: RoutingMode.direct, label: Text(tr.modeDirect, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
                         ],
                         selected: {settings.routingMode},
                         onSelectionChanged: (set) {
@@ -223,7 +225,7 @@ class DashboardPage extends ConsumerWidget {
                           Expanded(
                             child: _buildFeaturePill(
                               context,
-                              title: 'TUN Mode',
+                              title: tr.tunMode,
                               isActive: settings.tunModeEnabled,
                               icon: Icons.vpn_key_rounded,
                               activeColor: const Color(0xFF6366F1),
@@ -237,7 +239,7 @@ class DashboardPage extends ConsumerWidget {
                           Expanded(
                             child: _buildFeaturePill(
                               context,
-                              title: 'System Proxy',
+                              title: tr.systemProxy,
                               isActive: settings.systemProxyEnabled,
                               icon: Icons.public_rounded,
                               activeColor: const Color(0xFF38BDF8),
@@ -263,26 +265,28 @@ class DashboardPage extends ConsumerWidget {
             children: [
               _buildMetricCard(
                 context,
-                title: 'DOWNLOAD',
+                title: tr.downloadSpeed,
                 value: ByteFormatter.formatSpeed(trafficState.currentDown),
-                total: 'Total: ${ByteFormatter.formatBytes(trafficState.totalDown)}',
+                total: '${tr.totalDownload}: ${ByteFormatter.formatBytes(trafficState.totalDown)}',
                 icon: Icons.arrow_downward_rounded,
                 color: const Color(0xFF38BDF8),
               ),
               const SizedBox(width: 12),
               _buildMetricCard(
                 context,
-                title: 'UPLOAD',
+                title: tr.uploadSpeed,
                 value: ByteFormatter.formatSpeed(trafficState.currentUp),
-                total: 'Total: ${ByteFormatter.formatBytes(trafficState.totalUp)}',
+                total: '${tr.totalUpload}: ${ByteFormatter.formatBytes(trafficState.totalUp)}',
                 icon: Icons.arrow_upward_rounded,
                 color: const Color(0xFF818CF8),
               ),
               const SizedBox(width: 12),
               _buildActiveNodeCard(
                 context,
+                title: tr.activeOutbound,
                 nodeName: currentNodeName,
                 isRunning: isRunning,
+                notConnectedStr: tr.notConnected,
               ),
             ],
           ),
@@ -300,9 +304,9 @@ class DashboardPage extends ConsumerWidget {
                   children: [
                     Row(
                       children: [
-                        const Text(
-                          'TELEMETRY STREAM',
-                          style: TextStyle(
+                        Text(
+                          tr.telemetryStream,
+                          style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 1.0,
@@ -316,18 +320,18 @@ class DashboardPage extends ConsumerWidget {
                             color: const Color(0xFF151E33),
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: const Text(
-                            'LIVE',
-                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF38BDF8)),
+                          child: Text(
+                            tr.live,
+                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF38BDF8)),
                           ),
                         ),
                       ],
                     ),
                     Row(
                       children: [
-                        _buildLegendPill(const Color(0xFF38BDF8), 'Down ${ByteFormatter.formatSpeed(trafficState.currentDown)}'),
+                        _buildLegendPill(const Color(0xFF38BDF8), '↓ ${ByteFormatter.formatSpeed(trafficState.currentDown)}'),
                         const SizedBox(width: 12),
-                        _buildLegendPill(const Color(0xFF818CF8), 'Up ${ByteFormatter.formatSpeed(trafficState.currentUp)}'),
+                        _buildLegendPill(const Color(0xFF818CF8), '↑ ${ByteFormatter.formatSpeed(trafficState.currentUp)}'),
                       ],
                     ),
                   ],
@@ -338,7 +342,7 @@ class DashboardPage extends ConsumerWidget {
                   child: trafficState.history.isEmpty
                       ? Center(
                           child: Text(
-                            'Telemetry data will populate when connection is established',
+                            tr.telemetryEmptyHint,
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
                               fontSize: 13,
@@ -476,8 +480,10 @@ class DashboardPage extends ConsumerWidget {
 
   Widget _buildActiveNodeCard(
     BuildContext context, {
+    required String title,
     required String nodeName,
     required bool isRunning,
+    required String notConnectedStr,
   }) {
     return Expanded(
       child: DoubleBezelCard(
@@ -498,7 +504,7 @@ class DashboardPage extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'ACTIVE OUTBOUND',
+                    title,
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
@@ -508,7 +514,7 @@ class DashboardPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    isRunning ? nodeName : 'Not Connected',
+                    isRunning ? nodeName : notConnectedStr,
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -519,7 +525,7 @@ class DashboardPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    isRunning ? 'Primary Group: Proxy' : 'Standby',
+                    isRunning ? 'Group: Proxy' : 'Standby',
                     style: TextStyle(
                       fontSize: 11,
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
