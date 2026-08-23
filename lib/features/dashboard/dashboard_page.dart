@@ -243,9 +243,10 @@ class DashboardPage extends ConsumerWidget {
                               isActive: settings.systemProxyEnabled,
                               icon: Icons.public_rounded,
                               activeColor: const Color(0xFF38BDF8),
-                              onTap: () {
-                                ref.read(settingsProvider.notifier).toggleSystemProxy(!settings.systemProxyEnabled);
-                                if (isRunning) ref.read(coreProvider.notifier).restartCore();
+                              onTap: () async {
+                                final next = !settings.systemProxyEnabled;
+                                await ref.read(settingsProvider.notifier).toggleSystemProxy(next);
+                                await ref.read(coreProvider.notifier).updateSystemProxyState(next);
                               },
                             ),
                           ),

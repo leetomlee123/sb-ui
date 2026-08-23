@@ -146,6 +146,20 @@ class CoreNotifier extends StateNotifier<CoreState> {
     }
   }
 
+  Future<void> updateSystemProxyState(bool enabled) async {
+    if (state.isRunning) {
+      if (enabled) {
+        final settings = _ref.read(settingsProvider);
+        await SystemProxyManager.setProxy(
+          host: '127.0.0.1',
+          port: settings.mixedPort,
+        );
+      } else {
+        await SystemProxyManager.clearProxy();
+      }
+    }
+  }
+
   Future<void> stopCore() async {
     // Clear system proxy
     await SystemProxyManager.clearProxy();

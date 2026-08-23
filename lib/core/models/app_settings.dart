@@ -40,7 +40,7 @@ class AppSettings {
     this.mixedPort = 2080,
     this.clashApiPort = 9090,
     this.clashApiSecret = '',
-    this.systemProxyEnabled = false,
+    this.systemProxyEnabled = true,
     this.tunModeEnabled = false,
     this.tunStack = 'mixed',
     this.logLevel = 'info',

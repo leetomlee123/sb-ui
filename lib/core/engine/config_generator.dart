@@ -226,14 +226,14 @@ class ConfigGenerator {
             'type': 'remote',
             'tag': 'geoip-cn',
             'format': 'binary',
-            'url': 'https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs',
+            'url': 'https://testingcf.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs',
             'download_detour': 'direct',
           },
           {
             'type': 'remote',
             'tag': 'geosite-cn',
             'format': 'binary',
-            'url': 'https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs',
+            'url': 'https://testingcf.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs',
             'download_detour': 'direct',
           }
         ],

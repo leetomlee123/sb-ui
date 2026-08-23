@@ -52,14 +52,32 @@ class SystemProxyManager {
     }
   }
 
-  // --- Windows ---
+  // --- Windows (WinINet with broadcast notification) ---
 
   static Future<bool> _setWindowsProxy(String host, int port) async {
     try {
       final proxyServer = '$host:$port';
-      const regKey = r'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings';
-      final command = "Set-ItemProperty -Path '$regKey' -Name ProxyEnable -Value 1; Set-ItemProperty -Path '$regKey' -Name ProxyServer -Value '$proxyServer'";
-      final result = await Process.run('powershell', ['-NoProfile', '-Command', command]);
+      const proxyOverride = '<local>;localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*';
+      
+      final psScript = '''
+\$reg = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'
+Set-ItemProperty -Path \$reg -Name ProxyEnable -Value 1
+Set-ItemProperty -Path \$reg -Name ProxyServer -Value '$proxyServer'
+Set-ItemProperty -Path \$reg -Name ProxyOverride -Value '$proxyOverride'
+
+try {
+  \$sig = @'
+[DllImport("wininet.dll", SetLastError = true, CharSet = CharSet.Auto)]
+public static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);
+'@
+  \$type = Add-Type -MemberDefinition \$sig -Name "WinINetProxy" -Namespace "Win32Native" -PassThru -ErrorAction SilentlyContinue
+  if (\$type) {
+    [Win32Native.WinINetProxy]::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0) | Out-Null
+    [Win32Native.WinINetProxy]::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0) | Out-Null
+  }
+} catch {}
+''';
+      final result = await Process.run('powershell', ['-NoProfile', '-NonInteractive', '-Command', psScript]);
       return result.exitCode == 0;
     } catch (_) {
       return false;
@@ -68,9 +86,23 @@ class SystemProxyManager {
 
   static Future<bool> _clearWindowsProxy() async {
     try {
-      const regKey = r'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings';
-      final command = "Set-ItemProperty -Path '$regKey' -Name ProxyEnable -Value 0";
-      final result = await Process.run('powershell', ['-NoProfile', '-Command', command]);
+      final psScript = '''
+\$reg = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'
+Set-ItemProperty -Path \$reg -Name ProxyEnable -Value 0
+
+try {
+  \$sig = @'
+[DllImport("wininet.dll", SetLastError = true, CharSet = CharSet.Auto)]
+public static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);
+'@
+  \$type = Add-Type -MemberDefinition \$sig -Name "WinINetProxy" -Namespace "Win32Native" -PassThru -ErrorAction SilentlyContinue
+  if (\$type) {
+    [Win32Native.WinINetProxy]::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0) | Out-Null
+    [Win32Native.WinINetProxy]::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0) | Out-Null
+  }
+} catch {}
+''';
+      final result = await Process.run('powershell', ['-NoProfile', '-NonInteractive', '-Command', psScript]);
       return result.exitCode == 0;
     } catch (_) {
       return false;

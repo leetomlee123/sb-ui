@@ -153,9 +153,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   value: settings.systemProxyEnabled,
                   onChanged: (val) async {
                     await ref.read(settingsProvider.notifier).toggleSystemProxy(val);
-                    if (coreState.isRunning) {
-                      ref.read(coreProvider.notifier).restartCore();
-                    }
+                    await ref.read(coreProvider.notifier).updateSystemProxyState(val);
                   },
                 ),
                 Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
