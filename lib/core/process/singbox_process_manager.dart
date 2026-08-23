@@ -135,10 +135,12 @@ class SingboxProcessManager {
 
     try {
       _outputController.add(LogEntry(level: LogLevel.info, message: 'Launching sing-box process...'));
+      final configParentDir = File(configPath).parent.path;
       _process = await Process.start(
         binary,
         ['run', '-c', configPath],
         mode: ProcessStartMode.normal,
+        workingDirectory: configParentDir,
         environment: _coreEnvironment,
       );
 

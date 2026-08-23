@@ -77,11 +77,35 @@ class StorageService {
   // --- App Directory for runtime configs ---
 
   static Future<Directory> getAppConfigDir() async {
-    final baseDir = await getApplicationSupportDirectory();
-    final configDir = Directory('${baseDir.path}/sing-box');
-    if (!await configDir.exists()) {
-      await configDir.create(recursive: true);
+    // 1. Try local portable ./config directory next to executable
+    try {
+      final appExeDir = File(Platform.resolvedExecutable).parent.path;
+      final localConfigDir = Directory('$appExeDir/config');
+      if (!await localConfigDir.exists()) {
+        await localConfigDir.create(recursive: true);
+      }
+      // Verify write permission
+      final testFile = File('${localConfigDir.path}/.test_write');
+      await testFile.writeAsString('1');
+      await testFile.delete();
+      return localConfigDir;
+    } catch (_) {}
+
+    // 2. Fallback to user application support directory
+    try {
+      final baseDir = await getApplicationSupportDirectory();
+      final fallbackConfigDir = Directory('${baseDir.path}/config');
+      if (!await fallbackConfigDir.exists()) {
+        await fallbackConfigDir.create(recursive: true);
+      }
+      return fallbackConfigDir;
+    } catch (_) {}
+
+    // 3. Last-resort fallback to current working directory
+    final cwdConfigDir = Directory('./config');
+    if (!await cwdConfigDir.exists()) {
+      await cwdConfigDir.create(recursive: true);
     }
-    return configDir;
+    return cwdConfigDir;
   }
 }
