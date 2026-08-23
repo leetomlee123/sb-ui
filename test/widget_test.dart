@@ -60,9 +60,19 @@ proxy-groups:
     expect(generated['route'], isNotNull);
     expect(generated['experimental']['clash_api']['external_controller'], '127.0.0.1:9090');
 
+    final outboundsList = generated['outbounds'] as List;
+    final allTags = outboundsList.map((o) => o['tag'].toString()).toSet();
+
     // Verify auto group sanitized non-existent-node
-    final autoGroup = (generated['outbounds'] as List).firstWhere((o) => o['tag'] == 'auto');
+    final autoGroup = outboundsList.firstWhere((o) => o['tag'] == 'auto');
     expect(autoGroup['outbounds'], contains('vless-cdn'));
     expect(autoGroup['outbounds'], isNot(contains('non-existent-node')));
+
+    // Verify Proxy group dependencies ALL exist in allTags
+    final proxyGroup = outboundsList.firstWhere((o) => o['tag'] == 'Proxy');
+    for (final dest in proxyGroup['outbounds'] as List) {
+      expect(allTags.contains(dest) || ['direct', 'block'].contains(dest), isTrue,
+          reason: 'Dependency $dest must exist in outbounds');
+    }
   });
 }
