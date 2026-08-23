@@ -50,7 +50,7 @@ void main() {
       final scriptPath = await service.writeSwapScript(
         stagingDir: r'C:\Temp\stage one',
         appDir: r'C:\Apps\sb ui',
-        exeName: 'sb_ui.exe',
+        exeName: 'singular.exe',
       );
 
       final script = await File(scriptPath).readAsString();

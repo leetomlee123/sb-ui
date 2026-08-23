@@ -78,7 +78,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name || github.event.inputs.tag_name }}
-          name: sing-box UI ${{ github.ref_name || github.event.inputs.tag_name }} (Windows)
+          name: Singular ${{ github.ref_name || github.event.inputs.tag_name }} (Windows)
           draft: false
           prerelease: false
           generate_release_notes: true
