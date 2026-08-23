@@ -7,6 +7,7 @@ import '../../core/providers/core_provider.dart';
 import '../../core/providers/profiles_provider.dart';
 import '../../core/utils/byte_formatter.dart';
 import '../../shared/widgets/double_bezel_card.dart';
+import 'widgets/manual_node_form_dialog.dart';
 
 class ProfilesPage extends ConsumerStatefulWidget {
   const ProfilesPage({super.key});
@@ -16,6 +17,13 @@ class ProfilesPage extends ConsumerStatefulWidget {
 }
 
 class _ProfilesPageState extends ConsumerState<ProfilesPage> {
+  void _showManualNodeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => const ManualNodeFormDialog(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final profilesState = ref.watch(profilesProvider);
@@ -28,7 +36,7 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row: Title & "Add Profile" button
+          // Header Row: Title & Action buttons
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -54,10 +62,20 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                   ),
                 ],
               ),
-              ElevatedButton.icon(
-                onPressed: () => _showAddProfileDialog(context, tr),
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: Text(tr.addProfile),
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => _showManualNodeDialog(context),
+                    icon: const Icon(Icons.tune_rounded, size: 16),
+                    label: Text(tr.tabManualForm),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddProfileDialog(context, tr),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: Text(tr.addProfile),
+                  ),
+                ],
               ),
             ],
           ),
@@ -399,12 +417,18 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                 children: [
                   SegmentedButton<int>(
                     segments: [
-                      ButtonSegment(value: 0, label: Text(tr.tabRemoteUrl)),
-                      ButtonSegment(value: 1, label: Text(tr.tabRawConfig)),
+                      ButtonSegment(value: 0, icon: const Icon(Icons.link_rounded, size: 15), label: Text(tr.tabRemoteUrl)),
+                      ButtonSegment(value: 1, icon: const Icon(Icons.description_outlined, size: 15), label: Text(tr.tabRawConfig)),
+                      ButtonSegment(value: 2, icon: const Icon(Icons.tune_rounded, size: 15), label: Text(tr.tabManualForm)),
                     ],
                     selected: {tabIndex},
                     onSelectionChanged: (set) {
-                      setDialogState(() => tabIndex = set.first);
+                      if (set.first == 2) {
+                        Navigator.pop(ctx);
+                        _showManualNodeDialog(context);
+                      } else {
+                        setDialogState(() => tabIndex = set.first);
+                      }
                     },
                   ),
                   const SizedBox(height: 20),
