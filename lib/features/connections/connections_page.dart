@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/i18n/translations.dart';
@@ -17,6 +18,26 @@ class ConnectionsPage extends ConsumerStatefulWidget {
 
 class _ConnectionsPageState extends ConsumerState<ConnectionsPage> {
   int _selectedTab = 0; // 0: Active Connections, 1: Traffic Analytics
+  Timer? _pollTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(connectionsProvider.notifier).refresh();
+      _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+        if (mounted) {
+          ref.read(connectionsProvider.notifier).refresh(silent: true);
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

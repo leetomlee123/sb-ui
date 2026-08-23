@@ -151,28 +151,15 @@ class _TempTraffic {
 
 class ConnectionsNotifier extends StateNotifier<ConnectionsState> {
   final Ref _ref;
-  Timer? _timer;
 
   ConnectionsNotifier(this._ref) : super(ConnectionsState()) {
     _ref.listen<CoreState>(coreProvider, (prev, next) {
       if (next.isRunning && (prev == null || !prev.isRunning)) {
         refresh();
-        _startTimer();
       } else if (!next.isRunning) {
-        _stopTimer();
         state = state.copyWith(connections: []);
       }
     });
-  }
-
-  void _startTimer() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 2), (_) => refresh(silent: true));
-  }
-
-  void _stopTimer() {
-    _timer?.cancel();
-    _timer = null;
   }
 
   Future<void> refresh({bool silent = false}) async {
@@ -218,12 +205,6 @@ class ConnectionsNotifier extends StateNotifier<ConnectionsState> {
       state = state.copyWith(connections: []);
     }
     return success;
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
   }
 }
 

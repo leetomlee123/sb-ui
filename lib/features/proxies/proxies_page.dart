@@ -378,14 +378,14 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
     }
 
     Color delayColor = const Color(0xFF64748B);
-    String delayText = '—';
+    String delayText = tr.isZh ? '测速' : 'Test';
 
     if (node.isTesting) {
       delayText = tr.pinging;
       delayColor = const Color(0xFFF59E0B);
     } else if (node.delay != null) {
       if (node.delay! <= 0) {
-        delayText = tr.timeout;
+        delayText = tr.isZh ? '不可用' : 'Timeout';
         delayColor = const Color(0xFFF43F5E);
       } else {
         delayText = '${node.delay} ms';

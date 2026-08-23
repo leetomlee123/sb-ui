@@ -62,16 +62,12 @@ class ProxiesState {
 
 class ProxiesNotifier extends StateNotifier<ProxiesState> {
   final Ref _ref;
-  Timer? _refreshTimer;
 
   ProxiesNotifier(this._ref) : super(ProxiesState()) {
     _ref.listen<CoreState>(coreProvider, (previous, next) {
       if (next.isRunning && (previous == null || !previous.isRunning)) {
         Future.delayed(const Duration(milliseconds: 200), () => fetchProxies());
         Future.delayed(const Duration(milliseconds: 800), () => fetchProxies(silent: true));
-        _startAutoRefresh();
-      } else if (!next.isRunning) {
-        _stopAutoRefresh();
       }
     });
 
@@ -114,6 +110,8 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
           if (initialGroup == null || !groups.containsKey(initialGroup)) {
             if (groups.containsKey('Proxy')) {
               initialGroup = 'Proxy';
+            } else if (groups.containsKey('Auto')) {
+              initialGroup = 'Auto';
             } else if (groups.containsKey('auto')) {
               initialGroup = 'auto';
             } else if (groups.isNotEmpty) {
@@ -131,16 +129,6 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
     } catch (_) {}
   }
 
-  void _startAutoRefresh() {
-    _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 8), (_) => fetchProxies(silent: true));
-  }
-
-  void _stopAutoRefresh() {
-    _refreshTimer?.cancel();
-    _refreshTimer = null;
-  }
-
   Future<void> fetchProxies({bool silent = false}) async {
     final client = _ref.read(clashApiClientProvider);
     if (client == null) {
@@ -154,6 +142,10 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
       final Map<String, ProxyGroup> groups = {};
       final Map<String, ProxyNode> nodes = {};
 
+      // First include all profile parsed nodes as baseline so NO node is ever lost or hidden!
+      _populateFromActiveProfile();
+      nodes.addAll(state.nodes);
+
       rawProxies.forEach((key, val) {
         if (val is Map<String, dynamic>) {
           final type = (val['type'] ?? '').toString().toLowerCase();
@@ -165,17 +157,17 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
         }
       });
 
-      // Fallback if API returned empty
-      if (groups.isEmpty && nodes.isEmpty) {
-        _populateFromActiveProfile();
-        if (!silent) state = state.copyWith(isLoading: false);
-        return;
+      // If API returned empty groups, keep profile groups
+      if (groups.isEmpty) {
+        groups.addAll(state.groups);
       }
 
       String? activeGroup = state.selectedGroup;
       if (activeGroup == null || !groups.containsKey(activeGroup)) {
         if (groups.containsKey('Proxy')) {
           activeGroup = 'Proxy';
+        } else if (groups.containsKey('Auto')) {
+          activeGroup = 'Auto';
         } else if (groups.containsKey('auto')) {
           activeGroup = 'auto';
         } else if (groups.isNotEmpty) {
@@ -205,33 +197,48 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
 
   Future<bool> selectNode(String groupName, String nodeName) async {
     final client = _ref.read(clashApiClientProvider);
-    if (client == null) return false;
 
-    // Direct selection target to parent selector (e.g. 'Proxy') if requested on urltest
-    String targetGroup = groupName;
-    if (state.groups.containsKey(groupName) && state.groups[groupName]!.type == OutboundType.urltest) {
-      if (state.groups.containsKey('Proxy')) {
-        targetGroup = 'Proxy';
-      } else {
-        final selector = state.groups.values.firstWhere(
-          (g) => g.type == OutboundType.selector,
-          orElse: () => state.groups.values.first,
-        );
-        targetGroup = selector.name;
+    // 1. Optimistic UI update: immediately switch current node in local groups
+    final updatedGroups = Map<String, ProxyGroup>.from(state.groups);
+    if (updatedGroups.containsKey(groupName) && updatedGroups[groupName]!.type == OutboundType.selector) {
+      updatedGroups[groupName] = updatedGroups[groupName]!.copyWith(current: nodeName);
+    }
+    if (updatedGroups.containsKey('Proxy')) {
+      updatedGroups['Proxy'] = updatedGroups['Proxy']!.copyWith(current: nodeName);
+    }
+    if (updatedGroups.containsKey('GLOBAL')) {
+      updatedGroups['GLOBAL'] = updatedGroups['GLOBAL']!.copyWith(current: nodeName);
+    }
+    state = state.copyWith(groups: updatedGroups);
+
+    if (client == null) return true;
+
+    // 2. Identify all selector groups in Clash API that need to be switched
+    final List<String> targetGroups = [];
+    if (state.groups.containsKey(groupName) && state.groups[groupName]!.type == OutboundType.selector) {
+      targetGroups.add(groupName);
+    }
+    for (final entry in state.groups.entries) {
+      if (entry.value.type == OutboundType.selector && entry.value.all.contains(nodeName) && !targetGroups.contains(entry.key)) {
+        targetGroups.add(entry.key);
       }
     }
-
-    final success = await client.selectProxy(targetGroup, nodeName);
-    if (success) {
-      final updatedGroups = Map<String, ProxyGroup>.from(state.groups);
-      if (updatedGroups.containsKey(targetGroup)) {
-        updatedGroups[targetGroup] = updatedGroups[targetGroup]!.copyWith(current: nodeName);
-      }
-      state = state.copyWith(groups: updatedGroups);
-      // Immediately resync
-      fetchProxies(silent: true);
+    if (targetGroups.isEmpty) {
+      if (state.groups.containsKey('Proxy')) targetGroups.add('Proxy');
+      if (state.groups.containsKey('GLOBAL')) targetGroups.add('GLOBAL');
     }
-    return success;
+
+    bool anySuccess = false;
+    for (final grp in targetGroups) {
+      try {
+        final ok = await client.selectProxy(grp, nodeName);
+        if (ok) anySuccess = true;
+      } catch (_) {}
+    }
+
+    // 3. Immediately re-fetch proxies from Clash API to synchronize
+    await fetchProxies(silent: true);
+    return anySuccess;
   }
 
   Future<void> testNodeDelay(String nodeName) async {
@@ -246,7 +253,8 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
 
       final delay = await client.testDelay(nodeName);
       final nodeAfter = state.nodes[nodeName] ?? current;
-      updatedNodes[nodeName] = nodeAfter.copyWith(delay: delay, isTesting: false);
+      // If delay is null or <= 0, mark as -1 (Timeout/Unavailable)
+      updatedNodes[nodeName] = nodeAfter.copyWith(delay: delay ?? -1, isTesting: false);
       state = state.copyWith(nodes: updatedNodes);
     }
   }
@@ -260,12 +268,6 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
       tests.add(testNodeDelay(nodeName));
     }
     await Future.wait(tests);
-  }
-
-  @override
-  void dispose() {
-    _refreshTimer?.cancel();
-    super.dispose();
   }
 }
 

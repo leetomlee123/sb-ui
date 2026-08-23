@@ -46,6 +46,9 @@ class LogsNotifier extends StateNotifier<LogsState> {
   StreamSubscription<LogEntry>? _wsLogSub;
   StreamSubscription<LogEntry>? _processOutputSub;
 
+  final List<LogEntry> _logBuffer = [];
+  Timer? _flushTimer;
+
   LogsNotifier(this._ref) : super(LogsState()) {
     // Listen to process output
     final processMgr = _ref.read(coreProvider.notifier).processManager;
@@ -67,7 +70,7 @@ class LogsNotifier extends StateNotifier<LogsState> {
     _wsLogSub?.cancel();
     final client = _ref.read(clashApiClientProvider);
     if (client != null) {
-      _wsLogSub = client.logsStream(level: 'debug').listen((entry) {
+      _wsLogSub = client.logsStream(level: 'info').listen((entry) {
         _addLog(entry);
       });
     }
@@ -80,10 +83,21 @@ class LogsNotifier extends StateNotifier<LogsState> {
 
   void _addLog(LogEntry entry) {
     if (state.isPaused) return;
-    final updated = [...state.logs, entry];
-    // Keep max 500 lines in memory
+    _logBuffer.add(entry);
+
+    if (_flushTimer == null || !_flushTimer!.isActive) {
+      _flushTimer = Timer(const Duration(milliseconds: 250), _flushLogs);
+    }
+  }
+
+  void _flushLogs() {
+    if (_logBuffer.isEmpty) return;
+    final List<LogEntry> toAdd = List.from(_logBuffer);
+    _logBuffer.clear();
+
+    final updated = [...state.logs, ...toAdd];
     if (updated.length > 500) {
-      updated.removeAt(0);
+      updated.removeRange(0, updated.length - 500);
     }
     state = state.copyWith(logs: updated);
   }
@@ -101,11 +115,13 @@ class LogsNotifier extends StateNotifier<LogsState> {
   }
 
   void clearLogs() {
+    _logBuffer.clear();
     state = state.copyWith(logs: []);
   }
 
   @override
   void dispose() {
+    _flushTimer?.cancel();
     _wsLogSub?.cancel();
     _processOutputSub?.cancel();
     super.dispose();
