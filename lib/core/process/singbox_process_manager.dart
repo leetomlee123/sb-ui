@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../models/log_entry.dart';
+import '../services/storage_service.dart';
 
 enum CoreStatus {
   stopped,
@@ -48,9 +49,12 @@ class SingboxProcessManager {
     }
 
     final exeDir = File(Platform.resolvedExecutable).parent.path;
+    final configDir = (await StorageService.getAppConfigDir()).path;
     final candidatePaths = [
-      // Bundled sidecars
+      // Bundled / updated sidecars
       p.join(exeDir, 'data', 'core', Platform.isWindows ? 'sing-box.exe' : 'sing-box'),
+      p.join(configDir, Platform.isWindows ? 'sing-box.exe' : 'sing-box'),
+      p.join(exeDir, 'config', Platform.isWindows ? 'sing-box.exe' : 'sing-box'),
       p.join(exeDir, '..', 'Resources', 'core', 'sing-box'),
       p.join(exeDir, Platform.isWindows ? 'sing-box.exe' : 'sing-box'),
       p.join(Directory.current.path, 'core', Platform.isWindows ? 'sing-box.exe' : 'sing-box'),

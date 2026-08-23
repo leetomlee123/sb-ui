@@ -144,6 +144,12 @@ class Translations {
   String get customBinaryHint => isZh ? '默认自动从 PATH 环境变量或程序内置目录加载' : 'Auto-detected from PATH or bundled sidecar';
   String get testCore => isZh ? '检测内核' : 'Test Core';
   String get detectedCore => isZh ? '已检测到内核: ' : 'Detected Core: ';
+  String get btnCheckUpdate => isZh ? '检查内核更新' : 'Check for Updates';
+  String get btnUpdateNow => isZh ? '立即升级' : 'Update Now';
+  String get updatingStatus => isZh ? '正在升级内核...' : 'Updating Core...';
+  String get coreLatestBadge => isZh ? '最新版' : 'Latest';
+  String get coreNewBadge => isZh ? '有新版本' : 'New Version';
+  String get releaseNotesLabel => isZh ? '版本更新说明' : 'Release Notes';
 
   String get closeToTrayTitle => isZh ? '关闭窗口时最小化到系统托盘' : 'Minimize to System Tray on Close';
   String get closeToTraySubtitle => isZh ? '点击右上角 X 时将程序隐藏至后台托盘继续保持代理' : 'Keep core active in background when clicking window close button';
