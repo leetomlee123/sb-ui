@@ -75,9 +75,19 @@ class SingboxProcessManager {
     return null;
   }
 
+  static const Map<String, String> _coreEnvironment = {
+    'ENABLE_DEPRECATED_LEGACY_DNS_SERVERS': 'true',
+    'ENABLE_DEPRECATED_OUTBOUND_DNS_RULE_ITEM': 'true',
+    'ENABLE_DEPRECATED_MISSING_DOMAIN_RESOLVER': 'true',
+  };
+
   Future<bool> checkConfig(String binaryPath, String configPath) async {
     try {
-      final result = await Process.run(binaryPath, ['check', '-c', configPath]);
+      final result = await Process.run(
+        binaryPath,
+        ['check', '-c', configPath],
+        environment: _coreEnvironment,
+      );
       if (result.exitCode != 0) {
         _outputController.add(LogEntry(
           level: LogLevel.error,
@@ -129,6 +139,7 @@ class SingboxProcessManager {
         binary,
         ['run', '-c', configPath],
         mode: ProcessStartMode.normal,
+        environment: _coreEnvironment,
       );
 
       _startedAt = DateTime.now();

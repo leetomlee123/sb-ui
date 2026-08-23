@@ -35,10 +35,9 @@ class ConfigGenerator {
       });
     }
 
-    // 3. Built-in system outbounds
+    // 3. Built-in system outbounds (Note: dns outbound deprecated in 1.11+ and removed in 1.13+)
     outbounds.add({'type': 'direct', 'tag': 'direct'});
     outbounds.add({'type': 'block', 'tag': 'block'});
-    outbounds.add({'type': 'dns', 'tag': 'dns-out'});
 
     // 4. Append user nodes
     outbounds.addAll(parsedOutbounds);
@@ -50,8 +49,6 @@ class ConfigGenerator {
         'tag': 'mixed-in',
         'listen': settings.allowLan ? '0.0.0.0' : '127.0.0.1',
         'listen_port': settings.mixedPort,
-        'sniff': true,
-        'sniff_override_destination': true,
       },
     ];
 
@@ -61,20 +58,21 @@ class ConfigGenerator {
         'type': 'tun',
         'tag': 'tun-in',
         'interface_name': 'singbox-tun',
-        'inet4_address': '172.19.0.1/30',
+        'address': ['172.19.0.1/30'],
         'auto_route': true,
         'strict_route': true,
         'stack': settings.tunStack,
-        'sniff': true,
-        'sniff_override_destination': true,
       });
     }
 
     // Route rules based on routingMode
     final List<Map<String, dynamic>> routeRules = [
       {
+        'action': 'sniff',
+      },
+      {
         'protocol': 'dns',
-        'outbound': 'dns-out',
+        'action': 'hijack-dns',
       },
       {
         'ip_is_private': true,
@@ -118,26 +116,10 @@ class ConfigGenerator {
       },
       'dns': {
         'servers': [
-          {
-            'tag': 'remote-dns',
-            'address': settings.remoteDns,
-            'detour': 'Proxy',
-          },
-          {
-            'tag': 'local-dns',
-            'address': settings.directDns,
-            'detour': 'direct',
-          },
-          {
-            'tag': 'block-dns',
-            'address': 'rcode://success',
-          }
+          _buildDnsServer('remote-dns', settings.remoteDns, detour: 'Proxy'),
+          _buildDnsServer('local-dns', settings.directDns, detour: 'direct'),
         ],
         'rules': [
-          {
-            'outbound': 'any',
-            'server': 'local-dns',
-          },
           {
             'rule_set': 'geosite-cn',
             'server': 'local-dns',
@@ -157,6 +139,7 @@ class ConfigGenerator {
       'inbounds': inbounds,
       'outbounds': outbounds,
       'route': {
+        'default_domain_resolver': 'local-dns',
         'rules': routeRules,
         'rule_set': [
           {
@@ -178,15 +161,57 @@ class ConfigGenerator {
         'auto_detect_interface': true,
       },
       'experimental': {
+        'cache_file': {
+          'enabled': true,
+        },
         'clash_api': {
           'external_controller': '127.0.0.1:${settings.clashApiPort}',
           if (settings.clashApiSecret.isNotEmpty) 'secret': settings.clashApiSecret,
-          'store_selected': true,
         }
       }
     };
 
     return config;
+  }
+
+  static Map<String, dynamic> _buildDnsServer(String tag, String address, {String? detour}) {
+    final trimmed = address.trim();
+    if (trimmed.startsWith('https://')) {
+      final uri = Uri.parse(trimmed);
+      return {
+        'tag': tag,
+        'type': 'https',
+        'server': uri.host,
+        if (uri.port != 0 && uri.port != 443) 'server_port': uri.port,
+        if (uri.path.isNotEmpty && uri.path != '/') 'path': uri.path,
+        'detour': ?detour,
+      };
+    } else if (trimmed.startsWith('tls://')) {
+      final uri = Uri.parse(trimmed);
+      return {
+        'tag': tag,
+        'type': 'tls',
+        'server': uri.host,
+        if (uri.port != 0 && uri.port != 853) 'server_port': uri.port,
+        'detour': ?detour,
+      };
+    } else if (trimmed.startsWith('tcp://')) {
+      final uri = Uri.parse(trimmed);
+      return {
+        'tag': tag,
+        'type': 'tcp',
+        'server': uri.host,
+        if (uri.port != 0 && uri.port != 53) 'server_port': uri.port,
+        'detour': ?detour,
+      };
+    } else {
+      return {
+        'tag': tag,
+        'type': 'udp',
+        'server': trimmed.replaceAll('udp://', ''),
+        'detour': ?detour,
+      };
+    }
   }
 
   static String generateJsonString({
