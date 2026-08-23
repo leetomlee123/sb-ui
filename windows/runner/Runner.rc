@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.singbox.ui" "\0"
-            VALUE "FileDescription", "sb_ui" "\0"
+            VALUE "CompanyName", "Singular" "\0"
+            VALUE "FileDescription", "Singular" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "sb_ui" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.singbox.ui. All rights reserved." "\0"
+            VALUE "InternalName", "singular" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Singular. All rights reserved." "\0"
             VALUE "OriginalFilename", "sb_ui.exe" "\0"
-            VALUE "ProductName", "sb_ui" "\0"
+            VALUE "ProductName", "Singular" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

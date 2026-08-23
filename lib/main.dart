@@ -52,7 +52,7 @@ void main() async {
           backgroundColor: Colors.transparent,
           skipTaskbar: false,
           titleBarStyle: TitleBarStyle.hidden,
-          title: 'sing-box Desktop',
+          title: 'Singular',
         );
 
         await windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -221,7 +221,7 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
     }
 
     return MaterialApp(
-      title: 'sing-box UI',
+      title: 'Singular',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

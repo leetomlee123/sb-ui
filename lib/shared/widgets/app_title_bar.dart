@@ -58,11 +58,11 @@ class AppTitleBar extends ConsumerWidget {
               ),
               const SizedBox(width: 10),
               const Text(
-                'sing-box',
+                'SINGULAR',
                 style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
-                  letterSpacing: -0.2,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 13,
+                  letterSpacing: 0.8,
                 ),
               ),
               const SizedBox(width: 6),
@@ -73,7 +73,7 @@ class AppTitleBar extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Text(
-                  'DESKTOP',
+                  'BOX',
                   style: TextStyle(
                     fontSize: 9,
                     fontWeight: FontWeight.w800,

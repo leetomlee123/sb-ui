@@ -9,8 +9,7 @@ class Translations {
 
   bool get isZh => code == 'zh';
 
-  // Title bar & General
-  String get appTitle => isZh ? 'sing-box 客户端' : 'sing-box Desktop';
+  String get appTitle => isZh ? 'Singular - 奇点代理客户端' : 'Singular Desktop';
   String get minimize => isZh ? '最小化' : 'Minimize';
   String get maximize => isZh ? '最大化' : 'Maximize';
   String get close => isZh ? '关闭' : 'Close';
