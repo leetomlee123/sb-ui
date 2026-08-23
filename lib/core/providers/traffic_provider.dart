@@ -39,6 +39,7 @@ class TrafficState {
 class TrafficNotifier extends StateNotifier<TrafficState> {
   final Ref _ref;
   StreamSubscription<TrafficPoint>? _sub;
+  Timer? _totalsSyncTimer;
   final ListQueue<TrafficPoint> _historyQueue = ListQueue<TrafficPoint>(90);
 
   TrafficNotifier(this._ref) : super(TrafficState()) {
@@ -53,8 +54,17 @@ class TrafficNotifier extends StateNotifier<TrafficState> {
 
   void _startListening() {
     _sub?.cancel();
+    _totalsSyncTimer?.cancel();
     final client = _ref.read(clashApiClientProvider);
     if (client == null) return;
+
+    // Immediately fetch ground-truth totals from kernel
+    _syncTotals();
+
+    // Periodically sync authoritative totals from core /connections API
+    _totalsSyncTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      _syncTotals();
+    });
 
     _sub = client.trafficStream().listen((point) {
       if (_historyQueue.length >= 90) {
@@ -65,22 +75,35 @@ class TrafficNotifier extends StateNotifier<TrafficState> {
       state = state.copyWith(
         currentUp: point.up,
         currentDown: point.down,
-        totalUp: state.totalUp + point.up,
-        totalDown: state.totalDown + point.down,
         history: _historyQueue.toList(growable: false),
       );
     });
   }
 
+  Future<void> _syncTotals() async {
+    final client = _ref.read(clashApiClientProvider);
+    if (client == null) return;
+    try {
+      final data = await client.getConnectionsData();
+      state = state.copyWith(
+        totalDown: data.downloadTotal,
+        totalUp: data.uploadTotal,
+      );
+    } catch (_) {}
+  }
+
   void _stopListening() {
     _sub?.cancel();
     _sub = null;
+    _totalsSyncTimer?.cancel();
+    _totalsSyncTimer = null;
     state = state.copyWith(currentUp: 0, currentDown: 0);
   }
 
   @override
   void dispose() {
     _sub?.cancel();
+    _totalsSyncTimer?.cancel();
     super.dispose();
   }
 }
