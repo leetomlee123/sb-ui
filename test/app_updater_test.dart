@@ -55,7 +55,7 @@ void main() {
 
       final script = await File(scriptPath).readAsString();
 
-      expect(scriptPath, endsWith(r'stage one\sb_ui_self_update.bat'));
+      expect(scriptPath.replaceAll('/', r'\'), endsWith(r'stage one\sb_ui_self_update.bat'));
       expect(script, contains(r'set "APP_DIR=C:\Apps\sb ui"'));
       expect(script, contains(r'set "SRC_DIR=C:\Temp\stage one"'));
       expect(script, contains(r'tasklist /FI "IMAGENAME eq %EXE_NAME%"'));
