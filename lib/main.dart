@@ -59,13 +59,17 @@ void main() async {
     }
 
     // 4. Background Asynchronous Startup Tasks (non-blocking)
-    unawaited(_runBackgroundStartupTasks());
+    unawaited(_runBackgroundStartupTasks(storageService));
 
     // 5. Mount App
     runApp(
       ProviderScope(
         overrides: [
           storageServiceProvider.overrideWithValue(storageService),
+          settingsProvider.overrideWith((ref) => SettingsNotifier(
+                ref.watch(storageServiceProvider),
+                initial: initialSettings,
+              )),
         ],
         child: const SingboxApp(),
       ),
@@ -76,11 +80,16 @@ void main() async {
 }
 
 /// Asynchronous non-blocking maintenance tasks performed in background on startup.
-Future<void> _runBackgroundStartupTasks() async {
-  // 1. Clear any orphan system proxy left by abnormal previous shutdowns
-  try {
-    await SystemProxyManager.clearProxy();
-  } catch (_) {}
+Future<void> _runBackgroundStartupTasks(StorageService storageService) async {
+  // 1. Clear any orphan system proxy left by abnormal previous shutdowns.
+  //    Only spawns PowerShell when the dirty flag says a proxy of ours may
+  //    still be applied — skips it entirely on normal launches.
+  if (storageService.isSystemProxyDirty()) {
+    try {
+      final cleared = await SystemProxyManager.clearProxy();
+      if (cleared) await storageService.setSystemProxyDirty(false);
+    } catch (_) {}
+  }
 
   // 2. Ensure bundled SRS rules exist on disk
   try {

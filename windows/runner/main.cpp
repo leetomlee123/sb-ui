@@ -26,7 +26,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
-  Win32Window::Size size(1280, 720);
+  // Matches WindowOptions in lib/main.dart so the Dart side does not resize
+  // the window right after the first frame.
+  Win32Window::Size size(1020, 680);
   if (!window.Create(L"Singular", origin, size)) {
     return EXIT_FAILURE;
   }

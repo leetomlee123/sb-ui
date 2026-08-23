@@ -7,7 +7,10 @@ import 'storage_provider.dart';
 class SettingsNotifier extends StateNotifier<AppSettings> {
   final StorageService _storage;
 
-  SettingsNotifier(this._storage) : super(_storage.loadSettings());
+  /// [initial] lets main() hand over the settings it already decoded before
+  /// runApp, skipping a second synchronous JSON parse during first build.
+  SettingsNotifier(this._storage, {AppSettings? initial})
+      : super(initial ?? _storage.loadSettings());
 
   Future<void> updateSettings(AppSettings newSettings) async {
     state = newSettings;

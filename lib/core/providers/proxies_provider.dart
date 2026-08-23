@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../engine/profile_parser.dart';
 import '../models/proxy_node.dart';
@@ -80,6 +81,12 @@ class ProxiesState {
 class ProxiesNotifier extends StateNotifier<ProxiesState> {
   final Ref _ref;
 
+  // Startup dedupe: track which raw config has already been parsed so the
+  // potentially large subscription config is decoded once, not on every
+  // fetchProxies() fallback.
+  String? _populatedForRaw;
+  bool _populateInFlight = false;
+
   ProxiesNotifier(this._ref) : super(ProxiesState()) {
     _ref.listen<CoreState>(coreProvider, (previous, next) {
       if (next.isRunning && (previous == null || !previous.isRunning)) {
@@ -88,7 +95,9 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
       }
     });
 
-    _populateFromActiveProfile();
+    // Non-blocking: parsing runs in a background isolate and fills state
+    // when ready, keeping the first frame free of heavy JSON/YAML work.
+    unawaited(_populateFromActiveProfile());
   }
 
   static String? findBestDefaultGroup(Map<String, ProxyGroup> groups) {
@@ -113,76 +122,84 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
     return groups.keys.first;
   }
 
-  void _populateFromActiveProfile() {
+  Future<void> _populateFromActiveProfile() async {
+    if (_populateInFlight) return;
     try {
       final activeProfile = _ref.read(profilesProvider).activeProfile;
-      if (activeProfile != null && activeProfile.rawConfig.isNotEmpty) {
-        final parseResult = ProfileParser.parse(activeProfile.rawConfig);
-        final Map<String, ProxyGroup> groups = {};
-        final Map<String, ProxyNode> nodes = {};
+      final raw = activeProfile?.rawConfig ?? '';
+      if (raw.isEmpty || raw == _populatedForRaw) return;
 
-        for (final ob in parseResult.outbounds) {
-          final tag = (ob['tag'] ?? '').toString();
-          final type = (ob['type'] ?? '').toString().toLowerCase();
-          if (['selector', 'urltest', 'fallback', 'loadbalance'].contains(type)) {
-            final allList = (ob['outbounds'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
-            groups[tag] = ProxyGroup(
-              name: tag,
-              type: OutboundType.fromString(type),
-              current: allList.isNotEmpty ? allList.first : '',
-              all: allList,
-              raw: ob,
-            );
-          } else if (tag.isNotEmpty) {
-            nodes[tag] = ProxyNode(
-              name: tag,
-              type: OutboundType.fromString(type),
-              server: ob['server']?.toString(),
-              port: ob['server_port'] is int ? ob['server_port'] : int.tryParse(ob['server_port']?.toString() ?? ''),
-              raw: ob,
-            );
-          }
-        }
+      _populateInFlight = true;
+      // Heavy JSON/YAML decode of the raw subscription runs off the UI isolate.
+      final parseResult = await Isolate.run(() => ProfileParser.parse(raw));
+      final Map<String, ProxyGroup> groups = {};
+      final Map<String, ProxyNode> nodes = {};
 
-        // If no selector group exists in profile, synthesize the primary Proxy group so UI is immediately actionable
-        final hasSelector = groups.values.any((g) => g.type == OutboundType.selector);
-        if (!hasSelector && (nodes.isNotEmpty || groups.isNotEmpty)) {
-          final allTargets = [
-            ...groups.keys,
-            ...nodes.keys,
-            'direct',
-          ];
-          final preferredNode = _ref.read(settingsProvider).selectedProxyNode;
-          final initialCurrent = (preferredNode.isNotEmpty && allTargets.contains(preferredNode))
-              ? preferredNode
-              : (groups.keys.isNotEmpty ? groups.keys.first : (nodes.keys.isNotEmpty ? nodes.keys.first : 'direct'));
-
-          groups['Proxy'] = ProxyGroup(
-            name: 'Proxy',
-            type: OutboundType.selector,
-            current: initialCurrent,
-            all: allTargets,
-            raw: {'type': 'selector', 'tag': 'Proxy', 'outbounds': allTargets},
+      for (final ob in parseResult.outbounds) {
+        final tag = (ob['tag'] ?? '').toString();
+        final type = (ob['type'] ?? '').toString().toLowerCase();
+        if (['selector', 'urltest', 'fallback', 'loadbalance'].contains(type)) {
+          final allList = (ob['outbounds'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+          groups[tag] = ProxyGroup(
+            name: tag,
+            type: OutboundType.fromString(type),
+            current: allList.isNotEmpty ? allList.first : '',
+            all: allList,
+            raw: ob,
           );
-        }
-
-        if (groups.isNotEmpty || nodes.isNotEmpty) {
-          String? initialGroup = findBestDefaultGroup(groups);
-
-          state = state.copyWith(
-            groups: groups,
-            nodes: nodes,
-            selectedGroup: initialGroup,
+        } else if (tag.isNotEmpty) {
+          nodes[tag] = ProxyNode(
+            name: tag,
+            type: OutboundType.fromString(type),
+            server: ob['server']?.toString(),
+            port: ob['server_port'] is int ? ob['server_port'] : int.tryParse(ob['server_port']?.toString() ?? ''),
+            raw: ob,
           );
         }
       }
-    } catch (_) {}
+
+      // If no selector group exists in profile, synthesize the primary Proxy group so UI is immediately actionable
+      final hasSelector = groups.values.any((g) => g.type == OutboundType.selector);
+      if (!hasSelector && (nodes.isNotEmpty || groups.isNotEmpty)) {
+        final allTargets = [
+          ...groups.keys,
+          ...nodes.keys,
+          'direct',
+        ];
+        final preferredNode = _ref.read(settingsProvider).selectedProxyNode;
+        final initialCurrent = (preferredNode.isNotEmpty && allTargets.contains(preferredNode))
+            ? preferredNode
+            : (groups.keys.isNotEmpty ? groups.keys.first : (nodes.keys.isNotEmpty ? nodes.keys.first : 'direct'));
+
+        groups['Proxy'] = ProxyGroup(
+          name: 'Proxy',
+          type: OutboundType.selector,
+          current: initialCurrent,
+          all: allTargets,
+          raw: {'type': 'selector', 'tag': 'Proxy', 'outbounds': allTargets},
+        );
+      }
+
+      if (groups.isNotEmpty || nodes.isNotEmpty) {
+        String? initialGroup = findBestDefaultGroup(groups);
+
+        state = state.copyWith(
+          groups: groups,
+          nodes: nodes,
+          selectedGroup: initialGroup,
+        );
+      }
+      _populatedForRaw = raw;
+    } catch (_) {
+    } finally {
+      _populateInFlight = false;
+    }
   }
 
   Future<void> fetchProxies({bool silent = false}) async {
     final client = _ref.read(clashApiClientProvider);
     if (client == null) {
-      _populateFromActiveProfile();
+      await _populateFromActiveProfile();
       return;
     }
 
@@ -190,7 +207,7 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
     try {
       final rawProxies = await client.getProxiesRaw();
       if (rawProxies.isEmpty) {
-        _populateFromActiveProfile();
+        await _populateFromActiveProfile();
         if (!silent) state = state.copyWith(isLoading: false);
         return;
       }
@@ -223,7 +240,7 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
         isLoading: false,
       );
     } catch (_) {
-      _populateFromActiveProfile();
+      await _populateFromActiveProfile();
       if (!silent) state = state.copyWith(isLoading: false);
     }
   }

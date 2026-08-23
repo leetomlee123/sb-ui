@@ -25,6 +25,12 @@ class MainShellView extends ConsumerStatefulWidget {
 class _MainShellViewState extends ConsumerState<MainShellView> {
   int _selectedIndex = 0;
 
+  // Lazy tab mounting: pages are constructed on first visit only, then kept
+  // alive by the IndexedStack. Avoids building all six pages (and their
+  // initState side effects: process spawns, disk scans, config parsing)
+  // during app startup.
+  final Set<int> _mountedTabs = {0};
+
   @override
   Widget build(BuildContext context) {
     final tr = ref.watch(translationsProvider);
@@ -46,6 +52,7 @@ class _MainShellViewState extends ConsumerState<MainShellView> {
                   onDestinationSelected: (int index) {
                     setState(() {
                       _selectedIndex = index;
+                      _mountedTabs.add(index);
                     });
                   },
                   labelType: NavigationRailLabelType.all,
@@ -99,12 +106,7 @@ class _MainShellViewState extends ConsumerState<MainShellView> {
                     child: IndexedStack(
                       index: _selectedIndex,
                       children: [
-                        DashboardPage(isVisible: _selectedIndex == 0),
-                        const ProxiesPage(),
-                        const ProfilesPage(),
-                        ConnectionsPage(isVisible: _selectedIndex == 3),
-                        LogsPage(isVisible: _selectedIndex == 4),
-                        const SettingsPage(),
+                        for (var i = 0; i < 6; i++) _buildTab(i),
                       ],
                     ),
                   ),
@@ -118,6 +120,28 @@ class _MainShellViewState extends ConsumerState<MainShellView> {
         ],
       ),
     );
+  }
+
+  Widget _buildTab(int index) {
+    if (!_mountedTabs.contains(index)) {
+      return const SizedBox.shrink();
+    }
+    switch (index) {
+      case 0:
+        return DashboardPage(isVisible: _selectedIndex == 0);
+      case 1:
+        return const ProxiesPage();
+      case 2:
+        return const ProfilesPage();
+      case 3:
+        return ConnectionsPage(isVisible: _selectedIndex == 3);
+      case 4:
+        return LogsPage(isVisible: _selectedIndex == 4);
+      case 5:
+        return const SettingsPage();
+      default:
+        return const SizedBox.shrink();
+    }
   }
 }
 

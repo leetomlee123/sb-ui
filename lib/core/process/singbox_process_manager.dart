@@ -45,6 +45,10 @@ class SingboxProcessManager {
   bool _lastRequireElevated = false;
   Timer? _crashResetTimer;
 
+  // Resolved binary path cache: avoids re-running the expensive candidate
+  // scan (which spawns processes) on every lookup.
+  String? _cachedBinaryPath;
+
   CoreStatus get status => _status;
   Stream<CoreStatus> get statusStream => _statusController.stream;
   Stream<LogEntry> get outputStream => _outputController.stream;
@@ -64,6 +68,15 @@ class SingboxProcessManager {
     if (customPath != null && customPath.isNotEmpty) {
       final file = File(customPath);
       if (await file.exists()) return customPath;
+    }
+
+    if (_cachedBinaryPath != null) {
+      // Cheap existence re-check guards against the binary disappearing
+      // mid-session (e.g. after an update failure).
+      if (await File(_cachedBinaryPath!).exists()) {
+        return _cachedBinaryPath!;
+      }
+      _cachedBinaryPath = null;
     }
 
     final exeDir = File(Platform.resolvedExecutable).parent.path;
@@ -87,8 +100,15 @@ class SingboxProcessManager {
 
     for (final candidate in candidatePaths) {
       try {
+        // Pre-filter path-like candidates with a cheap stat: spawning a
+        // process just to learn a binary is missing is very slow. Bare
+        // names ('sing-box') must still go through PATH resolution.
+        final looksLikePath = candidate.contains('/') || candidate.contains(r'\');
+        if (looksLikePath && !await File(candidate).exists()) continue;
+
         final result = await Process.run(candidate, ['version']);
         if (result.exitCode == 0) {
+          _cachedBinaryPath = candidate;
           return candidate;
         }
       } catch (_) {}

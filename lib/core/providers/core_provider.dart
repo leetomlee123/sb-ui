@@ -10,6 +10,7 @@ import '../services/storage_service.dart';
 import '../services/system_proxy_manager.dart';
 import 'profiles_provider.dart';
 import 'settings_provider.dart';
+import 'storage_provider.dart';
 
 class CoreState {
   final CoreStatus status;
@@ -61,6 +62,14 @@ class CoreNotifier extends StateNotifier<CoreState> {
 
   SingboxProcessManager get processManager => _processManager;
   ClashApiClient? get apiClient => _apiClient;
+
+  /// Tracks whether a system proxy we set may still be applied, so the next
+  /// launch only runs the PowerShell cleanup when it is actually needed.
+  Future<void> _markSystemProxyDirty(bool dirty) async {
+    try {
+      await _ref.read(storageServiceProvider).setSystemProxyDirty(dirty);
+    } catch (_) {}
+  }
 
   void _startUptimeTimer() {
     _uptimeTimer?.cancel();
@@ -126,10 +135,11 @@ class CoreNotifier extends StateNotifier<CoreState> {
 
         // Configure system proxy if enabled
         if (settings.systemProxyEnabled) {
-          await SystemProxyManager.setProxy(
+          final applied = await SystemProxyManager.setProxy(
             host: '127.0.0.1',
             port: settings.mixedPort,
           );
+          await _markSystemProxyDirty(applied);
         }
       } else {
         if (_processManager.status == CoreStatus.stopped) {
@@ -158,19 +168,24 @@ class CoreNotifier extends StateNotifier<CoreState> {
     if (state.isRunning) {
       if (enabled) {
         final settings = _ref.read(settingsProvider);
-        await SystemProxyManager.setProxy(
+        final applied = await SystemProxyManager.setProxy(
           host: '127.0.0.1',
           port: settings.mixedPort,
         );
+        await _markSystemProxyDirty(applied);
       } else {
-        await SystemProxyManager.clearProxy();
+        final cleared = await SystemProxyManager.clearProxy();
+        if (cleared) await _markSystemProxyDirty(false);
       }
     }
   }
 
   Future<void> stopCore() async {
     // Clear system proxy
-    await SystemProxyManager.clearProxy();
+    try {
+      final cleared = await SystemProxyManager.clearProxy();
+      if (cleared) await _markSystemProxyDirty(false);
+    } catch (_) {}
     await _processManager.stop();
     _apiClient = null;
     state = state.copyWith(status: CoreStatus.stopped, errorMessage: null);

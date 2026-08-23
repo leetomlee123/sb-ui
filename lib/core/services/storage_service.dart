@@ -10,6 +10,11 @@ class StorageService {
   static const String _keySettings = 'app_settings';
   static const String _keyProfiles = 'app_profiles';
   static const String _keyActiveProfileId = 'active_profile_id';
+  static const String _keySysProxyDirty = 'sys_proxy_dirty';
+
+  // Memoized config dir resolution: the probe-file write/delete below is
+  // real disk I/O, and this is called from several places during startup.
+  static Future<Directory>? _configDirFuture;
 
   final SharedPreferences _prefs;
 
@@ -75,9 +80,23 @@ class StorageService {
     }
   }
 
+  // --- Orphan system proxy tracking ---
+  //
+  // True while a system proxy we configured may still be active (set but not
+  // yet confirmed cleared, e.g. after a crash). Lets the startup cleanup skip
+  // its PowerShell spawn entirely in the common "nothing to clean" case.
+  // Defaults to true so pre-existing installs get one cleanup pass.
+  bool isSystemProxyDirty() => _prefs.getBool(_keySysProxyDirty) ?? true;
+
+  Future<void> setSystemProxyDirty(bool dirty) => _prefs.setBool(_keySysProxyDirty, dirty);
+
   // --- App Directory for runtime configs ---
 
-  static Future<Directory> getAppConfigDir() async {
+  static Future<Directory> getAppConfigDir() {
+    return _configDirFuture ??= _resolveAppConfigDir();
+  }
+
+  static Future<Directory> _resolveAppConfigDir() async {
     // 1. Try local portable ./config directory next to executable
     try {
       final appExeDir = File(Platform.resolvedExecutable).parent.path;
