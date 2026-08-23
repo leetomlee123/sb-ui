@@ -17,20 +17,9 @@ class DashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final coreState = ref.watch(coreProvider);
-    final trafficState = ref.watch(trafficProvider);
-    final connState = ref.watch(connectionsProvider);
     final settings = ref.watch(settingsProvider);
-    final proxiesState = ref.watch(proxiesProvider);
     final tr = ref.watch(translationsProvider);
-
     final isRunning = coreState.isRunning;
-    final totalDown = connState.downloadTotal > 0 ? connState.downloadTotal : trafficState.totalDown;
-    final totalUp = connState.uploadTotal > 0 ? connState.uploadTotal : trafficState.totalUp;
-    final totalCombined = totalDown + totalUp;
-
-    // Get current active proxy node
-    final activeGroup = proxiesState.groups['Proxy'];
-    final currentNodeName = activeGroup?.current ?? 'Auto';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -249,12 +238,14 @@ class DashboardPage extends ConsumerWidget {
                               context,
                               title: tr.systemProxy,
                               isActive: settings.systemProxyEnabled,
-                              icon: Icons.public_rounded,
-                              activeColor: const Color(0xFF38BDF8),
+                              icon: Icons.lan_rounded,
+                              activeColor: const Color(0xFF10B981),
                               onTap: () async {
                                 final next = !settings.systemProxyEnabled;
                                 await ref.read(settingsProvider.notifier).toggleSystemProxy(next);
-                                await ref.read(coreProvider.notifier).updateSystemProxyState(next);
+                                if (isRunning) {
+                                  await ref.read(coreProvider.notifier).restartCore();
+                                }
                               },
                             ),
                           ),
@@ -270,168 +261,117 @@ class DashboardPage extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // Row 2: Metrics Bento Strip (Down/Up Speeds + Totals + Combined Total + Current Node)
-          Row(
-            children: [
-              _buildMetricCard(
-                context,
-                title: tr.downloadSpeed,
-                value: ByteFormatter.formatSpeed(trafficState.currentDown),
-                total: '${tr.totalDownload}: ${ByteFormatter.formatBytes(totalDown)}',
-                icon: Icons.arrow_downward_rounded,
-                color: const Color(0xFF38BDF8),
-              ),
-              const SizedBox(width: 12),
-              _buildMetricCard(
-                context,
-                title: tr.uploadSpeed,
-                value: ByteFormatter.formatSpeed(trafficState.currentUp),
-                total: '${tr.totalUpload}: ${ByteFormatter.formatBytes(totalUp)}',
-                icon: Icons.arrow_upward_rounded,
-                color: const Color(0xFF818CF8),
-              ),
-              const SizedBox(width: 12),
-              _buildMetricCard(
-                context,
-                title: tr.totalTraffic,
-                value: ByteFormatter.formatBytes(totalCombined),
-                total: isRunning ? (tr.isZh ? '实时累计流量' : 'Session Total') : tr.standby,
-                icon: Icons.data_usage_rounded,
-                color: const Color(0xFF10B981),
-              ),
-              const SizedBox(width: 12),
-              _buildActiveNodeCard(
-                context,
-                title: tr.activeOutbound,
-                nodeName: currentNodeName,
-                isRunning: isRunning,
-                notConnectedStr: tr.notConnected,
-              ),
-            ],
-          ),
+          const _SpeedMetricsStrip(),
 
           const SizedBox(height: 16),
 
           // Row 3: Telemetry Stream LineChart (Obsidian Glow Graph)
-          DoubleBezelCard(
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          tr.telemetryStream,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.0,
-                            color: Color(0xFF818CF8),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF151E33),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            tr.live,
-                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF38BDF8)),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        _buildLegendPill(const Color(0xFF38BDF8), '↓ ${ByteFormatter.formatSpeed(trafficState.currentDown)}'),
-                        const SizedBox(width: 12),
-                        _buildLegendPill(const Color(0xFF818CF8), '↑ ${ByteFormatter.formatSpeed(trafficState.currentUp)}'),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  height: 190,
-                  child: trafficState.history.isEmpty
-                      ? Center(
-                          child: Text(
-                            tr.telemetryEmptyHint,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
-                              fontSize: 13,
-                            ),
-                          ),
-                        )
-                      : RepaintBoundary(
-                          child: LineChart(
-                            LineChartData(
-                            gridData: FlGridData(
-                              show: true,
-                              drawVerticalLine: false,
-                              getDrawingHorizontalLine: (value) => FlLine(
-                                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
-                                strokeWidth: 1,
-                              ),
-                            ),
-                            titlesData: const FlTitlesData(
-                              leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            ),
-                            borderData: FlBorderData(show: false),
-                            lineBarsData: [
-                              // Download curve (Sky Cyan)
-                              LineChartBarData(
-                                spots: trafficState.history
-                                    .asMap()
-                                    .entries
-                                    .map((e) => FlSpot(e.key.toDouble(), e.value.down.toDouble() / 1024))
-                                    .toList(),
-                                isCurved: true,
-                                curveSmoothness: 0.35,
-                                color: const Color(0xFF38BDF8),
-                                barWidth: 2.5,
-                                isStrokeCapRound: true,
-                                dotData: const FlDotData(show: false),
-                                belowBarData: BarAreaData(
-                                  show: true,
-                                  color: const Color(0xFF38BDF8).withValues(alpha: 0.12),
-                                ),
-                              ),
-                              // Upload curve (Electric Indigo)
-                              LineChartBarData(
-                                spots: trafficState.history
-                                    .asMap()
-                                    .entries
-                                    .map((e) => FlSpot(e.key.toDouble(), e.value.up.toDouble() / 1024))
-                                    .toList(),
-                                isCurved: true,
-                                curveSmoothness: 0.35,
-                                color: const Color(0xFF818CF8),
-                                barWidth: 2,
-                                isStrokeCapRound: true,
-                                dotData: const FlDotData(show: false),
-                                belowBarData: BarAreaData(
-                                  show: true,
-                                  color: const Color(0xFF818CF8).withValues(alpha: 0.08),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                ),
-              ],
-            ),
-          ),
+          const _TelemetryGraphCard(),
         ],
       ),
+    );
+  }
+
+  Widget _buildFeaturePill(
+    BuildContext context, {
+    required String title,
+    required bool isActive,
+    required IconData icon,
+    required Color activeColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive
+              ? activeColor.withValues(alpha: 0.12)
+              : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isActive ? activeColor : Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 14, color: isActive ? activeColor : const Color(0xFF64748B)),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: isActive ? activeColor : const Color(0xFF94A3B8),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SpeedMetricsStrip extends ConsumerWidget {
+  const _SpeedMetricsStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final coreState = ref.watch(coreProvider);
+    final trafficState = ref.watch(trafficProvider);
+    final connState = ref.watch(connectionsProvider);
+    final proxiesState = ref.watch(proxiesProvider);
+    final tr = ref.watch(translationsProvider);
+
+    final isRunning = coreState.isRunning;
+    final totalDown = connState.downloadTotal > 0 ? connState.downloadTotal : trafficState.totalDown;
+    final totalUp = connState.uploadTotal > 0 ? connState.uploadTotal : trafficState.totalUp;
+    final totalCombined = totalDown + totalUp;
+
+    // Get current active proxy node
+    final activeGroup = proxiesState.groups['Proxy'] ?? (proxiesState.groups.isNotEmpty ? proxiesState.groups.values.first : null);
+    final currentNodeName = activeGroup?.current ?? 'Auto';
+
+    return Row(
+      children: [
+        _buildMetricCard(
+          context,
+          title: tr.downloadSpeed,
+          value: ByteFormatter.formatSpeed(trafficState.currentDown),
+          total: '${tr.totalDownload}: ${ByteFormatter.formatBytes(totalDown)}',
+          icon: Icons.arrow_downward_rounded,
+          color: const Color(0xFF38BDF8),
+        ),
+        const SizedBox(width: 12),
+        _buildMetricCard(
+          context,
+          title: tr.uploadSpeed,
+          value: ByteFormatter.formatSpeed(trafficState.currentUp),
+          total: '${tr.totalUpload}: ${ByteFormatter.formatBytes(totalUp)}',
+          icon: Icons.arrow_upward_rounded,
+          color: const Color(0xFF818CF8),
+        ),
+        const SizedBox(width: 12),
+        _buildMetricCard(
+          context,
+          title: tr.totalTraffic,
+          value: ByteFormatter.formatBytes(totalCombined),
+          total: isRunning ? (tr.isZh ? '实时累计流量' : 'Session Total') : tr.standby,
+          icon: Icons.data_usage_rounded,
+          color: const Color(0xFF10B981),
+        ),
+        const SizedBox(width: 12),
+        _buildActiveNodeCard(
+          context,
+          title: tr.activeOutbound,
+          nodeName: currentNodeName,
+          isRunning: isRunning,
+          notConnectedStr: tr.notConnected,
+        ),
+      ],
     );
   }
 
@@ -460,6 +400,7 @@ class DashboardPage extends ConsumerWidget {
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     title,
@@ -522,6 +463,7 @@ class DashboardPage extends ConsumerWidget {
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     title,
@@ -545,7 +487,7 @@ class DashboardPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    isRunning ? 'Group: Proxy' : 'Standby',
+                    isRunning ? 'Clash API Direct Routing' : 'Standby',
                     style: TextStyle(
                       fontSize: 11,
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
@@ -559,45 +501,132 @@ class DashboardPage extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Widget _buildFeaturePill(
-    BuildContext context, {
-    required String title,
-    required bool isActive,
-    required IconData icon,
-    required Color activeColor,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive
-              ? activeColor.withValues(alpha: 0.12)
-              : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isActive ? activeColor : Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 14, color: isActive ? activeColor : const Color(0xFF64748B)),
-            const SizedBox(width: 6),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: isActive ? activeColor : const Color(0xFF94A3B8),
+class _TelemetryGraphCard extends ConsumerWidget {
+  const _TelemetryGraphCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final trafficState = ref.watch(trafficProvider);
+    final tr = ref.watch(translationsProvider);
+
+    return DoubleBezelCard(
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    tr.telemetryStream,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.0,
+                      color: Color(0xFF818CF8),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF151E33),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      tr.live,
+                      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF38BDF8)),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
+              Row(
+                children: [
+                  _buildLegendPill(const Color(0xFF38BDF8), '↓ ${ByteFormatter.formatSpeed(trafficState.currentDown)}'),
+                  const SizedBox(width: 12),
+                  _buildLegendPill(const Color(0xFF818CF8), '↑ ${ByteFormatter.formatSpeed(trafficState.currentUp)}'),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 190,
+            child: trafficState.history.isEmpty
+                ? Center(
+                    child: Text(
+                      tr.telemetryEmptyHint,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                        fontSize: 13,
+                      ),
+                    ),
+                  )
+                : RepaintBoundary(
+                    child: LineChart(
+                      LineChartData(
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: false,
+                          getDrawingHorizontalLine: (value) => FlLine(
+                            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
+                            strokeWidth: 1,
+                          ),
+                        ),
+                        titlesData: const FlTitlesData(
+                          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        ),
+                        borderData: FlBorderData(show: false),
+                        lineBarsData: [
+                          // Download curve (Sky Cyan)
+                          LineChartBarData(
+                            spots: trafficState.history
+                                .asMap()
+                                .entries
+                                .map((e) => FlSpot(e.key.toDouble(), e.value.down.toDouble() / 1024))
+                                .toList(),
+                            isCurved: true,
+                            curveSmoothness: 0.35,
+                            color: const Color(0xFF38BDF8),
+                            barWidth: 2.5,
+                            isStrokeCapRound: true,
+                            dotData: const FlDotData(show: false),
+                            belowBarData: BarAreaData(
+                              show: true,
+                              color: const Color(0xFF38BDF8).withValues(alpha: 0.12),
+                            ),
+                          ),
+                          // Upload curve (Electric Indigo)
+                          LineChartBarData(
+                            spots: trafficState.history
+                                .asMap()
+                                .entries
+                                .map((e) => FlSpot(e.key.toDouble(), e.value.up.toDouble() / 1024))
+                                .toList(),
+                            isCurved: true,
+                            curveSmoothness: 0.35,
+                            color: const Color(0xFF818CF8),
+                            barWidth: 2,
+                            isStrokeCapRound: true,
+                            dotData: const FlDotData(show: false),
+                            belowBarData: BarAreaData(
+                              show: true,
+                              color: const Color(0xFF818CF8).withValues(alpha: 0.08),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+          ),
+        ],
       ),
     );
   }

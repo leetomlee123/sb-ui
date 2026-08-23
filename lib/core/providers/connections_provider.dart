@@ -10,7 +10,7 @@ class DomainTrafficStat {
   final int total;
   final int connectionCount;
 
-  DomainTrafficStat({
+  const DomainTrafficStat({
     required this.domain,
     required this.upload,
     required this.download,
@@ -26,7 +26,7 @@ class OutboundTrafficStat {
   final int total;
   final int connectionCount;
 
-  OutboundTrafficStat({
+  const OutboundTrafficStat({
     required this.outbound,
     required this.upload,
     required this.download,
@@ -42,13 +42,23 @@ class ConnectionsState {
   final bool isLoading;
   final String searchQuery;
 
+  // Cached aggregations
+  final List<DomainTrafficStat> topDomains;
+  final List<OutboundTrafficStat> topOutbounds;
+  final Map<String, int> protocolBreakdown;
+
   ConnectionsState({
     this.connections = const [],
     this.downloadTotal = 0,
     this.uploadTotal = 0,
     this.isLoading = false,
     this.searchQuery = '',
-  });
+    List<DomainTrafficStat>? topDomains,
+    List<OutboundTrafficStat>? topOutbounds,
+    Map<String, int>? protocolBreakdown,
+  })  : topDomains = topDomains ?? _computeTopDomains(connections),
+        topOutbounds = topOutbounds ?? _computeTopOutbounds(connections),
+        protocolBreakdown = protocolBreakdown ?? _computeProtocolBreakdown(connections);
 
   int get combinedTotal => downloadTotal + uploadTotal;
 
@@ -63,11 +73,10 @@ class ConnectionsState {
     }).toList();
   }
 
-  // --- Traffic Analytics Aggregations ---
-
-  List<DomainTrafficStat> get topDomains {
+  static List<DomainTrafficStat> _computeTopDomains(List<ActiveConnection> conns) {
+    if (conns.isEmpty) return const [];
     final Map<String, _TempTraffic> map = {};
-    for (final c in connections) {
+    for (final c in conns) {
       final host = c.metadata.host.isNotEmpty
           ? c.metadata.host
           : (c.metadata.destinationIP.isNotEmpty ? c.metadata.destinationIP : 'Unknown');
@@ -92,9 +101,10 @@ class ConnectionsState {
     return list;
   }
 
-  List<OutboundTrafficStat> get topOutbounds {
+  static List<OutboundTrafficStat> _computeTopOutbounds(List<ActiveConnection> conns) {
+    if (conns.isEmpty) return const [];
     final Map<String, _TempTraffic> map = {};
-    for (final c in connections) {
+    for (final c in conns) {
       final outbound = c.chains.isNotEmpty ? c.chains.join(' → ') : (c.rule.isNotEmpty ? c.rule : 'Direct');
       final entry = map.putIfAbsent(outbound, () => _TempTraffic());
       entry.upload += c.upload;
@@ -116,9 +126,10 @@ class ConnectionsState {
     return list;
   }
 
-  Map<String, int> get protocolBreakdown {
+  static Map<String, int> _computeProtocolBreakdown(List<ActiveConnection> conns) {
+    if (conns.isEmpty) return const {};
     final Map<String, int> map = {};
-    for (final c in connections) {
+    for (final c in conns) {
       final net = c.metadata.network.toUpperCase();
       final key = net.isNotEmpty ? net : 'TCP';
       map[key] = (map[key] ?? 0) + (c.upload + c.download);
@@ -133,12 +144,18 @@ class ConnectionsState {
     bool? isLoading,
     String? searchQuery,
   }) {
+    final nextConns = connections ?? this.connections;
+    final connsChanged = connections != null && connections != this.connections;
+
     return ConnectionsState(
-      connections: connections ?? this.connections,
+      connections: nextConns,
       downloadTotal: downloadTotal ?? this.downloadTotal,
       uploadTotal: uploadTotal ?? this.uploadTotal,
       isLoading: isLoading ?? this.isLoading,
       searchQuery: searchQuery ?? this.searchQuery,
+      topDomains: connsChanged ? _computeTopDomains(nextConns) : topDomains,
+      topOutbounds: connsChanged ? _computeTopOutbounds(nextConns) : topOutbounds,
+      protocolBreakdown: connsChanged ? _computeProtocolBreakdown(nextConns) : protocolBreakdown,
     );
   }
 }
