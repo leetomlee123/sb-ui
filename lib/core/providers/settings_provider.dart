@@ -82,6 +82,10 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   Future<void> toggleShowTelemetryChart(bool enabled) async {
     await updateSettings(state.copyWith(showTelemetryChart: enabled));
   }
+
+  Future<void> toggleAutoCheckAppUpdates(bool enabled) async {
+    await updateSettings(state.copyWith(autoCheckAppUpdates: enabled));
+  }
 }
 
 final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((ref) {

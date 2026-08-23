@@ -38,6 +38,7 @@ class AppSettings {
   final String selectedProxyNode; // persisted user choice for primary selector
   final bool showSpeedMetrics; // Dashboard: toggle speed metrics bento strip
   final bool showTelemetryChart; // Dashboard: toggle live traffic waveform chart
+  final bool autoCheckAppUpdates; // Settings: silent update check on startup
 
   const AppSettings({
     this.mixedPort = 2080,
@@ -60,6 +61,7 @@ class AppSettings {
     this.selectedProxyNode = '',
     this.showSpeedMetrics = true,
     this.showTelemetryChart = true,
+    this.autoCheckAppUpdates = true,
   });
 
   Map<String, dynamic> toJson() {
@@ -84,6 +86,7 @@ class AppSettings {
       'selectedProxyNode': selectedProxyNode,
       'showSpeedMetrics': showSpeedMetrics,
       'showTelemetryChart': showTelemetryChart,
+      'autoCheckAppUpdates': autoCheckAppUpdates,
     };
   }
 
@@ -112,6 +115,7 @@ class AppSettings {
       selectedProxyNode: json['selectedProxyNode'] as String? ?? '',
       showSpeedMetrics: json['showSpeedMetrics'] as bool? ?? true,
       showTelemetryChart: json['showTelemetryChart'] as bool? ?? true,
+      autoCheckAppUpdates: json['autoCheckAppUpdates'] as bool? ?? true,
     );
   }
 
@@ -136,6 +140,7 @@ class AppSettings {
     String? selectedProxyNode,
     bool? showSpeedMetrics,
     bool? showTelemetryChart,
+    bool? autoCheckAppUpdates,
   }) {
     return AppSettings(
       mixedPort: mixedPort ?? this.mixedPort,
@@ -158,6 +163,7 @@ class AppSettings {
       selectedProxyNode: selectedProxyNode ?? this.selectedProxyNode,
       showSpeedMetrics: showSpeedMetrics ?? this.showSpeedMetrics,
       showTelemetryChart: showTelemetryChart ?? this.showTelemetryChart,
+      autoCheckAppUpdates: autoCheckAppUpdates ?? this.autoCheckAppUpdates,
     );
   }
 

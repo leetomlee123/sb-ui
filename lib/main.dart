@@ -6,9 +6,11 @@ import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 import 'app/theme.dart';
 import 'core/i18n/translations.dart';
+import 'core/providers/app_updater_provider.dart';
 import 'core/providers/core_provider.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/providers/storage_provider.dart';
+import 'core/services/app_updater_service.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/system_proxy_manager.dart';
 import 'features/shell/main_shell_view.dart';
@@ -31,6 +33,12 @@ void main() async {
     final storageService = await StorageService.init();
     await StorageService.ensureBundledRulesExtracted();
     final initialSettings = storageService.loadSettings();
+
+    // 3.5 Clean up leftovers from a previous self-update (rollback .old
+    // binary and stale temp staging dirs).
+    try {
+      await AppUpdaterService.cleanupOnStartup();
+    } catch (_) {}
 
     // 4. Desktop window & tray setup
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -83,7 +91,10 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
     super.initState();
     trayManager.addListener(this);
     windowManager.addListener(this);
+    // Graceful-shutdown primitive shared with the self-updater.
+    appShutdownHook = _exitApplication;
     _initTray();
+    _scheduleSilentUpdateCheck();
   }
 
   @override
@@ -127,6 +138,17 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
         await trayManager.setContextMenu(menu);
       }
     } catch (_) {}
+  }
+
+  /// Silent background check for app updates, kept off the startup path.
+  void _scheduleSilentUpdateCheck() {
+    Future.delayed(const Duration(seconds: 8), () async {
+      if (!mounted) return;
+      try {
+        if (!ref.read(settingsProvider).autoCheckAppUpdates) return;
+        await ref.read(appUpdaterProvider.notifier).checkForUpdates();
+      } catch (_) {}
+    });
   }
 
   @override

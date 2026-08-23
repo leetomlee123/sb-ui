@@ -168,6 +168,18 @@ class Translations {
   String get coreNewBadge => isZh ? '有新版本' : 'New Version';
   String get releaseNotesLabel => isZh ? '版本更新说明' : 'Release Notes';
 
+  // App Self-Update
+  String get secAppUpdate => isZh ? '应用更新' : 'APP UPDATE';
+  String get appCurrentVersion => isZh ? '当前应用版本: ' : 'Current app version: ';
+  String get btnCheckAppUpdate => isZh ? '检查应用更新' : 'Check for App Updates';
+  String get appNewBadge => isZh ? '发现新版本' : 'New Version Available';
+  String get appUpdateNow => isZh ? '立即更新' : 'Update Now';
+  String get appUpToDateMsg => isZh ? '当前已是最新版本' : 'App is up to date';
+  String get autoCheckAppUpdatesTitle => isZh ? '启动时自动检查更新' : 'Check for Updates on Startup';
+  String get autoCheckAppUpdatesSubtitle => isZh ? '启动后在后台静默检查 GitHub 最新 Release（不自动下载）' : 'Silently check GitHub releases in background on startup (no auto-download)';
+  String get appInstallingRestartMsg => isZh ? '更新包已就绪，应用即将退出并自动安装重启...' : 'Update package ready. The app will exit, install, and relaunch...';
+  String get appUpdateUnsupported => isZh ? '当前平台暂不支持应用内更新，请前往 GitHub Releases 手动下载' : 'In-app update is not supported on this platform yet. Please download from GitHub Releases manually';
+
   String get secGeoAssets => isZh ? 'GEO 规则与分流数据库' : 'GEO ASSETS & ROUTING DATABASES';
   String get geoAssetsDesc => isZh ? '维护本地离线 GeoIP 与 GeoSite 二进制分流规则库，支持高速 CDN 一键更新' : 'Manage and update offline GeoIP & GeoSite binary routing datasets';
   String get updateAllGeo => isZh ? '更新全部 Geo 规则' : 'Update All Geo Assets';

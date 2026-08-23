@@ -13,6 +13,10 @@ class RemoteReleaseInfo {
   final int assetSize;
   final DateTime publishedAt;
 
+  /// Optional URL of a SHA256SUMS.txt manifest shipped with the release
+  /// (currently only the app's own releases provide one).
+  final String? sha256SumsUrl;
+
   RemoteReleaseInfo({
     required this.tagName,
     required this.version,
@@ -21,6 +25,7 @@ class RemoteReleaseInfo {
     required this.downloadUrl,
     required this.assetSize,
     required this.publishedAt,
+    this.sha256SumsUrl,
   });
 }
 

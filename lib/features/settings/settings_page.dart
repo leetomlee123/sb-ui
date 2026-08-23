@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/i18n/translations.dart';
+import '../../core/models/app_settings.dart';
+import '../../core/providers/app_updater_provider.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/providers/core_updater_provider.dart';
 import '../../core/providers/geo_updater_provider.dart';
@@ -102,6 +104,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final coreIsRunning = ref.watch(coreProvider.select((s) => s.isRunning));
     final updaterState = ref.watch(coreUpdaterProvider);
     final geoState = ref.watch(geoUpdaterProvider);
+    final appUpdaterState = ref.watch(appUpdaterProvider);
     final tr = ref.watch(translationsProvider);
 
     return SingleChildScrollView(
@@ -347,6 +350,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
           const SizedBox(height: 24),
 
+          // App Self-Update (GitHub Releases)
+          _buildAppUpdateSection(context, appUpdaterState, settings, tr),
+
+          const SizedBox(height: 24),
+
           // Dashboard Module Preferences
           _buildSectionHeader(tr.dashboardDisplay),
           DoubleBezelCard(
@@ -586,6 +594,249 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           Expanded(
             child: Text(
               updaterState.errorMessage ?? updaterState.statusMessage,
+              style: const TextStyle(fontSize: 12, color: Color(0xFFF43F5E)),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: bannerBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: bannerBorder, width: 1),
+      ),
+      child: content,
+    );
+  }
+
+  Widget _buildAppUpdateSection(
+    BuildContext context,
+    AppUpdaterState appUpdaterState,
+    AppSettings settings,
+    Translations tr,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(tr.secAppUpdate),
+        DoubleBezelCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Current version + check button
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Icon(Icons.apps_rounded, size: 16, color: Color(0xFF10B981)),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            '${tr.appCurrentVersion}v${appUpdaterState.currentVersion ?? "..."}',
+                            style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Color(0xFF94A3B8)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: appUpdaterState.isBusy
+                        ? null
+                        : () {
+                            ref.read(appUpdaterProvider.notifier).checkForUpdates();
+                          },
+                    icon: appUpdaterState.status == UpdateStatus.checking
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.system_update_alt_rounded, size: 16),
+                    label: Text(tr.btnCheckAppUpdate, style: const TextStyle(fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    ),
+                  ),
+                ],
+              ),
+
+              if (!Platform.isWindows) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded, size: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        tr.appUpdateUnsupported,
+                        style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+
+              // Update status banner (available / progress / error)
+              if (appUpdaterState.status != UpdateStatus.idle) ...[
+                const SizedBox(height: 16),
+                _buildAppUpdateStatusBanner(context, appUpdaterState, tr),
+              ],
+
+              const Divider(height: 24),
+
+              // Auto check on startup preference
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text(tr.autoCheckAppUpdatesTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                subtitle: Text(tr.autoCheckAppUpdatesSubtitle, style: const TextStyle(fontSize: 12)),
+                value: settings.autoCheckAppUpdates,
+                onChanged: (val) {
+                  ref.read(settingsProvider.notifier).toggleAutoCheckAppUpdates(val);
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAppUpdateStatusBanner(
+    BuildContext context,
+    AppUpdaterState state,
+    Translations tr,
+  ) {
+    Color bannerBg;
+    Color bannerBorder;
+    Widget content;
+
+    if (state.status == UpdateStatus.available) {
+      bannerBg = const Color(0xFF6366F1).withValues(alpha: 0.12);
+      bannerBorder = const Color(0xFF6366F1).withValues(alpha: 0.35);
+      final release = state.latestRelease!;
+
+      content = Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFF6366F1),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              release.tagName,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.white),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tr.appNewBadge,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
+                ),
+                Text(
+                  '${(release.assetSize / (1024 * 1024)).toStringAsFixed(1)} MB • ${release.assetName}',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: Platform.isWindows
+                ? () {
+                    ref.read(appUpdaterProvider.notifier).applyUpdate();
+                  }
+                : null,
+            icon: const Icon(Icons.download_rounded, size: 16),
+            label: Text(tr.appUpdateNow),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: const Color(0xFF10B981).withValues(alpha: 0.4),
+              disabledForegroundColor: Colors.white70,
+            ),
+          ),
+        ],
+      );
+    } else if (state.status == UpdateStatus.downloading ||
+        state.status == UpdateStatus.installing) {
+      bannerBg = const Color(0xFF38BDF8).withValues(alpha: 0.12);
+      bannerBorder = const Color(0xFF38BDF8).withValues(alpha: 0.35);
+
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  state.status == UpdateStatus.installing
+                      ? tr.appInstallingRestartMsg
+                      : state.statusMessage,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF38BDF8)),
+                ),
+              ),
+              Text(
+                '${(state.progress * 100).toInt()}%',
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace', fontWeight: FontWeight.bold, color: Color(0xFF38BDF8)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: state.progress > 0 ? state.progress : null,
+              minHeight: 6,
+              backgroundColor: const Color(0xFF1E293B),
+              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF38BDF8)),
+            ),
+          ),
+        ],
+      );
+    } else if (state.status == UpdateStatus.upToDate ||
+        state.status == UpdateStatus.success) {
+      bannerBg = const Color(0xFF10B981).withValues(alpha: 0.08);
+      bannerBorder = const Color(0xFF10B981).withValues(alpha: 0.25);
+
+      content = Row(
+        children: [
+          const Icon(Icons.check_rounded, size: 16, color: Color(0xFF10B981)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              state.currentVersion != null
+                  ? '${tr.appUpToDateMsg} (v${state.currentVersion})'
+                  : tr.appUpToDateMsg,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF10B981)),
+            ),
+          ),
+        ],
+      );
+    } else {
+      bannerBg = const Color(0xFFF43F5E).withValues(alpha: 0.1);
+      bannerBorder = const Color(0xFFF43F5E).withValues(alpha: 0.3);
+
+      content = Row(
+        children: [
+          const Icon(Icons.error_outline_rounded, size: 16, color: Color(0xFFF43F5E)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              state.errorMessage ?? state.statusMessage,
               style: const TextStyle(fontSize: 12, color: Color(0xFFF43F5E)),
             ),
           ),

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/core_updater_service.dart';
+import '../utils/version_utils.dart';
 import 'core_provider.dart';
 
 enum UpdateStatus {
@@ -102,7 +103,7 @@ class CoreUpdaterNotifier extends StateNotifier<CoreUpdaterState> {
       return;
     }
 
-    final hasNewVersion = currentVer == null || _isNewer(latest.version, currentVer);
+    final hasNewVersion = currentVer == null || isNewerVersion(latest.version, currentVer);
 
     state = state.copyWith(
       status: hasNewVersion ? UpdateStatus.available : UpdateStatus.upToDate,
@@ -167,18 +168,6 @@ class CoreUpdaterNotifier extends StateNotifier<CoreUpdaterState> {
       }
       return false;
     }
-  }
-
-  bool _isNewer(String latest, String current) {
-    final l = latest.replaceAll('v', '').split('.');
-    final c = current.replaceAll('v', '').split('.');
-    for (int i = 0; i < l.length && i < c.length; i++) {
-      final lNum = int.tryParse(l[i]) ?? 0;
-      final cNum = int.tryParse(c[i]) ?? 0;
-      if (lNum > cNum) return true;
-      if (lNum < cNum) return false;
-    }
-    return l.length > c.length;
   }
 }
 
