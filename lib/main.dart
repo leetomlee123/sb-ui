@@ -114,6 +114,16 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
   }
 
   @override
+  void onTrayIconRightMouseDown() {
+    trayManager.popUpContextMenu();
+  }
+
+  @override
+  void onTrayIconRightMouseUp() {
+    trayManager.popUpContextMenu();
+  }
+
+  @override
   void onTrayMenuItemClick(MenuItem menuItem) async {
     switch (menuItem.key) {
       case 'show_window':
@@ -141,8 +151,15 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
 
   Future<void> _exitApplication() async {
     try {
-      await ref.read(coreProvider.notifier).stopCore();
+      await ref.read(coreProvider.notifier).stopCore().timeout(
+        const Duration(milliseconds: 1500),
+        onTimeout: () => false,
+      );
+    } catch (_) {}
+    try {
       await trayManager.destroy();
+    } catch (_) {}
+    try {
       await windowManager.destroy();
     } catch (_) {}
     exit(0);
