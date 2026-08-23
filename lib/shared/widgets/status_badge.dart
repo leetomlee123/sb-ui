@@ -15,19 +15,19 @@ class StatusBadge extends StatelessWidget {
     switch (status) {
       case CoreStatus.running:
         color = const Color(0xFF10B981);
-        bgColor = const Color(0xFF10B981).withValues(alpha: 0.15);
+        bgColor = const Color(0xFF10B981).withValues(alpha: 0.12);
         break;
       case CoreStatus.starting:
         color = const Color(0xFFF59E0B);
-        bgColor = const Color(0xFFF59E0B).withValues(alpha: 0.15);
+        bgColor = const Color(0xFFF59E0B).withValues(alpha: 0.12);
         break;
       case CoreStatus.error:
-        color = const Color(0xFFEF4444);
-        bgColor = const Color(0xFFEF4444).withValues(alpha: 0.15);
+        color = const Color(0xFFF43F5E);
+        bgColor = const Color(0xFFF43F5E).withValues(alpha: 0.12);
         break;
       case CoreStatus.stopped:
         color = const Color(0xFF94A3B8);
-        bgColor = const Color(0xFF94A3B8).withValues(alpha: 0.15);
+        bgColor = const Color(0xFF94A3B8).withValues(alpha: 0.1);
         break;
     }
 
@@ -36,7 +36,7 @@ class StatusBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4), width: 1),
+        border: Border.all(color: color.withValues(alpha: 0.35), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -47,6 +47,15 @@ class StatusBadge extends StatelessWidget {
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
+              boxShadow: status == CoreStatus.running
+                  ? [
+                      BoxShadow(
+                        color: color.withValues(alpha: 0.8),
+                        blurRadius: 6,
+                        spreadRadius: 1,
+                      )
+                    ]
+                  : null,
             ),
           ),
           const SizedBox(width: 6),
@@ -56,6 +65,7 @@ class StatusBadge extends StatelessWidget {
               color: color,
               fontSize: 11,
               fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
             ),
           ),
         ],

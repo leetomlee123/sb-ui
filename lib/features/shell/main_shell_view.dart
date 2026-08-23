@@ -38,18 +38,19 @@ class _MainShellViewState extends ConsumerState<MainShellView> {
     final trafficState = ref.watch(trafficProvider);
     final profilesState = ref.watch(profilesProvider);
     final settings = ref.watch(settingsProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       body: Column(
         children: [
-          // Top Title Bar
+          // Top Frameless Title Bar
           const AppTitleBar(),
 
-          // Main Center Area (Navigation Rail + Content)
+          // Main Center Viewport
           Expanded(
             child: Row(
               children: [
-                // Modern Desktop Navigation Rail
+                // Refined Obsidian Sidebar Navigation Rail
                 NavigationRail(
                   selectedIndex: _selectedIndex,
                   onDestinationSelected: (int index) {
@@ -58,7 +59,9 @@ class _MainShellViewState extends ConsumerState<MainShellView> {
                     });
                   },
                   labelType: NavigationRailLabelType.all,
-                  minWidth: 76,
+                  minWidth: 80,
+                  useIndicator: true,
+                  indicatorColor: const Color(0xFF6366F1).withValues(alpha: 0.15),
                   destinations: const [
                     NavigationRailDestination(
                       icon: Icon(Icons.speed_rounded),
@@ -78,7 +81,7 @@ class _MainShellViewState extends ConsumerState<MainShellView> {
                     NavigationRailDestination(
                       icon: Icon(Icons.compare_arrows_rounded),
                       selectedIcon: Icon(Icons.compare_arrows_rounded, color: Color(0xFF818CF8)),
-                      label: Text('Connections'),
+                      label: Text('Sessions'),
                     ),
                     NavigationRailDestination(
                       icon: Icon(Icons.terminal_rounded),
@@ -86,35 +89,42 @@ class _MainShellViewState extends ConsumerState<MainShellView> {
                       label: Text('Logs'),
                     ),
                     NavigationRailDestination(
-                      icon: Icon(Icons.settings_rounded),
-                      selectedIcon: Icon(Icons.settings_rounded, color: Color(0xFF818CF8)),
+                      icon: Icon(Icons.tune_rounded),
+                      selectedIcon: Icon(Icons.tune_rounded, color: Color(0xFF818CF8)),
                       label: Text('Settings'),
                     ),
                   ],
                 ),
 
-                const VerticalDivider(thickness: 1, width: 1),
+                VerticalDivider(
+                  thickness: 1,
+                  width: 1,
+                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                ),
 
-                // Active Page Content
+                // Active Tab Content Page
                 Expanded(
-                  child: IndexedStack(
-                    index: _selectedIndex,
-                    children: _pages,
+                  child: Container(
+                    color: isDark ? const Color(0xFF070A12) : const Color(0xFFF8FAFC),
+                    child: IndexedStack(
+                      index: _selectedIndex,
+                      children: _pages,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
 
-          // Bottom Compact Status Bar
+          // Bottom Telemetry Status Ribbon
           Container(
-            height: 32,
+            height: 34,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
+              color: isDark ? const Color(0xFF080C16) : Colors.white,
               border: Border(
                 top: BorderSide(
-                  color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
                   width: 1,
                 ),
               ),
@@ -122,49 +132,62 @@ class _MainShellViewState extends ConsumerState<MainShellView> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Left: Active Profile & Mode
+                // Left: Connection State & Active Profile
                 Row(
                   children: [
-                    Icon(
-                      coreState.isRunning ? Icons.circle : Icons.circle_outlined,
-                      size: 8,
-                      color: coreState.isRunning ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: coreState.isRunning ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                        shape: BoxShape.circle,
+                        boxShadow: coreState.isRunning
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFF10B981).withValues(alpha: 0.8),
+                                  blurRadius: 6,
+                                  spreadRadius: 1,
+                                )
+                              ]
+                            : null,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      profilesState.activeProfile?.name ?? 'No Profile',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                      profilesState.activeProfile?.name ?? 'No Active Profile',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(width: 12),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        color: const Color(0xFF6366F1).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         settings.routingMode.displayName.toUpperCase(),
-                        style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
+                        style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.5, color: Color(0xFF818CF8)),
                       ),
                     ),
                   ],
                 ),
 
-                // Right: Speed Pill
+                // Right: Real-time Speeds
                 Row(
                   children: [
-                    const Icon(Icons.arrow_downward_rounded, size: 12, color: Color(0xFF06B6D4)),
-                    const SizedBox(width: 2),
+                    const Icon(Icons.arrow_downward_rounded, size: 13, color: Color(0xFF38BDF8)),
+                    const SizedBox(width: 3),
                     Text(
                       ByteFormatter.formatSpeed(trafficState.currentDown),
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF06B6D4)),
+                      style: const TextStyle(fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold, color: Color(0xFF38BDF8)),
                     ),
-                    const SizedBox(width: 12),
-                    const Icon(Icons.arrow_upward_rounded, size: 12, color: Color(0xFF6366F1)),
-                    const SizedBox(width: 2),
+                    const SizedBox(width: 14),
+                    const Icon(Icons.arrow_upward_rounded, size: 13, color: Color(0xFF818CF8)),
+                    const SizedBox(width: 3),
                     Text(
                       ByteFormatter.formatSpeed(trafficState.currentUp),
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF6366F1)),
+                      style: const TextStyle(fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
                     ),
                   ],
                 ),

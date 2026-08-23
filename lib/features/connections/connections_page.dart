@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/connections_provider.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/utils/byte_formatter.dart';
+import '../../shared/widgets/double_bezel_card.dart';
 
 class ConnectionsPage extends ConsumerWidget {
   const ConnectionsPage({super.key});
@@ -17,10 +18,10 @@ class ConnectionsPage extends ConsumerWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.link_off_rounded, size: 64, color: const Color(0xFF94A3B8).withValues(alpha: 0.5)),
+            Icon(Icons.link_off_rounded, size: 64, color: const Color(0xFF64748B).withValues(alpha: 0.5)),
             const SizedBox(height: 16),
             const Text(
-              'Core is not running',
+              'sing-box Core is Offline',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -43,9 +44,27 @@ class ConnectionsPage extends ConsumerWidget {
           // Header Row: Count, Search, Close All
           Row(
             children: [
-              Text(
-                'Active Connections (${connState.connections.length})',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'ACTIVE CONNECTIONS',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.0,
+                      color: Color(0xFF818CF8),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tracking ${connState.connections.length} live TCP / UDP sessions',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
               ),
               const Spacer(),
               // Search field
@@ -56,7 +75,7 @@ class ConnectionsPage extends ConsumerWidget {
                   decoration: const InputDecoration(
                     hintText: 'Search host, IP, or rule...',
                     hintStyle: TextStyle(fontSize: 12),
-                    prefixIcon: Icon(Icons.search, size: 16),
+                    prefixIcon: Icon(Icons.search_rounded, size: 16),
                     contentPadding: EdgeInsets.symmetric(horizontal: 12),
                   ),
                   onChanged: (val) {
@@ -71,7 +90,7 @@ class ConnectionsPage extends ConsumerWidget {
                     : () {
                         ref.read(connectionsProvider.notifier).closeAllConnections();
                       },
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
                 icon: const Icon(Icons.close_fullscreen_rounded, size: 16),
                 label: const Text('Close All', style: TextStyle(fontSize: 12)),
               ),
@@ -80,87 +99,95 @@ class ConnectionsPage extends ConsumerWidget {
 
           const SizedBox(height: 20),
 
-          // Connections Data Table
+          // Connections Data Table in DoubleBezelCard
           Expanded(
             child: connections.isEmpty
                 ? const Center(
                     child: Text(
-                      'No active connections matching query',
-                      style: TextStyle(color: Color(0xFF94A3B8)),
+                      'No active connections matching filter',
+                      style: TextStyle(color: Color(0xFF64748B)),
                     ),
                   )
-                : Card(
-                    clipBehavior: Clip.antiAlias,
-                    child: ListView.separated(
-                      itemCount: connections.length,
-                      separatorBuilder: (context, index) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final conn = connections[index];
-                        final destination = conn.metadata.host.isNotEmpty
-                            ? conn.metadata.host
-                            : '${conn.metadata.destinationIP}:${conn.metadata.destinationPort}';
+                : DoubleBezelCard(
+                    padding: EdgeInsets.zero,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: ListView.separated(
+                        itemCount: connections.length,
+                        separatorBuilder: (context, index) => Divider(
+                          height: 1,
+                          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                        ),
+                        itemBuilder: (context, index) {
+                          final conn = connections[index];
+                          final destination = conn.metadata.host.isNotEmpty
+                              ? conn.metadata.host
+                              : '${conn.metadata.destinationIP}:${conn.metadata.destinationPort}';
 
-                        return ListTile(
-                          dense: true,
-                          leading: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              conn.metadata.network.toUpperCase(),
-                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF06B6D4)),
-                            ),
-                          ),
-                          title: Text(
-                            destination,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Row(
-                            children: [
-                              Text(
-                                'Rule: ${conn.rule.isEmpty ? "Match" : conn.rule}',
-                                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                          return ListTile(
+                            dense: true,
+                            leading: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF38BDF8).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(5),
+                                border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.3)),
                               ),
-                              const SizedBox(width: 12),
-                              if (conn.chains.isNotEmpty)
+                              child: Text(
+                                conn.metadata.network.toUpperCase(),
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF38BDF8)),
+                              ),
+                            ),
+                            title: Text(
+                              destination,
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: -0.2),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Row(
+                              children: [
                                 Text(
-                                  'Out: ${conn.chains.join(" → ")}',
-                                  style: const TextStyle(fontSize: 11, color: Color(0xFF818CF8)),
+                                  'Rule: ${conn.rule.isEmpty ? "Match" : conn.rule}',
+                                  style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                                 ),
-                            ],
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
+                                const SizedBox(width: 12),
+                                if (conn.chains.isNotEmpty)
                                   Text(
-                                    '↓ ${ByteFormatter.formatBytes(conn.download)}',
-                                    style: const TextStyle(fontSize: 11, color: Color(0xFF06B6D4)),
+                                    'Route: ${conn.chains.join(" → ")}',
+                                    style: const TextStyle(fontSize: 11, color: Color(0xFF818CF8)),
                                   ),
-                                  Text(
-                                    '↑ ${ByteFormatter.formatBytes(conn.upload)}',
-                                    style: const TextStyle(fontSize: 11, color: Color(0xFF6366F1)),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(width: 12),
-                              IconButton(
-                                icon: const Icon(Icons.close_rounded, size: 18),
-                                tooltip: 'Terminate connection',
-                                onPressed: () {
-                                  ref.read(connectionsProvider.notifier).closeConnection(conn.id);
-                                },
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                              ],
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      '↓ ${ByteFormatter.formatBytes(conn.download)}',
+                                      style: const TextStyle(fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold, color: Color(0xFF38BDF8)),
+                                    ),
+                                    Text(
+                                      '↑ ${ByteFormatter.formatBytes(conn.upload)}',
+                                      style: const TextStyle(fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(width: 12),
+                                IconButton(
+                                  icon: const Icon(Icons.close_rounded, size: 18),
+                                  tooltip: 'Kill Connection',
+                                  hoverColor: const Color(0xFFF43F5E).withValues(alpha: 0.15),
+                                  onPressed: () {
+                                    ref.read(connectionsProvider.notifier).closeConnection(conn.id);
+                                  },
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
           ),

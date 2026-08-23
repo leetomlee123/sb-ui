@@ -48,27 +48,54 @@ class _LogsPageState extends ConsumerState<LogsPage> {
           // Controls toolbar
           Row(
             children: [
-              const Text(
-                'Live Logs',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'SYSTEM LOG STREAM',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.0,
+                      color: Color(0xFF818CF8),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Real-time core diagnostics and WebSocket log pipeline',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
               ),
               const Spacer(),
 
               // Level dropdown
-              DropdownButton<LogLevel>(
-                value: logsState.filterLevel,
-                underline: const SizedBox(),
-                items: LogLevel.values.map((level) {
-                  return DropdownMenuItem(
-                    value: level,
-                    child: Text('Level: ${level.nameStr}', style: const TextStyle(fontSize: 12)),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    ref.read(logsProvider.notifier).setFilterLevel(val);
-                  }
-                },
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0E1424),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5)),
+                ),
+                child: DropdownButton<LogLevel>(
+                  value: logsState.filterLevel,
+                  underline: const SizedBox(),
+                  dropdownColor: const Color(0xFF0E1424),
+                  items: LogLevel.values.map((level) {
+                    return DropdownMenuItem(
+                      value: level,
+                      child: Text('Level: ${level.nameStr}', style: const TextStyle(fontSize: 12)),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      ref.read(logsProvider.notifier).setFilterLevel(val);
+                    }
+                  },
+                ),
               ),
 
               const SizedBox(width: 12),
@@ -81,7 +108,7 @@ class _LogsPageState extends ConsumerState<LogsPage> {
                   decoration: const InputDecoration(
                     hintText: 'Search logs...',
                     hintStyle: TextStyle(fontSize: 12),
-                    prefixIcon: Icon(Icons.search, size: 16),
+                    prefixIcon: Icon(Icons.search_rounded, size: 16),
                     contentPadding: EdgeInsets.symmetric(horizontal: 10),
                   ),
                   onChanged: (val) {
@@ -98,7 +125,7 @@ class _LogsPageState extends ConsumerState<LogsPage> {
                   logsState.isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
                   color: logsState.isPaused ? const Color(0xFF10B981) : null,
                 ),
-                tooltip: logsState.isPaused ? 'Resume auto-update' : 'Pause logs',
+                tooltip: logsState.isPaused ? 'Resume live update' : 'Pause logs',
                 onPressed: () {
                   ref.read(logsProvider.notifier).togglePause();
                 },
@@ -130,19 +157,26 @@ class _LogsPageState extends ConsumerState<LogsPage> {
 
           const SizedBox(height: 16),
 
-          // Logs Console Area
+          // Logs OLED Console Area
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF0B0F19),
-                borderRadius: BorderRadius.circular(12),
+                color: const Color(0xFF060910),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: const Color(0xFF1E293B)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: logs.isEmpty
                   ? const Center(
                       child: Text(
-                        'No logs recorded yet',
+                        'No core log events captured yet',
                         style: TextStyle(color: Color(0xFF64748B), fontFamily: 'monospace'),
                       ),
                     )
@@ -151,7 +185,7 @@ class _LogsPageState extends ConsumerState<LogsPage> {
                       itemCount: logs.length,
                       itemBuilder: (context, index) {
                         final entry = logs[index];
-                        return _buildLogLine(entry);
+                        return _buildLogLine(entry, index + 1);
                       },
                     ),
             ),
@@ -161,7 +195,7 @@ class _LogsPageState extends ConsumerState<LogsPage> {
     );
   }
 
-  Widget _buildLogLine(LogEntry entry) {
+  Widget _buildLogLine(LogEntry entry, int lineNumber) {
     Color levelColor;
     switch (entry.level) {
       case LogLevel.trace:
@@ -177,23 +211,27 @@ class _LogsPageState extends ConsumerState<LogsPage> {
         levelColor = const Color(0xFFF59E0B);
         break;
       case LogLevel.error:
-        levelColor = const Color(0xFFEF4444);
+        levelColor = const Color(0xFFF43F5E);
         break;
     }
 
     final timeStr = DateFormat('HH:mm:ss').format(entry.timestamp.toLocal());
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 2.5),
       child: SelectableText.rich(
         TextSpan(
           children: [
+            TextSpan(
+              text: '${lineNumber.toString().padLeft(4, "0")} ',
+              style: const TextStyle(color: Color(0xFF334155), fontSize: 12, fontFamily: 'monospace'),
+            ),
             TextSpan(
               text: '$timeStr ',
               style: const TextStyle(color: Color(0xFF64748B), fontSize: 12, fontFamily: 'monospace'),
             ),
             TextSpan(
-              text: '[${entry.level.nameStr}] '.padRight(9),
+              text: '[${entry.level.nameStr}] '.padRight(8),
               style: TextStyle(color: levelColor, fontWeight: FontWeight.bold, fontSize: 12, fontFamily: 'monospace'),
             ),
             TextSpan(

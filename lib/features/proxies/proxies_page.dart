@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/proxy_node.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/providers/proxies_provider.dart';
+import '../../shared/widgets/double_bezel_card.dart';
 
 class ProxiesPage extends ConsumerWidget {
   const ProxiesPage({super.key});
@@ -19,15 +20,15 @@ class ProxiesPage extends ConsumerWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.power_off_rounded, size: 64, color: const Color(0xFF94A3B8).withValues(alpha: 0.5)),
+            Icon(Icons.power_off_rounded, size: 64, color: const Color(0xFF64748B).withValues(alpha: 0.5)),
             const SizedBox(height: 16),
             const Text(
-              'Core is not running',
+              'sing-box Core is Offline',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             const Text(
-              'Start sing-box from Dashboard to view and switch proxies',
+              'Start connection on Dashboard to manage proxies and test latency',
               style: TextStyle(color: Color(0xFF94A3B8)),
             ),
           ],
@@ -50,10 +51,10 @@ class ProxiesPage extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row: Group selector chips, Search, Speedtest button
+          // Header Bar: Strategy Group Chips, Search & Speed Test
           Row(
             children: [
-              // Strategy Groups Chips
+              // Strategy Groups selector chips
               Expanded(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -63,7 +64,7 @@ class ProxiesPage extends ConsumerWidget {
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: ChoiceChip(
-                          label: Text(groupName),
+                          label: Text(groupName, style: TextStyle(fontSize: 12, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
                           selected: isSelected,
                           onSelected: (selected) {
                             if (selected) {
@@ -79,15 +80,15 @@ class ProxiesPage extends ConsumerWidget {
 
               const SizedBox(width: 16),
 
-              // Search field
+              // Search Filter Field
               SizedBox(
-                width: 200,
+                width: 220,
                 height: 40,
                 child: TextField(
                   decoration: InputDecoration(
                     hintText: 'Filter nodes...',
                     hintStyle: const TextStyle(fontSize: 12),
-                    prefixIcon: const Icon(Icons.search, size: 16),
+                    prefixIcon: const Icon(Icons.search_rounded, size: 16),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                     filled: true,
                     border: OutlineInputBorder(
@@ -103,13 +104,13 @@ class ProxiesPage extends ConsumerWidget {
 
               const SizedBox(width: 12),
 
-              // Speed test button
+              // Speed Test Button
               ElevatedButton.icon(
                 onPressed: () {
                   ref.read(proxiesProvider.notifier).testAllInSelectedGroup();
                 },
                 icon: const Icon(Icons.speed_rounded, size: 16),
-                label: const Text('Speed Test', style: TextStyle(fontSize: 12)),
+                label: const Text('Ping All', style: TextStyle(fontSize: 12)),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 ),
@@ -117,7 +118,7 @@ class ProxiesPage extends ConsumerWidget {
 
               const SizedBox(width: 8),
 
-              // Refresh proxies
+              // Refresh
               IconButton(
                 icon: const Icon(Icons.refresh_rounded, size: 20),
                 tooltip: 'Refresh list',
@@ -130,39 +131,86 @@ class ProxiesPage extends ConsumerWidget {
 
           const SizedBox(height: 20),
 
-          // Nodes Grid
+          // Nodes Grid (Asymmetrical Double-Bezel Cards)
           Expanded(
             child: filteredNodes.isEmpty
                 ? const Center(
                     child: Text(
                       'No proxy nodes found',
-                      style: TextStyle(color: Color(0xFF94A3B8)),
+                      style: TextStyle(color: Color(0xFF64748B)),
                     ),
                   )
                 : GridView.builder(
                     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 320,
-                      mainAxisExtent: 100,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
+                      mainAxisExtent: 104,
+                      crossAxisSpacing: 14,
+                      mainAxisSpacing: 14,
                     ),
                     itemCount: filteredNodes.length,
                     itemBuilder: (context, index) {
                       final node = filteredNodes[index];
                       final isSelectedInGroup = activeGroup?.current == node.name;
 
-                      return _buildNodeCard(
-                        context,
-                        node: node,
+                      return DoubleBezelCard(
+                        padding: const EdgeInsets.all(12),
+                        borderRadius: 14,
                         isSelected: isSelectedInGroup,
                         onTap: () {
                           if (selectedGroupName != null) {
                             ref.read(proxiesProvider.notifier).selectNode(selectedGroupName, node.name);
                           }
                         },
-                        onTestDelay: () {
-                          ref.read(proxiesProvider.notifier).testNodeDelay(node.name);
-                        },
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Top: Node Name + Radio Circle
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    node.name,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: isSelectedInGroup ? FontWeight.bold : FontWeight.w600,
+                                      color: isSelectedInGroup ? const Color(0xFF818CF8) : null,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isSelectedInGroup)
+                                  Container(
+                                    width: 16,
+                                    height: 16,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF6366F1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.check, size: 11, color: Colors.white),
+                                  ),
+                              ],
+                            ),
+
+                            // Bottom: Protocol Tag + Latency Badge
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Protocol badge with protocol-specific color
+                                _buildProtocolTag(node.type),
+
+                                // Latency Ping chip
+                                _buildDelayBadge(
+                                  node: node,
+                                  onTest: () {
+                                    ref.read(proxiesProvider.notifier).testNodeDelay(node.name);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       );
                     },
                   ),
@@ -172,127 +220,113 @@ class ProxiesPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildNodeCard(
-    BuildContext context, {
+  Widget _buildProtocolTag(OutboundType type) {
+    Color tagColor;
+    switch (type) {
+      case OutboundType.shadowsocks:
+        tagColor = const Color(0xFF38BDF8);
+        break;
+      case OutboundType.vmess:
+        tagColor = const Color(0xFF818CF8);
+        break;
+      case OutboundType.vless:
+        tagColor = const Color(0xFF10B981);
+        break;
+      case OutboundType.trojan:
+        tagColor = const Color(0xFFA855F7);
+        break;
+      case OutboundType.hysteria2:
+        tagColor = const Color(0xFFF59E0B);
+        break;
+      case OutboundType.tuic:
+        tagColor = const Color(0xFFF43F5E);
+        break;
+      case OutboundType.wireguard:
+        tagColor = const Color(0xFF2DD4BF);
+        break;
+      default:
+        tagColor = const Color(0xFF94A3B8);
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: tagColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: tagColor.withValues(alpha: 0.3), width: 0.8),
+      ),
+      child: Text(
+        type.displayName.toUpperCase(),
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.5,
+          color: tagColor,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDelayBadge({
     required ProxyNode node,
-    required bool isSelected,
-    required VoidCallback onTap,
-    required VoidCallback onTestDelay,
+    required VoidCallback onTest,
   }) {
-    Color delayColor = const Color(0xFF94A3B8);
+    if (['direct', 'block', 'dns', 'Auto'].contains(node.name)) {
+      return const SizedBox();
+    }
+
+    Color delayColor = const Color(0xFF64748B);
     String delayText = '—';
 
     if (node.isTesting) {
-      delayText = 'testing...';
+      delayText = 'pinging...';
       delayColor = const Color(0xFFF59E0B);
     } else if (node.delay != null) {
       if (node.delay! <= 0) {
         delayText = 'Timeout';
-        delayColor = const Color(0xFFEF4444);
+        delayColor = const Color(0xFFF43F5E);
       } else {
         delayText = '${node.delay} ms';
         if (node.delay! < 200) {
           delayColor = const Color(0xFF10B981);
-        } else if (node.delay! < 600) {
+        } else if (node.delay! < 500) {
           delayColor = const Color(0xFFF59E0B);
         } else {
-          delayColor = const Color(0xFFEF4444);
+          delayColor = const Color(0xFFF43F5E);
         }
       }
     }
 
-    final isSpecial = ['direct', 'block', 'dns', 'Auto'].contains(node.name);
-
     return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      onTap: onTest,
+      borderRadius: BorderRadius.circular(6),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
         decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFF6366F1).withValues(alpha: 0.12)
-              : Theme.of(context).cardTheme.color,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected
-                ? const Color(0xFF6366F1)
-                : Theme.of(context).dividerColor.withValues(alpha: 0.1),
-            width: isSelected ? 2 : 1,
-          ),
+          color: delayColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(6),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Top Row: Node Name & Active Radio Icon
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    node.name,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      color: isSelected ? const Color(0xFF818CF8) : null,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (isSelected)
-                  const Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF6366F1)),
-              ],
+            Container(
+              width: 5,
+              height: 5,
+              decoration: BoxDecoration(
+                color: delayColor,
+                shape: BoxShape.circle,
+              ),
             ),
-
-            // Bottom Row: Protocol Badge & Latency Pill
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Protocol badge
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    node.type.displayName.toUpperCase(),
-                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)),
-                  ),
-                ),
-
-                // Latency pill with tap to ping
-                if (!isSpecial)
-                  InkWell(
-                    onTap: onTestDelay,
-                    borderRadius: BorderRadius.circular(6),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: delayColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            delayText,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: delayColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
+            const SizedBox(width: 4),
+            Text(
+              delayText,
+              style: TextStyle(
+                fontSize: 11,
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.w700,
+                color: delayColor,
+              ),
             ),
           ],
         ),
