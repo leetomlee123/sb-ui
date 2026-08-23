@@ -92,6 +92,9 @@ class Translations {
   String get configPayload => isZh ? '配置文本' : 'Configuration Payload';
   String get configPayloadHint => isZh ? '支持粘贴 sing-box JSON、Clash YAML 或 ss/vmess/vless/trojan/hy2 节点链接' : 'Paste sing-box JSON, Clash YAML, or Shadowsocks/Vmess/Vless/Trojan/Hy2 URLs';
   String get downloadSubFailed => isZh ? '下载订阅链接失败，请检查网络或链接有效性' : 'Failed to download subscription URL';
+  String get copySubUrl => isZh ? '复制订阅链接' : 'Copy Subscription URL';
+  String get copyConfigPayload => isZh ? '复制配置文本' : 'Copy Config Payload';
+  String get copiedSubSuccess => isZh ? '订阅链接已成功复制到剪贴板' : 'Subscription URL copied to clipboard';
 
   // Connections Page
   String get activeConnections => isZh ? '实时活动连接' : 'ACTIVE CONNECTIONS';

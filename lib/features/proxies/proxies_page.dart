@@ -6,11 +6,24 @@ import '../../core/providers/core_provider.dart';
 import '../../core/providers/proxies_provider.dart';
 import '../../shared/widgets/double_bezel_card.dart';
 
-class ProxiesPage extends ConsumerWidget {
+class ProxiesPage extends ConsumerStatefulWidget {
   const ProxiesPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProxiesPage> createState() => _ProxiesPageState();
+}
+
+class _ProxiesPageState extends ConsumerState<ProxiesPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(proxiesProvider.notifier).fetchProxies();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final coreState = ref.watch(coreProvider);
     final proxiesState = ref.watch(proxiesProvider);
     final tr = ref.watch(translationsProvider);
@@ -67,7 +80,13 @@ class ProxiesPage extends ConsumerWidget {
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: ChoiceChip(
-                          label: Text(groupName, style: TextStyle(fontSize: 12, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                          label: Text(
+                            groupName,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
                           selected: isSelected,
                           onSelected: (selected) {
                             if (selected) {
@@ -247,6 +266,10 @@ class ProxiesPage extends ConsumerWidget {
         break;
       case OutboundType.wireguard:
         tagColor = const Color(0xFF2DD4BF);
+        break;
+      case OutboundType.urltest:
+      case OutboundType.selector:
+        tagColor = const Color(0xFF818CF8);
         break;
       default:
         tagColor = const Color(0xFF94A3B8);

@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../engine/profile_parser.dart';
 import '../models/proxy_node.dart';
 import 'core_provider.dart';
+import 'profiles_provider.dart';
 
 class ProxiesState {
   final Map<String, ProxyGroup> groups;
@@ -19,14 +21,26 @@ class ProxiesState {
   });
 
   List<ProxyNode> get filteredNodes {
-    if (selectedGroup == null || !groups.containsKey(selectedGroup)) {
-      return nodes.values.toList();
+    if (selectedGroup != null && groups.containsKey(selectedGroup)) {
+      final group = groups[selectedGroup]!;
+      return group.all
+          .map((name) {
+            if (nodes.containsKey(name)) return nodes[name]!;
+            if (groups.containsKey(name)) {
+              final grp = groups[name]!;
+              return ProxyNode(name: name, type: grp.type);
+            }
+            return ProxyNode(name: name, type: OutboundType.unknown);
+          })
+          .where((n) => n.name.toLowerCase().contains(searchQuery.toLowerCase()))
+          .toList();
     }
-    final group = groups[selectedGroup]!;
-    return group.all
-        .map((name) => nodes[name] ?? ProxyNode(name: name, type: OutboundType.unknown))
-        .where((n) => n.name.toLowerCase().contains(searchQuery.toLowerCase()))
-        .toList();
+    if (nodes.isNotEmpty) {
+      return nodes.values
+          .where((n) => n.name.toLowerCase().contains(searchQuery.toLowerCase()))
+          .toList();
+    }
+    return [];
   }
 
   ProxiesState copyWith({
@@ -53,12 +67,67 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
   ProxiesNotifier(this._ref) : super(ProxiesState()) {
     _ref.listen<CoreState>(coreProvider, (previous, next) {
       if (next.isRunning && (previous == null || !previous.isRunning)) {
-        fetchProxies();
+        Future.delayed(const Duration(milliseconds: 200), () => fetchProxies());
+        Future.delayed(const Duration(milliseconds: 800), () => fetchProxies(silent: true));
         _startAutoRefresh();
       } else if (!next.isRunning) {
         _stopAutoRefresh();
       }
     });
+
+    // Populate fallback nodes from active profile immediately
+    _populateFromActiveProfile();
+  }
+
+  void _populateFromActiveProfile() {
+    try {
+      final activeProfile = _ref.read(profilesProvider).activeProfile;
+      if (activeProfile != null && activeProfile.rawConfig.isNotEmpty) {
+        final parseResult = ProfileParser.parse(activeProfile.rawConfig);
+        final Map<String, ProxyGroup> groups = {};
+        final Map<String, ProxyNode> nodes = {};
+
+        for (final ob in parseResult.outbounds) {
+          final tag = (ob['tag'] ?? '').toString();
+          final type = (ob['type'] ?? '').toString().toLowerCase();
+          if (['selector', 'urltest', 'fallback', 'loadbalance'].contains(type)) {
+            final allList = (ob['outbounds'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+            groups[tag] = ProxyGroup(
+              name: tag,
+              type: OutboundType.fromString(type),
+              current: allList.isNotEmpty ? allList.first : '',
+              all: allList,
+              raw: ob,
+            );
+          } else if (tag.isNotEmpty) {
+            nodes[tag] = ProxyNode(
+              name: tag,
+              type: OutboundType.fromString(type),
+              server: ob['server']?.toString(),
+              port: ob['server_port'] is int ? ob['server_port'] : int.tryParse(ob['server_port']?.toString() ?? ''),
+              raw: ob,
+            );
+          }
+        }
+
+        if (groups.isNotEmpty || nodes.isNotEmpty) {
+          String? initialGroup = state.selectedGroup;
+          if (initialGroup == null || !groups.containsKey(initialGroup)) {
+            if (groups.containsKey('Proxy')) {
+              initialGroup = 'Proxy';
+            } else if (groups.isNotEmpty) {
+              initialGroup = groups.keys.first;
+            }
+          }
+
+          state = state.copyWith(
+            groups: groups,
+            nodes: nodes,
+            selectedGroup: initialGroup,
+          );
+        }
+      }
+    } catch (_) {}
   }
 
   void _startAutoRefresh() {
@@ -73,7 +142,10 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
 
   Future<void> fetchProxies({bool silent = false}) async {
     final client = _ref.read(clashApiClientProvider);
-    if (client == null) return;
+    if (client == null) {
+      _populateFromActiveProfile();
+      return;
+    }
 
     if (!silent) state = state.copyWith(isLoading: true);
     try {
@@ -92,10 +164,19 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
         }
       });
 
+      // Fallback if API returned empty
+      if (groups.isEmpty && nodes.isEmpty) {
+        _populateFromActiveProfile();
+        if (!silent) state = state.copyWith(isLoading: false);
+        return;
+      }
+
       String? activeGroup = state.selectedGroup;
       if (activeGroup == null || !groups.containsKey(activeGroup)) {
         if (groups.containsKey('Proxy')) {
           activeGroup = 'Proxy';
+        } else if (groups.containsKey('auto')) {
+          activeGroup = 'auto';
         } else if (groups.isNotEmpty) {
           activeGroup = groups.keys.first;
         }
@@ -108,6 +189,7 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
         isLoading: false,
       );
     } catch (_) {
+      _populateFromActiveProfile();
       if (!silent) state = state.copyWith(isLoading: false);
     }
   }

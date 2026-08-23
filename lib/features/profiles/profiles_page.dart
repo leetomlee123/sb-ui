@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/i18n/translations.dart';
 import '../../core/models/profile.dart';
@@ -215,14 +216,38 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      profile.url ?? profile.filePath ?? (tr.isZh ? '手动本地配置' : 'Manual Raw Configuration'),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    InkWell(
+                      onTap: () {
+                        final content = profile.url ?? profile.rawConfig;
+                        if (content.isNotEmpty) {
+                          Clipboard.setData(ClipboardData(text: content));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(profile.url != null ? tr.copiedSubSuccess : tr.copiedSubSuccess)),
+                          );
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(4),
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              profile.url ?? profile.filePath ?? (tr.isZh ? '手动本地配置' : 'Manual Raw Configuration'),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.copy_rounded,
+                            size: 12,
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                          ),
+                        ],
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -237,6 +262,19 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                       tooltip: tr.updateSub,
                       onPressed: onRefresh,
                     ),
+                  IconButton(
+                    icon: const Icon(Icons.copy_rounded, size: 19),
+                    tooltip: profile.type == ProfileType.remote ? tr.copySubUrl : tr.copyConfigPayload,
+                    onPressed: () {
+                      final content = profile.url ?? profile.rawConfig;
+                      if (content.isNotEmpty) {
+                        Clipboard.setData(ClipboardData(text: content));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(profile.url != null ? tr.copiedSubSuccess : tr.copiedSubSuccess)),
+                        );
+                      }
+                    },
+                  ),
                   IconButton(
                     icon: const Icon(Icons.code_rounded, size: 20),
                     tooltip: tr.editConfig,
