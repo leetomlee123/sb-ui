@@ -90,13 +90,8 @@ class SingboxProcessManager {
   static Future<bool> isElevated() async {
     if (Platform.isWindows) {
       try {
-        final res = await Process.run('powershell', [
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
-          r'([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)',
-        ]);
-        return res.stdout.toString().trim().toLowerCase() == 'true';
+        final res = await Process.run('net', ['session']);
+        return res.exitCode == 0;
       } catch (_) {
         return false;
       }
@@ -108,7 +103,7 @@ class SingboxProcessManager {
         return false;
       }
     }
-    return true;
+    return false;
   }
 
   Future<bool> checkConfig(String binaryPath, String configPath) async {
@@ -185,19 +180,18 @@ class SingboxProcessManager {
           message: 'Requesting Administrator privileges for TUN mode...',
         ));
 
-        final psScript = '''
-\$process = Start-Process -FilePath '$binary' -ArgumentList 'run', '-c', '$configPath' -WorkingDirectory '$configParentDir' -Verb RunAs -WindowStyle Hidden -PassThru
-\$process.Id
-''';
-        final result = await Process.run('powershell', ['-NoProfile', '-NonInteractive', '-Command', psScript]);
+        final escapedBinary = binary.replaceAll("'", "''");
+        final escapedConfig = configPath.replaceAll("'", "''");
+        final escapedDir = configParentDir.replaceAll("'", "''");
+
+        final psScript = "Start-Process -FilePath '$escapedBinary' -ArgumentList 'run', '-c', '$escapedConfig' -WorkingDirectory '$escapedDir' -Verb RunAs -WindowStyle Hidden";
+        final result = await Process.run('powershell', ['-NoProfile', '-Command', psScript]);
         if (result.exitCode == 0) {
-          final pidStr = result.stdout.toString().trim();
-          _elevatedPid = int.tryParse(pidStr);
           _startedAt = DateTime.now();
           _updateStatus(CoreStatus.running);
           _outputController.add(LogEntry(
             level: LogLevel.info,
-            message: 'sing-box TUN service started with Administrator privileges (PID: $_elevatedPid)',
+            message: 'sing-box TUN service started with Administrator privileges',
           ));
           return true;
         } else {

@@ -229,9 +229,12 @@ class DashboardPage extends ConsumerWidget {
                               isActive: settings.tunModeEnabled,
                               icon: Icons.vpn_key_rounded,
                               activeColor: const Color(0xFF6366F1),
-                              onTap: () {
-                                ref.read(settingsProvider.notifier).toggleTunMode(!settings.tunModeEnabled);
-                                if (isRunning) ref.read(coreProvider.notifier).restartCore();
+                              onTap: () async {
+                                final next = !settings.tunModeEnabled;
+                                await ref.read(settingsProvider.notifier).toggleTunMode(next);
+                                if (isRunning) {
+                                  await ref.read(coreProvider.notifier).restartCore();
+                                }
                               },
                             ),
                           ),
