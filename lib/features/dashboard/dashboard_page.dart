@@ -262,108 +262,13 @@ class DashboardPage extends ConsumerWidget {
 
           const SizedBox(height: 16),
 
-          // Dashboard Display Controls & Quick Toggles
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                tr.dashboardDisplay,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.0,
-                  color: Color(0xFF818CF8),
-                ),
-              ),
-              Row(
-                children: [
-                  FilterChip(
-                    avatar: Icon(
-                      Icons.speed_rounded,
-                      size: 14,
-                      color: settings.showSpeedMetrics ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
-                    ),
-                    label: Text(
-                      tr.toggleMetrics,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: settings.showSpeedMetrics ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                    selected: settings.showSpeedMetrics,
-                    onSelected: (val) {
-                      ref.read(settingsProvider.notifier).toggleShowSpeedMetrics(val);
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    avatar: Icon(
-                      Icons.show_chart_rounded,
-                      size: 14,
-                      color: settings.showTelemetryChart ? const Color(0xFF818CF8) : const Color(0xFF64748B),
-                    ),
-                    label: Text(
-                      tr.toggleChart,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: settings.showTelemetryChart ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                    selected: settings.showTelemetryChart,
-                    onSelected: (val) {
-                      ref.read(settingsProvider.notifier).toggleShowTelemetryChart(val);
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-
           // Row 2: Metrics Bento Strip (Down/Up Speeds + Totals + Combined Total + Current Node)
-          if (settings.showSpeedMetrics) ...[
-            const SizedBox(height: 14),
-            const _SpeedMetricsStrip(),
-          ],
+          const _SpeedMetricsStrip(),
+
+          const SizedBox(height: 16),
 
           // Row 3: Telemetry Stream LineChart (Obsidian Glow Graph)
-          if (settings.showTelemetryChart) ...[
-            const SizedBox(height: 16),
-            _TelemetryGraphCard(visible: isVisible),
-          ],
-
-          // Fallback notice when both are hidden
-          if (!settings.showSpeedMetrics && !settings.showTelemetryChart) ...[
-            const SizedBox(height: 16),
-            DoubleBezelCard(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.info_outline_rounded, size: 18, color: Color(0xFF818CF8)),
-                      const SizedBox(width: 10),
-                      Text(
-                        tr.chartCollapsedHint,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ],
-                  ),
-                  TextButton.icon(
-                    onPressed: () {
-                      ref.read(settingsProvider.notifier).toggleShowSpeedMetrics(true);
-                      ref.read(settingsProvider.notifier).toggleShowTelemetryChart(true);
-                    },
-                    icon: const Icon(Icons.visibility_rounded, size: 14),
-                    label: Text(tr.isZh ? '全部显示' : 'Show All', style: const TextStyle(fontSize: 12)),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          _TelemetryGraphCard(visible: isVisible),
         ],
       ),
     );
@@ -690,17 +595,6 @@ class _TelemetryGraphCard extends ConsumerWidget {
                   _buildLegendPill(const Color(0xFF38BDF8), '↓ ${ByteFormatter.formatSpeed(currentDown)}'),
                   const SizedBox(width: 12),
                   _buildLegendPill(const Color(0xFF818CF8), '↑ ${ByteFormatter.formatSpeed(currentUp)}'),
-                  const SizedBox(width: 10),
-                  IconButton(
-                    icon: const Icon(Icons.visibility_off_outlined, size: 16),
-                    tooltip: tr.toggleChart,
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-                    onPressed: () {
-                      ref.read(settingsProvider.notifier).toggleShowTelemetryChart(false);
-                    },
-                  ),
                 ],
               ),
             ],

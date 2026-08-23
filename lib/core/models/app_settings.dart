@@ -36,8 +36,6 @@ class AppSettings {
   final String directDns;
   final bool allowLan;
   final String selectedProxyNode; // persisted user choice for primary selector
-  final bool showSpeedMetrics; // Dashboard: toggle speed metrics bento strip
-  final bool showTelemetryChart; // Dashboard: toggle live traffic waveform chart
 
   const AppSettings({
     this.mixedPort = 2080,
@@ -58,8 +56,6 @@ class AppSettings {
     this.directDns = '223.5.5.5',
     this.allowLan = false,
     this.selectedProxyNode = '',
-    this.showSpeedMetrics = true,
-    this.showTelemetryChart = true,
   });
 
   Map<String, dynamic> toJson() {
@@ -82,8 +78,6 @@ class AppSettings {
       'directDns': directDns,
       'allowLan': allowLan,
       'selectedProxyNode': selectedProxyNode,
-      'showSpeedMetrics': showSpeedMetrics,
-      'showTelemetryChart': showTelemetryChart,
     };
   }
 
@@ -110,8 +104,6 @@ class AppSettings {
       directDns: json['directDns'] as String? ?? '223.5.5.5',
       allowLan: json['allowLan'] as bool? ?? false,
       selectedProxyNode: json['selectedProxyNode'] as String? ?? '',
-      showSpeedMetrics: json['showSpeedMetrics'] as bool? ?? true,
-      showTelemetryChart: json['showTelemetryChart'] as bool? ?? true,
     );
   }
 
@@ -134,8 +126,6 @@ class AppSettings {
     String? directDns,
     bool? allowLan,
     String? selectedProxyNode,
-    bool? showSpeedMetrics,
-    bool? showTelemetryChart,
   }) {
     return AppSettings(
       mixedPort: mixedPort ?? this.mixedPort,
@@ -156,8 +146,6 @@ class AppSettings {
       directDns: directDns ?? this.directDns,
       allowLan: allowLan ?? this.allowLan,
       selectedProxyNode: selectedProxyNode ?? this.selectedProxyNode,
-      showSpeedMetrics: showSpeedMetrics ?? this.showSpeedMetrics,
-      showTelemetryChart: showTelemetryChart ?? this.showTelemetryChart,
     );
   }
 

@@ -347,35 +347,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
           const SizedBox(height: 24),
 
-          // Dashboard Module Preferences
-          _buildSectionHeader(tr.dashboardDisplay),
-          DoubleBezelCard(
-            padding: EdgeInsets.zero,
-            child: Column(
-              children: [
-                SwitchListTile(
-                  title: Text(tr.optShowSpeedMetricsTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: Text(tr.optShowSpeedMetricsSubtitle, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
-                  value: settings.showSpeedMetrics,
-                  onChanged: (val) {
-                    ref.read(settingsProvider.notifier).toggleShowSpeedMetrics(val);
-                  },
-                ),
-                Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
-                SwitchListTile(
-                  title: Text(tr.optShowTelemetryChartTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: Text(tr.optShowTelemetryChartSubtitle, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
-                  value: settings.showTelemetryChart,
-                  onChanged: (val) {
-                    ref.read(settingsProvider.notifier).toggleShowTelemetryChart(val);
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
           // General & Desktop Behavior
           _buildSectionHeader(tr.secDesktop),
           DoubleBezelCard(

@@ -58,15 +58,6 @@ class Translations {
   String get telemetryStream => isZh ? '实时流量波形' : 'TELEMETRY STREAM';
   String get live => isZh ? '实时' : 'LIVE';
   String get telemetryEmptyHint => isZh ? '建立网络连接后将自动呈现实时流量走势图' : 'Telemetry data will populate when connection is established';
-  String get toggleChart => isZh ? '流量图表' : 'Waveform Chart';
-  String get toggleMetrics => isZh ? '速率统计' : 'Speed Metrics';
-  String get chartCollapsedHint => isZh ? '实时流量波形图已隐藏（点击上方或设置中可随时开启）' : 'Traffic graph hidden (toggle via header or settings)';
-  String get statsCollapsedHint => isZh ? '速率统计卡片已隐藏' : 'Speed metrics hidden';
-  String get dashboardDisplay => isZh ? '仪表盘模块展示' : 'DASHBOARD DISPLAY';
-  String get optShowSpeedMetricsTitle => isZh ? '显示速率与流量统计卡片' : 'Speed & Traffic Metrics Bento';
-  String get optShowSpeedMetricsSubtitle => isZh ? '在首页展示下载/上传实时速率及本次会话累计流量卡片' : 'Display download/upload speeds and session traffic cards on Dashboard';
-  String get optShowTelemetryChartTitle => isZh ? '显示实时流量波形图表' : 'Live Traffic Waveform Graph';
-  String get optShowTelemetryChartSubtitle => isZh ? '在首页渲染 90 秒实时流量折线波动图（关闭可进一步降低待机负载）' : 'Render 90s live traffic line graph (disable to minimize CPU load)';
 
   // Proxies Page
   String get coreOfflineTitle => isZh ? 'sing-box 核心未运行' : 'sing-box Core is Offline';
