@@ -219,43 +219,72 @@ class AppUpdaterService {
     required String exeName,
   }) async {
     final scriptPath = p.join(stagingDir, 'sb_ui_self_update.bat');
-    final content = '''
-@echo off
-set "APP_DIR=$appDir"
-set "SRC_DIR=$stagingDir"
-set "EXE_NAME=$exeName"
-
-:wait_exit
-tasklist /FI "IMAGENAME eq %EXE_NAME%" 2>nul | find /I "%EXE_NAME%" >nul 2>&1
-if not errorlevel 1 (
-  ping -n 2 127.0.0.1 >nul
-  goto wait_exit
-)
-
-if exist "%APP_DIR%\\%EXE_NAME%" move /y "%APP_DIR%\\%EXE_NAME%" "%APP_DIR%\\%EXE_NAME%.old" >nul 2>&1
-
-xcopy /e /y /i "%SRC_DIR%\\*" "%APP_DIR%\\" >nul 2>&1
-
-rem The staging copy includes this script itself; drop the duplicated one.
-del /f /q "%APP_DIR%\\sb_ui_self_update.bat" >nul 2>&1
-
-if exist "%APP_DIR%\\%EXE_NAME%" (
-  if exist "%APP_DIR%\\%EXE_NAME%.old" del /f /q "%APP_DIR%\\%EXE_NAME%.old" >nul 2>&1
-)
-
-cd /d "%APP_DIR%"
-start "" "%EXE_NAME%"
-rd /s /q "%SRC_DIR%" >nul 2>&1
-del /f /q "%~f0" >nul 2>&1
-''';
+    final lines = [
+      '@echo off',
+      'set "APP_DIR=$appDir"',
+      'set "SRC_DIR=$stagingDir"',
+      'set "EXE_NAME=$exeName"',
+      'set /a RETRIES=0',
+      '',
+      ':wait_exit',
+      'set /a RETRIES+=1',
+      'if %RETRIES% geq 20 goto do_kill',
+      'tasklist /FI "IMAGENAME eq %EXE_NAME%" 2>nul | find /I "%EXE_NAME%" >nul 2>&1',
+      'if not errorlevel 1 (',
+      '  ping -n 2 127.0.0.1 >nul',
+      '  goto wait_exit',
+      ')',
+      'goto do_swap',
+      '',
+      ':do_kill',
+      'taskkill /F /IM "%EXE_NAME%" >nul 2>&1',
+      'ping -n 2 127.0.0.1 >nul',
+      '',
+      ':do_swap',
+      'if exist "%APP_DIR%\\%EXE_NAME%" move /y "%APP_DIR%\\%EXE_NAME%" "%APP_DIR%\\%EXE_NAME%.old" >nul 2>&1',
+      '',
+      'xcopy /e /y /i "%SRC_DIR%\\*" "%APP_DIR%\\" >nul 2>&1',
+      '',
+      'rem The staging copy includes this script itself; drop the duplicated one.',
+      'del /f /q "%APP_DIR%\\sb_ui_self_update.bat" >nul 2>&1',
+      '',
+      'if exist "%APP_DIR%\\%EXE_NAME%" (',
+      '  if exist "%APP_DIR%\\%EXE_NAME%.old" del /f /q "%APP_DIR%\\%EXE_NAME%.old" >nul 2>&1',
+      ')',
+      '',
+      'cd /d "%APP_DIR%"',
+      'start "" "%EXE_NAME%"',
+      'rd /s /q "%SRC_DIR%" >nul 2>&1',
+      'del /f /q "%~f0" >nul 2>&1',
+    ];
+    // CRLF line endings required for cmd.exe batch parsing
+    final content = '${lines.join('\r\n')}\r\n';
     final scriptFile = File(scriptPath);
     await scriptFile.parent.create(recursive: true);
     await scriptFile.writeAsString(content, flush: true);
     return scriptPath;
   }
 
-  /// Launches the swap script detached from this process so it survives exit.
+  /// Launches the swap script detached and silently in background without a visible console window.
   Future<void> launchDetached(String scriptPath) async {
+    if (Platform.isWindows) {
+      try {
+        await Process.start(
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-WindowStyle',
+            'Hidden',
+            '-Command',
+            'Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$scriptPath`"" -WindowStyle Hidden',
+          ],
+          mode: ProcessStartMode.detached,
+        );
+        return;
+      } catch (_) {}
+    }
+
     await Process.start(
       'cmd.exe',
       ['/c', scriptPath],
