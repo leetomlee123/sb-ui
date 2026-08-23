@@ -74,6 +74,14 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   Future<void> setSelectedProxyNode(String nodeName) async {
     await updateSettings(state.copyWith(selectedProxyNode: nodeName));
   }
+
+  Future<void> toggleShowSpeedMetrics(bool enabled) async {
+    await updateSettings(state.copyWith(showSpeedMetrics: enabled));
+  }
+
+  Future<void> toggleShowTelemetryChart(bool enabled) async {
+    await updateSettings(state.copyWith(showTelemetryChart: enabled));
+  }
 }
 
 final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((ref) {

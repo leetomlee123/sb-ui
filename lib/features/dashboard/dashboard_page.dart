@@ -263,15 +263,17 @@ class DashboardPage extends ConsumerWidget {
           ),
         ),
 
-          const SizedBox(height: 16),
-
           // Row 2: Metrics Bento Strip (Down/Up Speeds + Totals + Combined Total + Current Node)
-          const _SpeedMetricsStrip(),
-
-          const SizedBox(height: 16),
+          if (settings.showSpeedMetrics) ...[
+            const SizedBox(height: 16),
+            const _SpeedMetricsStrip(),
+          ],
 
           // Row 3: Telemetry Stream LineChart (Obsidian Glow Graph)
-          _TelemetryGraphCard(visible: isVisible),
+          if (settings.showTelemetryChart) ...[
+            const SizedBox(height: 16),
+            _TelemetryGraphCard(visible: isVisible),
+          ],
         ],
       ),
     );
