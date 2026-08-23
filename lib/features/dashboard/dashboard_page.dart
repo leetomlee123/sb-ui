@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -581,6 +582,10 @@ class _TelemetryGraphCard extends ConsumerWidget {
                 : RepaintBoundary(
                     child: LineChart(
                       LineChartData(
+                        clipData: const FlClipData.all(),
+                        minX: 0,
+                        maxX: math.max(30.0, (trafficState.history.length - 1).toDouble()),
+                        minY: 0,
                         gridData: FlGridData(
                           show: true,
                           drawVerticalLine: false,
@@ -596,17 +601,38 @@ class _TelemetryGraphCard extends ConsumerWidget {
                           bottomTitles: AxisTitles(
                             sideTitles: SideTitles(
                               showTitles: true,
-                              reservedSize: 20,
+                              reservedSize: 22,
                               interval: 15,
                               getTitlesWidget: (value, meta) {
                                 final total = trafficState.history.length;
-                                final diff = (total - 1 - value.toInt()).abs();
-                                if (diff == 0) {
-                                  return Text(tr.isZh ? '实时' : 'Now', style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)));
+                                final valInt = value.toInt();
+                                final diff = (total - 1 - valInt).abs();
+                                Widget child = const SizedBox.shrink();
+
+                                if (valInt == total - 1) {
+                                  child = Text(
+                                    tr.isZh ? '实时' : 'Now',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Color(0xFF38BDF8),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  );
                                 } else if (diff == 30 || diff == 60 || diff == 90) {
-                                  return Text('${diff}s', style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)));
+                                  child = Text(
+                                    '${diff}s',
+                                    style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)),
+                                  );
                                 }
-                                return const SizedBox.shrink();
+
+                                return SideTitleWidget(
+                                  meta: meta,
+                                  fitInside: SideTitleFitInsideData.fromTitleMeta(
+                                    meta,
+                                    distanceFromEdge: 6,
+                                  ),
+                                  child: child,
+                                );
                               },
                             ),
                           ),
