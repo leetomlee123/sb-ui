@@ -43,7 +43,7 @@ class ConfigGenerator {
       }
     }
 
-    // 2. Add "Auto" URL-Test if not already defined and proxy nodes exist
+    // 2. Add or enhance "Auto" URL-Test if proxy nodes exist
     String autoGroupTag = existingAutoGroup != null ? (existingAutoGroup['tag'] ?? 'Auto').toString() : 'Auto';
     if (existingAutoGroup == null && nodeTags.isNotEmpty) {
       finalOutbounds.add({
@@ -51,13 +51,19 @@ class ConfigGenerator {
         'tag': 'Auto',
         'outbounds': List<String>.from(nodeTags),
         'url': 'https://www.gstatic.com/generate_204',
-        'interval': '10m',
+        'interval': '2m',
         'tolerance': 50,
       });
       autoGroupTag = 'Auto';
+    } else if (existingAutoGroup != null && nodeTags.isNotEmpty) {
+      final existingOutbounds = (existingAutoGroup['outbounds'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+      final mergedOutbounds = <String>{...existingOutbounds, ...nodeTags}.toList();
+      existingAutoGroup['outbounds'] = mergedOutbounds;
+      existingAutoGroup['interval'] = '2m';
+      existingAutoGroup['tolerance'] = 50;
     }
 
-    // 3. Add default "Proxy" selector if not already defined
+    // 3. Add or enhance "Proxy" selector
     String primaryProxyTag = existingProxyGroup != null ? (existingProxyGroup['tag'] ?? 'Proxy').toString() : 'Proxy';
     if (existingProxyGroup == null) {
       final List<String> proxyDestinations = [
@@ -69,9 +75,18 @@ class ConfigGenerator {
         'type': 'selector',
         'tag': 'Proxy',
         'outbounds': proxyDestinations,
-        'default': nodeTags.isNotEmpty ? nodeTags.first : 'direct',
+        'default': nodeTags.isNotEmpty ? autoGroupTag : 'direct',
       });
       primaryProxyTag = 'Proxy';
+    } else {
+      final existingOutbounds = (existingProxyGroup['outbounds'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+      if (nodeTags.isNotEmpty && !existingOutbounds.contains(autoGroupTag)) {
+        existingOutbounds.insert(0, autoGroupTag);
+      }
+      existingProxyGroup['outbounds'] = existingOutbounds;
+      if (nodeTags.isNotEmpty) {
+        existingProxyGroup['default'] = autoGroupTag;
+      }
     }
 
     // 4. Append existing user groups
