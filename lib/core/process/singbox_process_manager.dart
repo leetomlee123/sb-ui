@@ -27,6 +27,7 @@ enum CoreStatus {
 
 class SingboxProcessManager {
   Process? _process;
+  int? _elevatedPid;
   CoreStatus _status = CoreStatus.stopped;
   final _statusController = StreamController<CoreStatus>.broadcast();
   final _outputController = StreamController<LogEntry>.broadcast();
@@ -81,21 +82,48 @@ class SingboxProcessManager {
 
   static const Map<String, String> _coreEnvironment = {
     'ENABLE_DEPRECATED_LEGACY_DNS_SERVERS': 'true',
-    'ENABLE_DEPRECATED_OUTBOUND_DNS_RULE_ITEM': 'true',
-    'ENABLE_DEPRECATED_MISSING_DOMAIN_RESOLVER': 'true',
+    'ENABLE_DEPRECATED_GEO_IP_FIELDS': 'true',
+    'ENABLE_DEPRECATED_SPECIAL_RULE_FIELDS': 'true',
+    'ENABLE_DEPRECATED_GLOBAL_CLIENT': 'true',
   };
+
+  static Future<bool> isElevated() async {
+    if (Platform.isWindows) {
+      try {
+        final res = await Process.run('powershell', [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          r'([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)',
+        ]);
+        return res.stdout.toString().trim().toLowerCase() == 'true';
+      } catch (_) {
+        return false;
+      }
+    } else if (Platform.isLinux || Platform.isMacOS) {
+      try {
+        final res = await Process.run('id', ['-u']);
+        return res.stdout.toString().trim() == '0';
+      } catch (_) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   Future<bool> checkConfig(String binaryPath, String configPath) async {
     try {
+      final configParentDir = File(configPath).parent.path;
       final result = await Process.run(
         binaryPath,
         ['check', '-c', configPath],
+        workingDirectory: configParentDir,
         environment: _coreEnvironment,
       );
       if (result.exitCode != 0) {
         _outputController.add(LogEntry(
           level: LogLevel.error,
-          message: 'Config check failed:\n${result.stderr}',
+          message: 'Config check failed:\n${result.stderr}\n${result.stdout}',
         ));
         return false;
       }
@@ -103,7 +131,7 @@ class SingboxProcessManager {
     } catch (e) {
       _outputController.add(LogEntry(
         level: LogLevel.error,
-        message: 'Failed to verify config: $e',
+        message: 'Error during config check: $e',
       ));
       return false;
     }
@@ -112,6 +140,7 @@ class SingboxProcessManager {
   Future<bool> start({
     required String configPath,
     String? customBinaryPath,
+    bool requireElevated = false,
   }) async {
     if (_status == CoreStatus.running || _status == CoreStatus.starting) {
       return true;
@@ -138,8 +167,43 @@ class SingboxProcessManager {
     }
 
     try {
-      _outputController.add(LogEntry(level: LogLevel.info, message: 'Launching sing-box process...'));
       final configParentDir = File(configPath).parent.path;
+      final alreadyAdmin = await isElevated();
+
+      // If TUN mode requested and not yet elevated on Windows, request UAC elevation
+      if (requireElevated && !alreadyAdmin && Platform.isWindows) {
+        _outputController.add(LogEntry(
+          level: LogLevel.info,
+          message: 'Requesting Administrator privileges for TUN mode...',
+        ));
+
+        final psScript = '''
+\$process = Start-Process -FilePath '$binary' -ArgumentList 'run', '-c', '$configPath' -WorkingDirectory '$configParentDir' -Verb RunAs -WindowStyle Hidden -PassThru
+\$process.Id
+''';
+        final result = await Process.run('powershell', ['-NoProfile', '-NonInteractive', '-Command', psScript]);
+        if (result.exitCode == 0) {
+          final pidStr = result.stdout.toString().trim();
+          _elevatedPid = int.tryParse(pidStr);
+          _startedAt = DateTime.now();
+          _updateStatus(CoreStatus.running);
+          _outputController.add(LogEntry(
+            level: LogLevel.info,
+            message: 'sing-box TUN service started with Administrator privileges (PID: $_elevatedPid)',
+          ));
+          return true;
+        } else {
+          _outputController.add(LogEntry(
+            level: LogLevel.error,
+            message: 'Administrator authorization was cancelled or failed: ${result.stderr}',
+          ));
+          _updateStatus(CoreStatus.error);
+          return false;
+        }
+      }
+
+      // Normal process start
+      _outputController.add(LogEntry(level: LogLevel.info, message: 'Launching sing-box process...'));
       _process = await Process.start(
         binary,
         ['run', '-c', configPath],
@@ -187,20 +251,26 @@ class SingboxProcessManager {
   }
 
   Future<void> stop() async {
-    if (_process == null) {
-      _updateStatus(CoreStatus.stopped);
-      return;
+    _outputController.add(LogEntry(level: LogLevel.info, message: 'Stopping sing-box process...'));
+
+    if (_process != null) {
+      try {
+        _process!.kill(ProcessSignal.sigterm);
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (_process != null) {
+          _process!.kill(ProcessSignal.sigkill);
+        }
+      } catch (_) {}
+      _process = null;
     }
 
-    try {
-      _outputController.add(LogEntry(level: LogLevel.info, message: 'Stopping sing-box process...'));
-      _process!.kill(ProcessSignal.sigterm);
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (_process != null) {
-        _process!.kill(ProcessSignal.sigkill);
-      }
-    } catch (_) {}
-    _process = null;
+    if (_elevatedPid != null || Platform.isWindows) {
+      try {
+        await Process.run('taskkill', ['/F', '/IM', 'sing-box.exe', '/T']);
+      } catch (_) {}
+      _elevatedPid = null;
+    }
+
     _startedAt = null;
     _updateStatus(CoreStatus.stopped);
   }
@@ -208,10 +278,15 @@ class SingboxProcessManager {
   Future<bool> restart({
     required String configPath,
     String? customBinaryPath,
+    bool requireElevated = false,
   }) async {
     await stop();
-    await Future.delayed(const Duration(milliseconds: 300));
-    return await start(configPath: configPath, customBinaryPath: customBinaryPath);
+    await Future.delayed(const Duration(milliseconds: 400));
+    return await start(
+      configPath: configPath,
+      customBinaryPath: customBinaryPath,
+      requireElevated: requireElevated,
+    );
   }
 
   void dispose() {

@@ -114,6 +114,7 @@ class CoreNotifier extends StateNotifier<CoreState> {
       final success = await _processManager.start(
         configPath: configFile.path,
         customBinaryPath: settings.customSingboxPath.isNotEmpty ? settings.customSingboxPath : null,
+        requireElevated: settings.tunModeEnabled,
       );
 
       if (success) {
