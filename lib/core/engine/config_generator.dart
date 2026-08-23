@@ -2,47 +2,107 @@ import 'dart:convert';
 import '../models/app_settings.dart';
 
 class ConfigGenerator {
+  static const Set<String> _groupTypes = {'selector', 'urltest', 'loadbalance'};
+
   static Map<String, dynamic> generate({
     required AppSettings settings,
     required List<Map<String, dynamic>> parsedOutbounds,
   }) {
-    final List<String> nodeTags = parsedOutbounds
+    // 1. Separate individual proxy nodes from existing group outbounds
+    final List<Map<String, dynamic>> rawNodes = [];
+    final List<Map<String, dynamic>> rawGroups = [];
+
+    for (final ob in parsedOutbounds) {
+      final type = (ob['type'] ?? '').toString().toLowerCase();
+      if (_groupTypes.contains(type)) {
+        rawGroups.add(Map<String, dynamic>.from(ob));
+      } else {
+        rawNodes.add(Map<String, dynamic>.from(ob));
+      }
+    }
+
+    // List of individual proxy node tags
+    final List<String> nodeTags = rawNodes
         .map((e) => (e['tag'] ?? '').toString())
         .where((tag) => tag.isNotEmpty)
         .toList();
 
-    // Strategy groups
-    final List<Map<String, dynamic>> outbounds = [];
+    // 2. Set of all valid destination tags (built-in + user nodes)
+    final Set<String> validDestTags = {'direct', 'block', ...nodeTags};
 
-    // 1. "Proxy" selector group
-    final List<String> proxyGroupOutbounds = ['Auto', ...nodeTags, 'direct'];
-    outbounds.add({
-      'type': 'selector',
-      'tag': 'Proxy',
-      'outbounds': proxyGroupOutbounds.isEmpty ? ['direct'] : proxyGroupOutbounds,
-      'default': nodeTags.isNotEmpty ? nodeTags.first : 'direct',
-    });
+    final List<Map<String, dynamic>> finalOutbounds = [];
 
-    // 2. "Auto" URL-Test group
-    if (nodeTags.isNotEmpty) {
-      outbounds.add({
+    // Check if user already defined a "Proxy" or "Auto" group
+    final bool hasCustomProxyGroup = rawGroups.any(
+      (g) => (g['tag'] ?? '').toString().toLowerCase() == 'proxy',
+    );
+    final bool hasCustomAutoGroup = rawGroups.any(
+      (g) => (g['tag'] ?? '').toString().toLowerCase() == 'auto',
+    );
+
+    // 3. Add default "Proxy" selector if not already defined
+    if (!hasCustomProxyGroup) {
+      final List<String> proxyDestinations = [
+        if (nodeTags.isNotEmpty) 'Auto',
+        ...nodeTags,
+        'direct',
+      ];
+      finalOutbounds.add({
+        'type': 'selector',
+        'tag': 'Proxy',
+        'outbounds': proxyDestinations,
+        'default': nodeTags.isNotEmpty ? nodeTags.first : 'direct',
+      });
+      validDestTags.add('Proxy');
+    }
+
+    // 4. Add default "Auto" URL-Test if not already defined and nodes exist
+    if (!hasCustomAutoGroup && nodeTags.isNotEmpty) {
+      finalOutbounds.add({
         'type': 'urltest',
         'tag': 'Auto',
-        'outbounds': nodeTags,
+        'outbounds': List<String>.from(nodeTags),
         'url': 'https://www.gstatic.com/generate_204',
         'interval': '10m',
         'tolerance': 50,
       });
+      validDestTags.add('Auto');
     }
 
-    // 3. Built-in system outbounds (Note: dns outbound deprecated in 1.11+ and removed in 1.13+)
-    outbounds.add({'type': 'direct', 'tag': 'direct'});
-    outbounds.add({'type': 'block', 'tag': 'block'});
+    // 5. Sanitize and append existing user groups
+    for (final group in rawGroups) {
+      final groupTag = (group['tag'] ?? '').toString();
+      validDestTags.add(groupTag);
+    }
 
-    // 4. Append user nodes
-    outbounds.addAll(parsedOutbounds);
+    for (final group in rawGroups) {
+      final rawList = group['outbounds'];
+      List<String> sanitizedList = [];
 
-    // Inbounds list
+      if (rawList is List) {
+        sanitizedList = rawList
+            .map((e) => e.toString())
+            .where((tag) => validDestTags.contains(tag) && tag != group['tag'])
+            .toList();
+      }
+
+      // If all referenced nodes were missing or empty, fallback to available nodes or direct
+      if (sanitizedList.isEmpty) {
+        sanitizedList = nodeTags.isNotEmpty ? List<String>.from(nodeTags) : ['direct'];
+      }
+
+      group['outbounds'] = sanitizedList;
+      finalOutbounds.add(group);
+    }
+
+    // 6. Built-in system outbounds
+    finalOutbounds.add({'type': 'direct', 'tag': 'direct'});
+    finalOutbounds.add({'type': 'block', 'tag': 'block'});
+
+    // 7. Append all individual proxy nodes
+    finalOutbounds.addAll(rawNodes);
+
+    // 8. Inbounds list
     final List<Map<String, dynamic>> inbounds = [
       {
         'type': 'mixed',
@@ -65,7 +125,9 @@ class ConfigGenerator {
       });
     }
 
-    // Route rules based on routingMode
+    // 9. Route rules based on routingMode
+    final String primaryOutboundTag = hasCustomProxyGroup ? rawGroups.firstWhere((g) => (g['tag'] ?? '').toString().toLowerCase() == 'proxy')['tag'] : 'Proxy';
+
     final List<Map<String, dynamic>> routeRules = [
       {
         'action': 'sniff',
@@ -82,14 +144,14 @@ class ConfigGenerator {
 
     if (settings.routingMode == RoutingMode.global) {
       routeRules.add({
-        'outbound': 'Proxy',
+        'outbound': primaryOutboundTag,
       });
     } else if (settings.routingMode == RoutingMode.direct) {
       routeRules.add({
         'outbound': 'direct',
       });
     } else {
-      // Rule mode: bypass CN sites/IPs, route rest to Proxy
+      // Rule mode: bypass CN sites/IPs, route rest to primaryOutboundTag
       routeRules.addAll([
         {
           'clash_mode': 'Direct',
@@ -97,14 +159,14 @@ class ConfigGenerator {
         },
         {
           'clash_mode': 'Global',
-          'outbound': 'Proxy',
+          'outbound': primaryOutboundTag,
         },
         {
           'rule_set': ['geoip-cn', 'geosite-cn'],
           'outbound': 'direct',
         },
         {
-          'outbound': 'Proxy',
+          'outbound': primaryOutboundTag,
         }
       ]);
     }
@@ -116,7 +178,7 @@ class ConfigGenerator {
       },
       'dns': {
         'servers': [
-          _buildDnsServer('remote-dns', settings.remoteDns, detour: 'Proxy'),
+          _buildDnsServer('remote-dns', settings.remoteDns, detour: primaryOutboundTag),
           _buildDnsServer('local-dns', settings.directDns, detour: 'direct'),
         ],
         'rules': [
@@ -137,7 +199,7 @@ class ConfigGenerator {
         'strategy': 'prefer_ipv4',
       },
       'inbounds': inbounds,
-      'outbounds': outbounds,
+      'outbounds': finalOutbounds,
       'route': {
         'default_domain_resolver': 'local-dns',
         'rules': routeRules,
@@ -157,7 +219,7 @@ class ConfigGenerator {
             'download_detour': 'direct',
           }
         ],
-        'final': 'Proxy',
+        'final': primaryOutboundTag,
         'auto_detect_interface': true,
       },
       'experimental': {

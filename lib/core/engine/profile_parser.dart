@@ -48,13 +48,14 @@ class ProfileParser {
     }
 
     // 2. Try parsing as YAML (Clash / Clash Meta config)
-    if (trimmed.contains('proxies:') || trimmed.contains('Proxy:')) {
+    if (trimmed.contains('proxies:') || trimmed.contains('Proxy:') || trimmed.contains('proxy-groups:')) {
       try {
         final yamlDoc = loadYaml(trimmed);
         if (yamlDoc is YamlMap) {
           final proxies = yamlDoc['proxies'] ?? yamlDoc['Proxy'];
+          final List<Map<String, dynamic>> outbounds = [];
+
           if (proxies is YamlList) {
-            final List<Map<String, dynamic>> outbounds = [];
             for (final p in proxies) {
               if (p is YamlMap) {
                 final converted = _convertClashProxyToSingbox(p);
@@ -63,6 +64,22 @@ class ProfileParser {
                 }
               }
             }
+          }
+
+          // Also convert proxy-groups if present
+          final groups = yamlDoc['proxy-groups'] ?? yamlDoc['Proxy Group'];
+          if (groups is YamlList) {
+            for (final g in groups) {
+              if (g is YamlMap) {
+                final groupOutbound = _convertClashGroupToSingbox(g);
+                if (groupOutbound != null) {
+                  outbounds.add(groupOutbound);
+                }
+              }
+            }
+          }
+
+          if (outbounds.isNotEmpty) {
             return ProfileParserResult(
               outbounds: outbounds,
               count: outbounds.length,
@@ -77,7 +94,13 @@ class ProfileParser {
     String decodedUris = trimmed;
     try {
       // If entire string is base64
-      if (!trimmed.contains('\n') && !trimmed.startsWith('vmess://') && !trimmed.startsWith('ss://') && !trimmed.startsWith('vless://')) {
+      if (!trimmed.contains('\n') &&
+          !trimmed.startsWith('vmess://') &&
+          !trimmed.startsWith('ss://') &&
+          !trimmed.startsWith('vless://') &&
+          !trimmed.startsWith('trojan://') &&
+          !trimmed.startsWith('hy2://') &&
+          !trimmed.startsWith('hysteria2://')) {
         final normalized = base64.normalize(trimmed);
         decodedUris = utf8.decode(base64.decode(normalized));
       }
@@ -107,12 +130,71 @@ class ProfileParser {
     return ProfileParserResult(outbounds: [], count: 0, format: 'unknown');
   }
 
+  static Map<String, dynamic>? _convertClashGroupToSingbox(YamlMap group) {
+    final name = (group['name'] ?? '').toString();
+    final type = (group['type'] ?? 'select').toString().toLowerCase();
+    final proxiesList = group['proxies'];
+    if (name.isEmpty || proxiesList is! YamlList) return null;
+
+    final List<String> outbounds = proxiesList.map((e) => e.toString()).toList();
+
+    if (type == 'url-test' || type == 'urltest') {
+      return {
+        'type': 'urltest',
+        'tag': name,
+        'outbounds': outbounds,
+        'url': (group['url'] ?? 'https://www.gstatic.com/generate_204').toString(),
+        'interval': '${group['interval'] ?? 300}s',
+        'tolerance': int.tryParse(group['tolerance']?.toString() ?? '50') ?? 50,
+      };
+    } else if (type == 'load-balance' || type == 'loadbalance') {
+      return {
+        'type': 'urltest',
+        'tag': name,
+        'outbounds': outbounds,
+      };
+    } else {
+      return {
+        'type': 'selector',
+        'tag': name,
+        'outbounds': outbounds,
+      };
+    }
+  }
+
   static Map<String, dynamic>? _convertClashProxyToSingbox(YamlMap proxy) {
     final type = (proxy['type'] ?? '').toString().toLowerCase();
     final name = (proxy['name'] ?? 'Proxy').toString();
     final server = (proxy['server'] ?? '').toString();
     final port = int.tryParse((proxy['port'] ?? '').toString()) ?? 443;
     final password = (proxy['password'] ?? proxy['uuid'] ?? '').toString();
+
+    // Parse transport if present
+    Map<String, dynamic>? transport;
+    final network = (proxy['network'] ?? '').toString().toLowerCase();
+    if (network == 'ws' || proxy['ws-opts'] != null) {
+      transport = {
+        'type': 'ws',
+        if (proxy['ws-opts'] != null && proxy['ws-opts']['path'] != null)
+          'path': proxy['ws-opts']['path'].toString(),
+        if (proxy['ws-opts'] != null && proxy['ws-opts']['headers'] != null)
+          'headers': (proxy['ws-opts']['headers'] as YamlMap).value,
+      };
+    } else if (network == 'grpc' || proxy['grpc-opts'] != null) {
+      transport = {
+        'type': 'grpc',
+        if (proxy['grpc-opts'] != null && proxy['grpc-opts']['grpc-service-name'] != null)
+          'service_name': proxy['grpc-opts']['grpc-service-name'].toString(),
+      };
+    } else if (network == 'http' || proxy['http-opts'] != null) {
+      transport = {
+        'type': 'http',
+        if (proxy['http-opts'] != null && proxy['http-opts']['path'] != null)
+          'path': proxy['http-opts']['path'].toString(),
+        if (proxy['http-opts'] != null && proxy['http-opts']['headers'] != null)
+          'headers': (proxy['http-opts']['headers'] as YamlMap).value,
+      };
+    }
 
     switch (type) {
       case 'ss':
@@ -138,16 +220,16 @@ class ProfileParser {
           'uuid': password,
           'security': (proxy['cipher'] ?? 'auto').toString(),
           'alter_id': int.tryParse((proxy['alterId'] ?? '0').toString()) ?? 0,
-          'transport': {
-            'type': (proxy['network'] ?? 'tcp').toString(),
-            if (proxy['ws-opts'] != null) 'path': (proxy['ws-opts']['path'] ?? '/').toString(),
-            if (proxy['ws-opts'] != null && proxy['ws-opts']['headers'] != null)
-              'headers': (proxy['ws-opts']['headers'] as YamlMap).value,
-          },
+          'transport': ?transport,
           'tls': {
             'enabled': proxy['tls'] == true,
-            'server_name': (proxy['servername'] ?? server).toString(),
+            'server_name': (proxy['servername'] ?? proxy['sni'] ?? server).toString(),
             'insecure': proxy['skip-cert-verify'] == true,
+            if (proxy['client-fingerprint'] != null)
+              'utls': {
+                'enabled': true,
+                'fingerprint': proxy['client-fingerprint'].toString(),
+              },
           }
         };
 
@@ -158,17 +240,24 @@ class ProfileParser {
           'server': server,
           'server_port': port,
           'uuid': password,
-          'flow': (proxy['flow'] ?? '').toString(),
+          if (proxy['flow'] != null && proxy['flow'].toString().isNotEmpty)
+            'flow': proxy['flow'].toString(),
+          'transport': ?transport,
           'tls': {
-            'enabled': proxy['tls'] == true,
-            'server_name': (proxy['servername'] ?? server).toString(),
-            'reality': proxy['reality-opts'] != null
-                ? {
-                    'enabled': true,
-                    'public_key': (proxy['reality-opts']['public-key'] ?? '').toString(),
-                    'short_id': (proxy['reality-opts']['short-id'] ?? '').toString(),
-                  }
-                : null,
+            'enabled': proxy['tls'] == true || proxy['reality-opts'] != null,
+            'server_name': (proxy['servername'] ?? proxy['sni'] ?? server).toString(),
+            'insecure': proxy['skip-cert-verify'] == true,
+            if (proxy['reality-opts'] != null)
+              'reality': {
+                'enabled': true,
+                'public_key': (proxy['reality-opts']['public-key'] ?? proxy['reality-opts']['publicKey'] ?? '').toString(),
+                'short_id': (proxy['reality-opts']['short-id'] ?? proxy['reality-opts']['shortId'] ?? '').toString(),
+              },
+            if (proxy['client-fingerprint'] != null)
+              'utls': {
+                'enabled': true,
+                'fingerprint': proxy['client-fingerprint'].toString(),
+              },
           }
         };
 
@@ -179,9 +268,10 @@ class ProfileParser {
           'server': server,
           'server_port': port,
           'password': password,
+          'transport': ?transport,
           'tls': {
             'enabled': true,
-            'server_name': (proxy['sni'] ?? server).toString(),
+            'server_name': (proxy['sni'] ?? proxy['servername'] ?? server).toString(),
             'insecure': proxy['skip-cert-verify'] == true,
           }
         };
@@ -193,7 +283,7 @@ class ProfileParser {
           'tag': name,
           'server': server,
           'server_port': port,
-          'password': password,
+          'password': (proxy['password'] ?? proxy['auth'] ?? '').toString(),
           if (proxy['up'] != null) 'up_mbps': int.tryParse(proxy['up'].toString()),
           if (proxy['down'] != null) 'down_mbps': int.tryParse(proxy['down'].toString()),
           'tls': {
@@ -210,7 +300,7 @@ class ProfileParser {
           'server': server,
           'server_port': port,
           'uuid': password,
-          'password': (proxy['token'] ?? '').toString(),
+          'password': (proxy['token'] ?? proxy['password'] ?? '').toString(),
           'congestion_controller': (proxy['congestion-controller'] ?? 'bbr').toString(),
           'tls': {
             'enabled': true,
@@ -231,12 +321,30 @@ class ProfileParser {
       final tag = uri.fragment.isNotEmpty ? Uri.decodeComponent(uri.fragment) : '${uri.scheme}-${uri.host}';
 
       if (scheme == 'trojan') {
+        Map<String, dynamic>? transport;
+        final netType = uri.queryParameters['type'] ?? 'tcp';
+        if (netType == 'ws') {
+          transport = {
+            'type': 'ws',
+            'path': uri.queryParameters['path'] ?? '/',
+            if (uri.queryParameters['host'] != null)
+              'headers': {'Host': uri.queryParameters['host']!},
+          };
+        } else if (netType == 'grpc') {
+          transport = {
+            'type': 'grpc',
+            if (uri.queryParameters['serviceName'] != null)
+              'service_name': uri.queryParameters['serviceName']!,
+          };
+        }
+
         return {
           'type': 'trojan',
           'tag': tag,
           'server': uri.host,
           'server_port': uri.port == 0 ? 443 : uri.port,
           'password': uri.userInfo,
+          'transport': ?transport,
           'tls': {
             'enabled': true,
             'server_name': uri.queryParameters['sni'] ?? uri.host,
@@ -257,22 +365,47 @@ class ProfileParser {
           }
         };
       } else if (scheme == 'vless') {
+        Map<String, dynamic>? transport;
+        final netType = uri.queryParameters['type'] ?? uri.queryParameters['net'] ?? 'tcp';
+        if (netType == 'ws') {
+          transport = {
+            'type': 'ws',
+            'path': uri.queryParameters['path'] ?? '/',
+            if (uri.queryParameters['host'] != null)
+              'headers': {'Host': uri.queryParameters['host']!},
+          };
+        } else if (netType == 'grpc') {
+          transport = {
+            'type': 'grpc',
+            if (uri.queryParameters['serviceName'] != null)
+              'service_name': uri.queryParameters['serviceName']!,
+          };
+        }
+
         return {
           'type': 'vless',
           'tag': tag,
           'server': uri.host,
           'server_port': uri.port == 0 ? 443 : uri.port,
           'uuid': uri.userInfo,
-          'flow': uri.queryParameters['flow'] ?? '',
+          if (uri.queryParameters['flow'] != null && uri.queryParameters['flow']!.isNotEmpty)
+            'flow': uri.queryParameters['flow']!,
+          'transport': ?transport,
           'tls': {
             'enabled': uri.queryParameters['security'] == 'tls' || uri.queryParameters['security'] == 'reality',
-            'server_name': uri.queryParameters['sni'] ?? uri.host,
+            'server_name': uri.queryParameters['sni'] ?? uri.queryParameters['host'] ?? uri.host,
+            'insecure': uri.queryParameters['allowInsecure'] == '1',
             if (uri.queryParameters['security'] == 'reality')
               'reality': {
                 'enabled': true,
                 'public_key': uri.queryParameters['pbk'] ?? '',
                 'short_id': uri.queryParameters['sid'] ?? '',
-              }
+              },
+            if (uri.queryParameters['fp'] != null)
+              'utls': {
+                'enabled': true,
+                'fingerprint': uri.queryParameters['fp']!,
+              },
           }
         };
       } else if (scheme == 'vmess') {
@@ -280,19 +413,62 @@ class ProfileParser {
         final base64Content = uriStr.substring(8);
         final jsonStr = utf8.decode(base64.decode(base64.normalize(base64Content)));
         final Map<String, dynamic> vmessMap = jsonDecode(jsonStr);
+
+        Map<String, dynamic>? transport;
+        final netType = (vmessMap['net'] ?? 'tcp').toString().toLowerCase();
+        if (netType == 'ws') {
+          transport = {
+            'type': 'ws',
+            'path': (vmessMap['path'] ?? '/').toString(),
+            if (vmessMap['host'] != null)
+              'headers': {'Host': vmessMap['host'].toString()},
+          };
+        } else if (netType == 'grpc') {
+          transport = {
+            'type': 'grpc',
+            if (vmessMap['path'] != null)
+              'service_name': vmessMap['path'].toString(),
+          };
+        }
+
         return {
           'type': 'vmess',
           'tag': vmessMap['ps'] ?? 'VMess',
           'server': vmessMap['add'] ?? '',
           'server_port': int.tryParse(vmessMap['port']?.toString() ?? '443') ?? 443,
           'uuid': vmessMap['id'] ?? '',
-          'security': 'auto',
+          'security': (vmessMap['scy'] ?? 'auto').toString(),
           'alter_id': int.tryParse(vmessMap['aid']?.toString() ?? '0') ?? 0,
+          'transport': ?transport,
           'tls': {
             'enabled': vmessMap['tls'] == 'tls',
-            'server_name': vmessMap['sni'] ?? vmessMap['host'] ?? vmessMap['add'] ?? '',
+            'server_name': (vmessMap['sni'] ?? vmessMap['host'] ?? vmessMap['add'] ?? '').toString(),
           }
         };
+      } else if (scheme == 'ss') {
+        // ss://base64(method:password)@server:port#tag or ss://base64(method:password@server:port)#tag
+        final rawNoScheme = uriStr.substring(5);
+        final parts = rawNoScheme.split('#');
+        final cleanPart = parts[0];
+        final nodeTag = parts.length > 1 ? Uri.decodeComponent(parts[1]) : 'Shadowsocks';
+
+        if (cleanPart.contains('@')) {
+          final atParts = cleanPart.split('@');
+          final userDecoded = utf8.decode(base64.decode(base64.normalize(atParts[0])));
+          final colonIdx = userDecoded.indexOf(':');
+          final method = colonIdx != -1 ? userDecoded.substring(0, colonIdx) : 'aes-256-gcm';
+          final password = colonIdx != -1 ? userDecoded.substring(colonIdx + 1) : userDecoded;
+
+          final hostPort = atParts[1].split(':');
+          return {
+            'type': 'shadowsocks',
+            'tag': nodeTag,
+            'server': hostPort[0],
+            'server_port': int.tryParse(hostPort.length > 1 ? hostPort[1] : '8388') ?? 8388,
+            'method': method,
+            'password': password,
+          };
+        }
       }
     } catch (_) {}
     return null;
