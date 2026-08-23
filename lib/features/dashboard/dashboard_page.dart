@@ -632,7 +632,34 @@ class _TelemetryGraphCard extends ConsumerWidget {
                         clipData: const FlClipData.all(),
                         minX: 0,
                         maxX: math.max(30.0, (history.length - 1).toDouble()),
-                        minY: 0,
+                        lineTouchData: LineTouchData(
+                          enabled: true,
+                          handleBuiltInTouches: true,
+                          touchTooltipData: LineTouchTooltipData(
+                            getTooltipColor: (touchedSpot) => const Color(0xFF1E293B),
+                            tooltipBorder: const BorderSide(color: Color(0xFF334155), width: 1),
+                            tooltipPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            getTooltipItems: (touchedSpots) {
+                              return touchedSpots.map((spot) {
+                                final isDown = spot.barIndex == 0;
+                                final color = isDown ? const Color(0xFF38BDF8) : const Color(0xFF818CF8);
+                                final prefix = isDown ? '↓ ' : '↑ ';
+                                final bytesPerSecond = (spot.y * 1024).round();
+                                final formattedSpeed = ByteFormatter.formatSpeed(bytesPerSecond, decimals: 2);
+
+                                return LineTooltipItem(
+                                  '$prefix$formattedSpeed',
+                                  TextStyle(
+                                    color: color,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    fontFamily: 'monospace',
+                                  ),
+                                );
+                              }).toList();
+                            },
+                          ),
+                        ),
                         gridData: FlGridData(
                           show: true,
                           drawVerticalLine: false,

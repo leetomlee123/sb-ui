@@ -2,7 +2,9 @@ import 'package:intl/intl.dart';
 
 class ByteFormatter {
   static String formatBytes(int bytes, {int decimals = 1}) {
-    if (bytes <= 0) return '0 B';
+    if (bytes <= 0) {
+      return decimals > 0 ? '${(0.0).toStringAsFixed(decimals)} B' : '0 B';
+    }
     const suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
     int i = 0;
     double size = bytes.toDouble();
@@ -13,8 +15,8 @@ class ByteFormatter {
     return '${size.toStringAsFixed(decimals)} ${suffixes[i]}';
   }
 
-  static String formatSpeed(int bytesPerSecond) {
-    return '${formatBytes(bytesPerSecond)}/s';
+  static String formatSpeed(int bytesPerSecond, {int decimals = 1}) {
+    return '${formatBytes(bytesPerSecond, decimals: decimals)}/s';
   }
 
   static String formatDate(DateTime? date) {
