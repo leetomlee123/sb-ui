@@ -14,8 +14,9 @@ import 'features/shell/main_shell_view.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize persistent storage
+  // Initialize persistent storage & ensure offline rule sets are extracted
   final storageService = await StorageService.init();
+  await StorageService.ensureBundledRulesExtracted();
 
   // Desktop window & tray setup
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {

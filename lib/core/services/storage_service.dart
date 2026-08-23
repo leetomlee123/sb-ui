@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/app_settings.dart';
@@ -107,5 +108,27 @@ class StorageService {
       await cwdConfigDir.create(recursive: true);
     }
     return cwdConfigDir;
+  }
+
+  static Future<void> ensureBundledRulesExtracted() async {
+    try {
+      final configDir = await getAppConfigDir();
+      final geoipTarget = File('${configDir.path}/geoip-cn.srs');
+      final geositeTarget = File('${configDir.path}/geosite-cn.srs');
+
+      if (!await geoipTarget.exists() || await geoipTarget.length() == 0) {
+        try {
+          final data = await rootBundle.load('assets/rules/geoip-cn.srs');
+          await geoipTarget.writeAsBytes(data.buffer.asUint8List());
+        } catch (_) {}
+      }
+
+      if (!await geositeTarget.exists() || await geositeTarget.length() == 0) {
+        try {
+          final data = await rootBundle.load('assets/rules/geosite-cn.srs');
+          await geositeTarget.writeAsBytes(data.buffer.asUint8List());
+        } catch (_) {}
+      }
+    } catch (_) {}
   }
 }

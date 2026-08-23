@@ -216,6 +216,19 @@ class ConfigGenerator {
         ],
         'rules': [
           {
+            'domain_suffix': [
+              '.cn',
+              'jsdelivr.net',
+              'jsdelivr.com',
+              'aliyun.com',
+              'alicdn.com',
+              '189.cn',
+              'qq.com',
+              'baidu.com',
+            ],
+            'server': 'local-dns',
+          },
+          {
             'rule_set': 'geosite-cn',
             'server': 'local-dns',
           },
@@ -238,18 +251,16 @@ class ConfigGenerator {
         'rules': routeRules,
         'rule_set': [
           {
-            'type': 'remote',
+            'type': 'local',
             'tag': 'geoip-cn',
             'format': 'binary',
-            'url': 'https://testingcf.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs',
-            'download_detour': 'direct',
+            'path': 'geoip-cn.srs',
           },
           {
-            'type': 'remote',
+            'type': 'local',
             'tag': 'geosite-cn',
             'format': 'binary',
-            'url': 'https://testingcf.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs',
-            'download_detour': 'direct',
+            'path': 'geosite-cn.srs',
           }
         ],
         'final': primaryProxyTag,
