@@ -3,6 +3,7 @@ import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
+import '../utils/proxy_dio_helper.dart';
 import 'core_updater_service.dart';
 
 /// Checks GitHub Releases of this app itself and prepares a self-update.
@@ -28,6 +29,11 @@ class AppUpdaterService {
                 },
               ),
             );
+
+  /// Configures local proxy port for downloading and API calls when core is running.
+  void setProxyPort(int? port) {
+    ProxyDioHelper.configureProxy(_dio, proxyPort: port);
+  }
 
   /// Check GitHub for the latest app release (any platform; asset matching is Windows-only).
   Future<RemoteReleaseInfo?> checkLatestRelease() async {

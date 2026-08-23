@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/geo_asset.dart';
 import '../services/geo_updater_service.dart';
 import 'core_provider.dart';
+import 'settings_provider.dart';
 
 class GeoUpdaterState {
   final List<GeoAssetInfo> assets;
@@ -51,6 +52,12 @@ class GeoUpdaterNotifier extends StateNotifier<GeoUpdaterState> {
     refreshAssets();
   }
 
+  void _syncProxy() {
+    final isRunning = _ref.read(coreProvider).isRunning;
+    final mixedPort = _ref.read(settingsProvider).mixedPort;
+    _service.setProxyPort(isRunning ? mixedPort : null);
+  }
+
   Future<void> refreshAssets() async {
     try {
       final assets = await _service.getGeoAssets();
@@ -59,6 +66,7 @@ class GeoUpdaterNotifier extends StateNotifier<GeoUpdaterState> {
   }
 
   Future<bool> updateSingleAsset(GeoAssetInfo asset) async {
+    _syncProxy();
     state = state.copyWith(
       isUpdating: true,
       activeAssetName: asset.name,
@@ -103,6 +111,7 @@ class GeoUpdaterNotifier extends StateNotifier<GeoUpdaterState> {
   }
 
   Future<bool> updateAllAssets() async {
+    _syncProxy();
     if (state.assets.isEmpty) await refreshAssets();
     if (state.assets.isEmpty) return false;
 

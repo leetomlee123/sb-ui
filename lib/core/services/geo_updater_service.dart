@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 import '../models/geo_asset.dart';
+import '../utils/proxy_dio_helper.dart';
 import 'storage_service.dart';
 
 class GeoUpdaterService {
@@ -37,6 +38,11 @@ class GeoUpdaterService {
                 },
               ),
             );
+
+  /// Configures local proxy port for downloading rule sets when core is running.
+  void setProxyPort(int? port) {
+    ProxyDioHelper.configureProxy(_dio, proxyPort: port);
+  }
 
   Future<List<GeoAssetInfo>> getGeoAssets() async {
     final configDir = await StorageService.getAppConfigDir();

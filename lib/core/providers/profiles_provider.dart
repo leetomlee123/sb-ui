@@ -5,6 +5,9 @@ import 'package:uuid/uuid.dart';
 import '../engine/profile_parser.dart';
 import '../models/profile.dart';
 import '../services/storage_service.dart';
+import '../utils/proxy_dio_helper.dart';
+import 'core_provider.dart';
+import 'settings_provider.dart';
 import 'storage_provider.dart';
 
 class ProfilesState {
@@ -47,6 +50,7 @@ class ProfilesState {
 }
 
 class ProfilesNotifier extends StateNotifier<ProfilesState> {
+  final Ref _ref;
   final StorageService _storage;
   final _uuid = const Uuid();
   final _dio = Dio(BaseOptions(
@@ -57,7 +61,7 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
     },
   ));
 
-  ProfilesNotifier(this._storage)
+  ProfilesNotifier(this._ref, this._storage)
       : super(ProfilesState(
           profiles: _storage.loadProfiles(),
           activeProfileId: _storage.getActiveProfileId(),
@@ -66,6 +70,12 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
     if (state.activeProfileId == null && state.profiles.isNotEmpty) {
       setActiveProfile(state.profiles.first.id);
     }
+  }
+
+  void _syncProxy() {
+    final isRunning = _ref.read(coreProvider).isRunning;
+    final mixedPort = _ref.read(settingsProvider).mixedPort;
+    ProxyDioHelper.configureProxy(_dio, proxyPort: isRunning ? mixedPort : null);
   }
 
   Future<void> setActiveProfile(String id) async {
@@ -85,6 +95,7 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
     required String url,
     int autoUpdateHours = 24,
   }) async {
+    _syncProxy();
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final response = await _dio.get<String>(
@@ -258,6 +269,7 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
     final profile = state.profiles.firstWhere((p) => p.id == id);
     if (profile.type != ProfileType.remote || profile.url == null) return false;
 
+    _syncProxy();
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final response = await _dio.get<String>(
@@ -305,5 +317,5 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
 
 final profilesProvider = StateNotifierProvider<ProfilesNotifier, ProfilesState>((ref) {
   final storage = ref.watch(storageServiceProvider);
-  return ProfilesNotifier(storage);
+  return ProfilesNotifier(ref, storage);
 });

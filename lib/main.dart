@@ -27,47 +27,41 @@ void main() async {
       FlutterError.presentError(details);
     };
 
-    // 2. Clear any stale orphan system proxy on app startup
-    try {
-      await SystemProxyManager.clearProxy();
-    } catch (_) {}
+    // 2. Parallel Fast Boot: initialize storage & window manager concurrently
+    final isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+    final results = await Future.wait([
+      StorageService.init(),
+      if (isDesktop) windowManager.ensureInitialized(),
+    ]);
 
-    // 3. Initialize persistent storage & ensure offline rule sets are extracted
-    final storageService = await StorageService.init();
-    await StorageService.ensureBundledRulesExtracted();
+    final storageService = results[0] as StorageService;
     final initialSettings = storageService.loadSettings();
 
-    // 3.5 Clean up leftovers from a previous self-update (rollback .old
-    // binary and stale temp staging dirs).
-    try {
-      await AppUpdaterService.cleanupOnStartup();
-    } catch (_) {}
+    // 3. Kick off window display instantly on desktop
+    if (isDesktop) {
+      const windowOptions = WindowOptions(
+        size: Size(1020, 680),
+        minimumSize: Size(820, 560),
+        center: true,
+        backgroundColor: Colors.transparent,
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.hidden,
+        title: 'Singular',
+      );
 
-    // 4. Desktop window & tray setup
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      try {
-        await windowManager.ensureInitialized();
-
-        const windowOptions = WindowOptions(
-          size: Size(1020, 680),
-          minimumSize: Size(820, 560),
-          center: true,
-          backgroundColor: Colors.transparent,
-          skipTaskbar: false,
-          titleBarStyle: TitleBarStyle.hidden,
-          title: 'Singular',
-        );
-
-        await windowManager.waitUntilReadyToShow(windowOptions, () async {
-          await windowManager.setPreventClose(true);
-          if (!initialSettings.startMinimized) {
-            await windowManager.show();
-            await windowManager.focus();
-          }
-        });
-      } catch (_) {}
+      unawaited(windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.setPreventClose(true);
+        if (!initialSettings.startMinimized) {
+          await windowManager.show();
+          await windowManager.focus();
+        }
+      }));
     }
 
+    // 4. Background Asynchronous Startup Tasks (non-blocking)
+    unawaited(_runBackgroundStartupTasks());
+
+    // 5. Mount App
     runApp(
       ProviderScope(
         overrides: [
@@ -79,6 +73,24 @@ void main() async {
   }, (error, stackTrace) {
     debugPrint('[Unhandled Exception Shield] $error\n$stackTrace');
   });
+}
+
+/// Asynchronous non-blocking maintenance tasks performed in background on startup.
+Future<void> _runBackgroundStartupTasks() async {
+  // 1. Clear any orphan system proxy left by abnormal previous shutdowns
+  try {
+    await SystemProxyManager.clearProxy();
+  } catch (_) {}
+
+  // 2. Ensure bundled SRS rules exist on disk
+  try {
+    await StorageService.ensureBundledRulesExtracted();
+  } catch (_) {}
+
+  // 3. Clean up leftover rollback .old files or stale update staging dirs
+  try {
+    await AppUpdaterService.cleanupOnStartup();
+  } catch (_) {}
 }
 
 class SingboxApp extends ConsumerStatefulWidget {
@@ -96,7 +108,7 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
     windowManager.addListener(this);
     // Graceful-shutdown primitive shared with the self-updater.
     appShutdownHook = _exitApplication;
-    _initTray();
+    unawaited(_initTray());
     _scheduleSilentUpdateCheck();
   }
 
@@ -117,7 +129,7 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
 
         try {
           await trayManager.setIcon(iconPath);
-          await trayManager.setToolTip('sing-box Desktop');
+          await trayManager.setToolTip('Singular');
         } catch (_) {}
 
         final menu = Menu(

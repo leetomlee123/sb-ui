@@ -5,7 +5,9 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../services/app_updater_service.dart';
 import '../services/core_updater_service.dart';
 import '../utils/version_utils.dart';
+import 'core_provider.dart';
 import 'core_updater_provider.dart';
+import 'settings_provider.dart';
 
 /// Assigned by main.dart at startup; performs graceful shutdown
 /// (stop core -> destroy tray/window -> exit). Invoked right before the
@@ -57,12 +59,20 @@ class AppUpdaterState {
 }
 
 class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
+  final Ref _ref;
   final AppUpdaterService _updaterService = AppUpdaterService();
 
-  AppUpdaterNotifier() : super(AppUpdaterState());
+  AppUpdaterNotifier(this._ref) : super(AppUpdaterState());
+
+  void _syncProxy() {
+    final isCoreRunning = _ref.read(coreProvider).isRunning;
+    final mixedPort = _ref.read(settingsProvider).mixedPort;
+    _updaterService.setProxyPort(isCoreRunning ? mixedPort : null);
+  }
 
   /// Checks GitHub Releases of the app itself against the running version.
   Future<void> checkForUpdates() async {
+    _syncProxy();
     state = state.copyWith(
       status: UpdateStatus.checking,
       statusMessage: 'Checking for latest release...',
@@ -104,6 +114,7 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
   /// Downloads, verifies and stages the new bundle, then hands over to a
   /// detached batch script that swaps files after this process exits.
   Future<bool> applyUpdate() async {
+    _syncProxy();
     final release = state.latestRelease;
     if (release == null) return false;
 
@@ -170,5 +181,5 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
 
 final appUpdaterProvider =
     StateNotifierProvider<AppUpdaterNotifier, AppUpdaterState>((ref) {
-  return AppUpdaterNotifier();
+  return AppUpdaterNotifier(ref);
 });
