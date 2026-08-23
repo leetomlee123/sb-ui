@@ -35,6 +35,7 @@ class AppSettings {
   final String remoteDns;
   final String directDns;
   final bool allowLan;
+  final String selectedProxyNode; // persisted user choice for primary selector
 
   const AppSettings({
     this.mixedPort = 2080,
@@ -54,6 +55,7 @@ class AppSettings {
     this.remoteDns = 'https://1.1.1.1/dns-query',
     this.directDns = '223.5.5.5',
     this.allowLan = false,
+    this.selectedProxyNode = '',
   });
 
   Map<String, dynamic> toJson() {
@@ -75,6 +77,7 @@ class AppSettings {
       'remoteDns': remoteDns,
       'directDns': directDns,
       'allowLan': allowLan,
+      'selectedProxyNode': selectedProxyNode,
     };
   }
 
@@ -100,6 +103,7 @@ class AppSettings {
       remoteDns: json['remoteDns'] as String? ?? 'https://1.1.1.1/dns-query',
       directDns: json['directDns'] as String? ?? '223.5.5.5',
       allowLan: json['allowLan'] as bool? ?? false,
+      selectedProxyNode: json['selectedProxyNode'] as String? ?? '',
     );
   }
 
@@ -121,6 +125,7 @@ class AppSettings {
     String? remoteDns,
     String? directDns,
     bool? allowLan,
+    String? selectedProxyNode,
   }) {
     return AppSettings(
       mixedPort: mixedPort ?? this.mixedPort,
@@ -140,6 +145,7 @@ class AppSettings {
       remoteDns: remoteDns ?? this.remoteDns,
       directDns: directDns ?? this.directDns,
       allowLan: allowLan ?? this.allowLan,
+      selectedProxyNode: selectedProxyNode ?? this.selectedProxyNode,
     );
   }
 

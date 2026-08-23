@@ -11,6 +11,8 @@ enum OutboundType {
   dns,
   selector,
   urltest,
+  fallback,
+  loadbalance,
   unknown;
 
   static OutboundType fromString(String type) {
@@ -41,7 +43,13 @@ enum OutboundType {
       case 'selector':
         return OutboundType.selector;
       case 'urltest':
+      case 'url-test':
         return OutboundType.urltest;
+      case 'fallback':
+        return OutboundType.fallback;
+      case 'loadbalance':
+      case 'load-balance':
+        return OutboundType.loadbalance;
       default:
         return OutboundType.unknown;
     }
@@ -73,6 +81,10 @@ enum OutboundType {
         return 'Selector';
       case OutboundType.urltest:
         return 'URL-Test';
+      case OutboundType.fallback:
+        return 'Fallback';
+      case OutboundType.loadbalance:
+        return 'Load-Balance';
       case OutboundType.unknown:
         return 'Proxy';
     }

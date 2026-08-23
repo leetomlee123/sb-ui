@@ -4,6 +4,7 @@ import '../engine/profile_parser.dart';
 import '../models/proxy_node.dart';
 import 'core_provider.dart';
 import 'profiles_provider.dart';
+import 'settings_provider.dart';
 
 class ProxiesState {
   final Map<String, ProxyGroup> groups;
@@ -43,6 +44,22 @@ class ProxiesState {
     return [];
   }
 
+  List<String> get sortedGroupNames {
+    final keys = groups.keys.toList();
+    keys.sort((a, b) {
+      if (a == 'Proxy' || a == '节点选择') return -1;
+      if (b == 'Proxy' || b == '节点选择') return 1;
+      final grpA = groups[a];
+      final grpB = groups[b];
+      final isSelectorA = grpA?.type == OutboundType.selector;
+      final isSelectorB = grpB?.type == OutboundType.selector;
+      if (isSelectorA && !isSelectorB) return -1;
+      if (!isSelectorA && isSelectorB) return 1;
+      return a.compareTo(b);
+    });
+    return keys;
+  }
+
   ProxiesState copyWith({
     Map<String, ProxyGroup>? groups,
     Map<String, ProxyNode>? nodes,
@@ -66,8 +83,8 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
   ProxiesNotifier(this._ref) : super(ProxiesState()) {
     _ref.listen<CoreState>(coreProvider, (previous, next) {
       if (next.isRunning && (previous == null || !previous.isRunning)) {
-        Future.delayed(const Duration(milliseconds: 200), () => fetchProxies());
-        Future.delayed(const Duration(milliseconds: 800), () => fetchProxies(silent: true));
+        Future.delayed(const Duration(milliseconds: 300), () => fetchProxies());
+        Future.delayed(const Duration(milliseconds: 1000), () => fetchProxies(silent: true));
       }
     });
 
@@ -135,10 +152,15 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
             ...nodes.keys,
             'direct',
           ];
+          final preferredNode = _ref.read(settingsProvider).selectedProxyNode;
+          final initialCurrent = (preferredNode.isNotEmpty && allTargets.contains(preferredNode))
+              ? preferredNode
+              : (groups.keys.isNotEmpty ? groups.keys.first : (nodes.keys.isNotEmpty ? nodes.keys.first : 'direct'));
+
           groups['Proxy'] = ProxyGroup(
             name: 'Proxy',
             type: OutboundType.selector,
-            current: groups.keys.isNotEmpty ? groups.keys.first : (nodes.keys.isNotEmpty ? nodes.keys.first : 'direct'),
+            current: initialCurrent,
             all: allTargets,
             raw: {'type': 'selector', 'tag': 'Proxy', 'outbounds': allTargets},
           );
@@ -167,12 +189,14 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
     if (!silent) state = state.copyWith(isLoading: true);
     try {
       final rawProxies = await client.getProxiesRaw();
+      if (rawProxies.isEmpty) {
+        _populateFromActiveProfile();
+        if (!silent) state = state.copyWith(isLoading: false);
+        return;
+      }
+
       final Map<String, ProxyGroup> groups = {};
       final Map<String, ProxyNode> nodes = {};
-
-      // First include all profile parsed nodes as baseline so NO node is ever lost or hidden!
-      _populateFromActiveProfile();
-      nodes.addAll(state.nodes);
 
       rawProxies.forEach((key, val) {
         if (val is Map<String, dynamic>) {
@@ -184,11 +208,6 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
           }
         }
       });
-
-      // If API returned empty groups, keep profile groups
-      if (groups.isEmpty) {
-        groups.addAll(state.groups);
-      }
 
       String? activeGroup = state.selectedGroup;
       if (activeGroup == null ||
@@ -218,9 +237,10 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
   }
 
   Future<bool> selectNode(String groupName, String nodeName) async {
-    final client = _ref.read(clashApiClientProvider);
+    // 1. Save user node preference in persistent settings
+    _ref.read(settingsProvider.notifier).setSelectedProxyNode(nodeName);
 
-    // Determine target selector groups:
+    // 2. Identify target selector groups
     final List<String> targetGroups = [];
 
     // If current group is a selector, target it
@@ -234,7 +254,7 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
       }
     }
 
-    // Also include any other selector groups that have this node as an option (e.g. Proxy, GLOBAL)
+    // Also include any other selector groups that have this node as an option (e.g. Proxy, GLOBAL if selector)
     for (final entry in state.groups.entries) {
       if (entry.value.type == OutboundType.selector &&
           entry.value.all.contains(nodeName) &&
@@ -243,7 +263,7 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
       }
     }
 
-    // 1. Optimistic UI update: immediately switch current node in local selector groups
+    // 3. Optimistic UI update: immediately switch current node in local selector groups
     final updatedGroups = Map<String, ProxyGroup>.from(state.groups);
     for (final grpName in targetGroups) {
       if (updatedGroups.containsKey(grpName)) {
@@ -252,9 +272,10 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
     }
     state = state.copyWith(groups: updatedGroups);
 
+    final client = _ref.read(clashApiClientProvider);
     if (client == null) return true;
 
-    // 2. Dispatch PUT /proxies/{group} to Clash API for all target selector groups
+    // 4. Dispatch PUT /proxies/{group} to Clash API for all target selector groups
     bool anySuccess = false;
     for (final grp in targetGroups) {
       try {
@@ -263,7 +284,7 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
       } catch (_) {}
     }
 
-    // 3. Immediately re-fetch proxies from Clash API to synchronize
+    // 5. Immediately re-fetch proxies from Clash API to synchronize
     await fetchProxies(silent: true);
     return anySuccess;
   }

@@ -71,17 +71,23 @@ class ConfigGenerator {
 
     // 3. Add or enhance primary selector group (e.g. "节点选择" or "Proxy")
     String primaryProxyTag = existingProxyGroup != null ? (existingProxyGroup['tag'] ?? 'Proxy').toString() : 'Proxy';
+    final preferredNode = settings.selectedProxyNode;
+
     if (existingProxyGroup == null) {
       final List<String> proxyDestinations = [
         if (nodeTags.isNotEmpty) autoGroupTag,
         ...nodeTags,
         'direct',
       ];
+      final defaultTarget = (preferredNode.isNotEmpty && proxyDestinations.contains(preferredNode))
+          ? preferredNode
+          : (nodeTags.isNotEmpty ? autoGroupTag : 'direct');
+
       finalOutbounds.add({
         'type': 'selector',
         'tag': 'Proxy',
         'outbounds': proxyDestinations,
-        'default': nodeTags.isNotEmpty ? autoGroupTag : 'direct',
+        'default': defaultTarget,
       });
       primaryProxyTag = 'Proxy';
     } else {
@@ -90,7 +96,9 @@ class ConfigGenerator {
         existingOutbounds.insert(0, autoGroupTag);
       }
       existingProxyGroup['outbounds'] = existingOutbounds;
-      if (nodeTags.isNotEmpty && existingProxyGroup['default'] == null) {
+      if (preferredNode.isNotEmpty && existingOutbounds.contains(preferredNode)) {
+        existingProxyGroup['default'] = preferredNode;
+      } else if (nodeTags.isNotEmpty && existingProxyGroup['default'] == null) {
         existingProxyGroup['default'] = autoGroupTag;
       }
     }

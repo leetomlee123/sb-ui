@@ -70,6 +70,10 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   Future<void> toggleCloseToTray(bool enabled) async {
     await updateSettings(state.copyWith(closeToTray: enabled));
   }
+
+  Future<void> setSelectedProxyNode(String nodeName) async {
+    await updateSettings(state.copyWith(selectedProxyNode: nodeName));
+  }
 }
 
 final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((ref) {

@@ -74,5 +74,16 @@ proxy-groups:
       expect(allTags.contains(dest) || ['direct', 'block'].contains(dest), isTrue,
           reason: 'Dependency $dest must exist in outbounds');
     }
+
+    // Verify preferred selectedProxyNode is set as default in Proxy group
+    const customNodeSettings = AppSettings(
+      selectedProxyNode: 'HK-Node-01',
+    );
+    final customGenerated = ConfigGenerator.generate(
+      settings: customNodeSettings,
+      parsedOutbounds: result.outbounds,
+    );
+    final customProxyGroup = (customGenerated['outbounds'] as List).firstWhere((o) => o['tag'] == 'Proxy');
+    expect(customProxyGroup['default'], 'HK-Node-01');
   });
 }

@@ -76,11 +76,15 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
-                    children: groups.keys.map((groupName) {
+                    children: proxiesState.sortedGroupNames.map((groupName) {
                       final isSelected = groupName == selectedGroupName;
                       final grp = groups[groupName];
                       final isAutoType = grp?.type == OutboundType.urltest;
-                      final typeLabel = isAutoType ? 'URLTest' : 'Selector';
+                      final typeLabel = grp?.type == OutboundType.urltest
+                          ? 'URLTest'
+                          : (grp?.type == OutboundType.fallback
+                              ? 'Fallback'
+                              : (grp?.type == OutboundType.loadbalance ? 'LoadBalance' : 'Selector'));
                       final currentTarget = grp?.current ?? '';
 
                       return Padding(
