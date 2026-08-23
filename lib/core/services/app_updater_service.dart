@@ -13,7 +13,7 @@ import 'core_updater_service.dart';
 ///   SHA256SUMS.txt
 class AppUpdaterService {
   static const repoApiUrl =
-      'https://api.github.com/repos/leetomlee123/sb-ui/releases/latest';
+      'https://api.github.com/repos/leetomlee123/singular/releases/latest';
 
   final Dio _dio;
 

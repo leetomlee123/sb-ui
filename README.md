@@ -8,7 +8,7 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.13+-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
 [![sing-box](https://img.shields.io/badge/sing--box-1.10+-7C3AED?style=for-the-badge&logo=electron&logoColor=white)](https://github.com/SagerNet/sing-box)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/leetomlee123/sb-ui/releases)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/leetomlee123/singular/releases)
 [![License](https://img.shields.io/badge/License-MIT-emerald?style=for-the-badge)](LICENSE)
 
 </div>
@@ -103,8 +103,8 @@ sudo apt install -y clang cmake ninja-build pkg-config libgtk-3-dev libayatana-a
 
 ```bash
 # 1. 克隆代码仓库
-git clone https://github.com/leetomlee123/sb-ui.git
-cd sb-ui
+git clone https://github.com/leetomlee123/singular.git
+cd singular
 
 # 2. 获取依赖包
 flutter pub get
