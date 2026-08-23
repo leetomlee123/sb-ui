@@ -13,14 +13,19 @@ import '../../core/utils/byte_formatter.dart';
 import '../../shared/widgets/double_bezel_card.dart';
 
 class DashboardPage extends ConsumerWidget {
-  const DashboardPage({super.key});
+  final bool isVisible;
+  const DashboardPage({super.key, this.isVisible = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final coreState = ref.watch(coreProvider);
+    // Select individual fields instead of watching the whole CoreState object:
+    // the uptime timer rewrites the state every second, which would otherwise
+    // rebuild this entire page (chart included) even while hidden.
+    final isRunning = ref.watch(coreProvider.select((s) => s.isRunning));
+    final activeProfileName = ref.watch(coreProvider.select((s) => s.activeProfileName));
+    final errorMessage = ref.watch(coreProvider.select((s) => s.errorMessage));
     final settings = ref.watch(settingsProvider);
     final tr = ref.watch(translationsProvider);
-    final isRunning = coreState.isRunning;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -138,11 +143,11 @@ class DashboardPage extends ConsumerWidget {
                             const SizedBox(height: 6),
                             Text(
                               isRunning
-                                  ? '${tr.isZh ? "当前配置" : "Profile"}: ${coreState.activeProfileName ?? (tr.isZh ? "默认配置" : "Default")}'
-                                  : (coreState.errorMessage ?? tr.clickToConnect),
+                                  ? '${tr.isZh ? "当前配置" : "Profile"}: ${activeProfileName ?? (tr.isZh ? "默认配置" : "Default")}'
+                                  : (errorMessage ?? tr.clickToConnect),
                               style: TextStyle(
                                 fontSize: 13,
-                                color: coreState.errorMessage != null
+                                color: errorMessage != null
                                     ? const Color(0xFFF43F5E)
                                     : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                               ),
@@ -158,14 +163,11 @@ class DashboardPage extends ConsumerWidget {
                                   color: isRunning ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
                                 ),
                                 const SizedBox(width: 6),
-                                Text(
-                                  isRunning
-                                      ? '${tr.uptime} ${ByteFormatter.formatDuration(coreState.uptime)}'
-                                      : tr.standby,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontFamily: 'monospace',
-                                    color: isRunning ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                                Expanded(
+                                  child: _UptimeText(
+                                    isRunning: isRunning,
+                                    uptimeLabel: tr.uptime,
+                                    standbyLabel: tr.standby,
                                   ),
                                 ),
                               ],
@@ -267,7 +269,7 @@ class DashboardPage extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // Row 3: Telemetry Stream LineChart (Obsidian Glow Graph)
-          const _TelemetryGraphCard(),
+          _TelemetryGraphCard(visible: isVisible),
         ],
       ),
     );
@@ -316,18 +318,44 @@ class DashboardPage extends ConsumerWidget {
   }
 }
 
+/// Isolated so the once-per-second uptime tick only rebuilds this tiny Text,
+/// not the whole hero card / page.
+class _UptimeText extends ConsumerWidget {
+  final bool isRunning;
+  final String uptimeLabel;
+  final String standbyLabel;
+
+  const _UptimeText({
+    required this.isRunning,
+    required this.uptimeLabel,
+    required this.standbyLabel,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final uptime = isRunning ? ref.watch(coreProvider.select((s) => s.uptime)) : Duration.zero;
+    return Text(
+      isRunning ? '$uptimeLabel ${ByteFormatter.formatDuration(uptime)}' : standbyLabel,
+      style: TextStyle(
+        fontSize: 12,
+        fontFamily: 'monospace',
+        color: isRunning ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+      ),
+    );
+  }
+}
+
 class _SpeedMetricsStrip extends ConsumerWidget {
   const _SpeedMetricsStrip();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final coreState = ref.watch(coreProvider);
+    final isRunning = ref.watch(coreProvider.select((s) => s.isRunning));
     final trafficState = ref.watch(trafficProvider);
     final connState = ref.watch(connectionsProvider);
     final proxiesState = ref.watch(proxiesProvider);
     final tr = ref.watch(translationsProvider);
 
-    final isRunning = coreState.isRunning;
     final totalDown = connState.downloadTotal > 0 ? connState.downloadTotal : trafficState.totalDown;
     final totalUp = connState.uploadTotal > 0 ? connState.uploadTotal : trafficState.totalUp;
     final totalCombined = totalDown + totalUp;
@@ -505,12 +533,18 @@ class _SpeedMetricsStrip extends ConsumerWidget {
 }
 
 class _TelemetryGraphCard extends ConsumerWidget {
-  const _TelemetryGraphCard();
+  final bool visible;
+  const _TelemetryGraphCard({required this.visible});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final trafficState = ref.watch(trafficProvider);
+    // Skip the 1 Hz traffic watch entirely while the dashboard is hidden
+    // behind the IndexedStack: no FlSpot mapping, no chart repaint.
+    final trafficState = visible ? ref.watch(trafficProvider) : null;
     final tr = ref.watch(translationsProvider);
+    final currentDown = trafficState?.currentDown ?? 0;
+    final currentUp = trafficState?.currentUp ?? 0;
+    final history = trafficState?.history ?? const [];
 
     return DoubleBezelCard(
       padding: const EdgeInsets.all(22),
@@ -559,9 +593,9 @@ class _TelemetryGraphCard extends ConsumerWidget {
               ),
               Row(
                 children: [
-                  _buildLegendPill(const Color(0xFF38BDF8), '↓ ${ByteFormatter.formatSpeed(trafficState.currentDown)}'),
+                  _buildLegendPill(const Color(0xFF38BDF8), '↓ ${ByteFormatter.formatSpeed(currentDown)}'),
                   const SizedBox(width: 12),
-                  _buildLegendPill(const Color(0xFF818CF8), '↑ ${ByteFormatter.formatSpeed(trafficState.currentUp)}'),
+                  _buildLegendPill(const Color(0xFF818CF8), '↑ ${ByteFormatter.formatSpeed(currentUp)}'),
                 ],
               ),
             ],
@@ -569,7 +603,7 @@ class _TelemetryGraphCard extends ConsumerWidget {
           const SizedBox(height: 20),
           SizedBox(
             height: 205,
-            child: trafficState.history.isEmpty
+            child: !visible || history.isEmpty
                 ? Center(
                     child: Text(
                       tr.telemetryEmptyHint,
@@ -584,7 +618,7 @@ class _TelemetryGraphCard extends ConsumerWidget {
                       LineChartData(
                         clipData: const FlClipData.all(),
                         minX: 0,
-                        maxX: math.max(30.0, (trafficState.history.length - 1).toDouble()),
+                        maxX: math.max(30.0, (history.length - 1).toDouble()),
                         minY: 0,
                         gridData: FlGridData(
                           show: true,
@@ -604,7 +638,7 @@ class _TelemetryGraphCard extends ConsumerWidget {
                               reservedSize: 22,
                               interval: 15,
                               getTitlesWidget: (value, meta) {
-                                final total = trafficState.history.length;
+                                final total = history.length;
                                 final valInt = value.toInt();
                                 final diff = (total - 1 - valInt).abs();
                                 Widget child = const SizedBox.shrink();
@@ -641,7 +675,7 @@ class _TelemetryGraphCard extends ConsumerWidget {
                         lineBarsData: [
                           // Download curve (Sky Cyan)
                           LineChartBarData(
-                            spots: trafficState.history
+                            spots: history
                                 .asMap()
                                 .entries
                                 .map((e) => FlSpot(e.key.toDouble(), e.value.down.toDouble() / 1024))
@@ -659,7 +693,7 @@ class _TelemetryGraphCard extends ConsumerWidget {
                           ),
                           // Upload curve (Electric Indigo)
                           LineChartBarData(
-                            spots: trafficState.history
+                            spots: history
                                 .asMap()
                                 .entries
                                 .map((e) => FlSpot(e.key.toDouble(), e.value.up.toDouble() / 1024))

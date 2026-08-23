@@ -18,6 +18,8 @@ class LogsState {
   });
 
   List<LogEntry> get filteredLogs {
+    // Fast path: no filtering needed, avoid copying the whole buffer.
+    if (filterLevel == LogLevel.trace && searchQuery.isEmpty) return logs;
     return logs.where((entry) {
       if (entry.level.index < filterLevel.index) return false;
       if (searchQuery.isNotEmpty && !entry.message.toLowerCase().contains(searchQuery.toLowerCase())) {
@@ -70,6 +72,10 @@ class LogsNotifier extends StateNotifier<LogsState> {
 
   void _startWsLogs() {
     _wsLogSub?.cancel();
+    // Standard mode already mirrors core logs via stdout; subscribing to the WS
+    // as well duplicates every line. Only use the WS when stdout is unavailable
+    // (elevated TUN process we didn't spawn ourselves).
+    if (_ref.read(coreProvider.notifier).processManager.hasStdoutCapture) return;
     final client = _ref.read(clashApiClientProvider);
     if (client != null) {
       _wsLogSub = client.logsStream(level: 'info').listen((entry) {
@@ -88,7 +94,7 @@ class LogsNotifier extends StateNotifier<LogsState> {
     _incomingBuffer.add(entry);
 
     if (_flushTimer == null || !_flushTimer!.isActive) {
-      _flushTimer = Timer(const Duration(milliseconds: 250), _flushLogs);
+      _flushTimer = Timer(const Duration(milliseconds: 500), _flushLogs);
     }
   }
 

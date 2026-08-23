@@ -75,12 +75,12 @@ class _ConnectionsPageState extends ConsumerState<ConnectionsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final coreState = ref.watch(coreProvider);
+    final isRunning = ref.watch(coreProvider.select((s) => s.isRunning));
     final connState = ref.watch(connectionsProvider);
     final trafficState = ref.watch(trafficProvider);
     final tr = ref.watch(translationsProvider);
 
-    if (!coreState.isRunning) {
+    if (!isRunning) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

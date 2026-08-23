@@ -12,7 +12,9 @@ class AppTitleBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final coreState = ref.watch(coreProvider);
+    // Select only the status enum so the per-second uptime tick (new CoreState
+    // object) doesn't rebuild the title bar every second.
+    final status = ref.watch(coreProvider.select((s) => s.status));
     final tr = ref.watch(translationsProvider);
     final isDesktop = Platform.isLinux || Platform.isWindows || Platform.isMacOS;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -81,7 +83,7 @@ class AppTitleBar extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              StatusBadge(status: coreState.status),
+              StatusBadge(status: status),
             ],
           ),
 

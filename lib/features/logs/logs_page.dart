@@ -7,7 +7,8 @@ import '../../core/providers/logs_provider.dart';
 import 'package:intl/intl.dart';
 
 class LogsPage extends ConsumerStatefulWidget {
-  const LogsPage({super.key});
+  final bool isVisible;
+  const LogsPage({super.key, this.isVisible = true});
 
   @override
   ConsumerState<LogsPage> createState() => _LogsPageState();
@@ -15,7 +16,7 @@ class LogsPage extends ConsumerStatefulWidget {
 
 class _LogsPageState extends ConsumerState<LogsPage> {
   final ScrollController _scrollController = ScrollController();
-  final bool _autoScroll = true;
+  static final DateFormat _timeFormat = DateFormat('HH:mm:ss');
 
   @override
   void dispose() {
@@ -23,13 +24,16 @@ class _LogsPageState extends ConsumerState<LogsPage> {
     super.dispose();
   }
 
-  void _scrollToBottom() {
-    if (_autoScroll && _scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
+  /// Follow the tail only when the user is already near the bottom and the
+  /// page is visible. Uses jumpTo instead of animateTo: a restarted animation
+  /// on every log flush keeps the frame pipeline permanently busy.
+  void _followTail() {
+    if (!widget.isVisible || !_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final isNearBottom = position.pixels >= position.maxScrollExtent - 60;
+    if (!isNearBottom) return;
+    if (position.pixels < position.maxScrollExtent) {
+      _scrollController.jumpTo(position.maxScrollExtent);
     }
   }
 
@@ -56,7 +60,7 @@ class _LogsPageState extends ConsumerState<LogsPage> {
     final logs = logsState.filteredLogs;
 
     // Trigger auto scroll after build
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _followTail());
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -172,16 +176,20 @@ class _LogsPageState extends ConsumerState<LogsPage> {
                   ? Center(
                       child: Text(
                         tr.noLogsYet,
-                        style: const TextStyle(color: Color(0xFF64748B), fontFamily: 'monospace'),
+                        style: TextStyle(color: Color(0xFF64748B), fontFamily: 'monospace'),
                       ),
                     )
-                  : ListView.builder(
-                      controller: _scrollController,
-                      itemCount: logs.length,
-                      itemBuilder: (context, index) {
-                        final entry = logs[index];
-                        return _buildLogLine(entry, index + 1);
-                      },
+                  : SelectionArea(
+                      // One shared selection controller for all lines is far
+                      // cheaper than a SelectableText per row.
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        itemCount: logs.length,
+                        itemBuilder: (context, index) {
+                          final entry = logs[index];
+                          return _buildLogLine(entry, index + 1);
+                        },
+                      ),
                     ),
             ),
           ),
@@ -297,11 +305,11 @@ class _LogsPageState extends ConsumerState<LogsPage> {
 
   Widget _buildLogLine(LogEntry entry, int lineNumber) {
     final levelColor = _getLevelColor(entry.level);
-    final timeStr = DateFormat('HH:mm:ss').format(entry.timestamp.toLocal());
+    final timeStr = _timeFormat.format(entry.timestamp.toLocal());
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2.5),
-      child: SelectableText.rich(
+      child: Text.rich(
         TextSpan(
           children: [
             TextSpan(

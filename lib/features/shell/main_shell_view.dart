@@ -99,11 +99,11 @@ class _MainShellViewState extends ConsumerState<MainShellView> {
                     child: IndexedStack(
                       index: _selectedIndex,
                       children: [
-                        const DashboardPage(),
+                        DashboardPage(isVisible: _selectedIndex == 0),
                         const ProxiesPage(),
                         const ProfilesPage(),
                         ConnectionsPage(isVisible: _selectedIndex == 3),
-                        const LogsPage(),
+                        LogsPage(isVisible: _selectedIndex == 4),
                         const SettingsPage(),
                       ],
                     ),
@@ -126,7 +126,7 @@ class _BottomStatusRibbon extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final coreState = ref.watch(coreProvider);
+    final isRunning = ref.watch(coreProvider.select((s) => s.isRunning));
     final trafficState = ref.watch(trafficProvider);
     final profilesState = ref.watch(profilesProvider);
     final settings = ref.watch(settingsProvider);
@@ -155,9 +155,9 @@ class _BottomStatusRibbon extends ConsumerWidget {
                 width: 7,
                 height: 7,
                 decoration: BoxDecoration(
-                  color: coreState.isRunning ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                  color: isRunning ? const Color(0xFF10B981) : const Color(0xFF64748B),
                   shape: BoxShape.circle,
-                  boxShadow: coreState.isRunning
+                  boxShadow: isRunning
                       ? [
                           BoxShadow(
                             color: const Color(0xFF10B981).withValues(alpha: 0.8),

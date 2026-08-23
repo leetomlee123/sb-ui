@@ -19,7 +19,7 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
   @override
   Widget build(BuildContext context) {
     final profilesState = ref.watch(profilesProvider);
-    final coreState = ref.watch(coreProvider);
+    final coreIsRunning = ref.watch(coreProvider.select((s) => s.isRunning));
     final tr = ref.watch(translationsProvider);
     final profiles = profilesState.profiles;
 
@@ -105,13 +105,13 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
                         tr: tr,
                         onSelect: () async {
                           await ref.read(profilesProvider.notifier).setActiveProfile(profile.id);
-                          if (coreState.isRunning) {
+                          if (coreIsRunning) {
                             ref.read(coreProvider.notifier).restartCore();
                           }
                         },
                         onRefresh: () async {
                           await ref.read(profilesProvider.notifier).refreshProfile(profile.id);
-                          if (isActive && coreState.isRunning) {
+                          if (isActive && coreIsRunning) {
                             ref.read(coreProvider.notifier).restartCore();
                           }
                         },

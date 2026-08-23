@@ -99,7 +99,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
-    final coreState = ref.watch(coreProvider);
+    final coreIsRunning = ref.watch(coreProvider.select((s) => s.isRunning));
     final updaterState = ref.watch(coreUpdaterProvider);
     final geoState = ref.watch(geoUpdaterProvider);
     final tr = ref.watch(translationsProvider);
@@ -167,7 +167,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   value: settings.tunModeEnabled,
                   onChanged: (val) async {
                     await ref.read(settingsProvider.notifier).toggleTunMode(val);
-                    if (coreState.isRunning) {
+                    if (coreIsRunning) {
                       ref.read(coreProvider.notifier).restartCore();
                     }
                   },

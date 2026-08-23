@@ -24,14 +24,14 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final coreState = ref.watch(coreProvider);
+    final isRunning = ref.watch(coreProvider.select((s) => s.isRunning));
     final proxiesState = ref.watch(proxiesProvider);
     final tr = ref.watch(translationsProvider);
 
     final groups = proxiesState.groups;
     final selectedGroupName = proxiesState.selectedGroup;
 
-    if (!coreState.isRunning) {
+    if (!isRunning) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
