@@ -595,11 +595,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     GeoUpdaterState geoState,
     Translations tr,
   ) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final cardBg = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
+    final itemBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final itemBorder = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+    final textPrimary = isDark ? Colors.white : const Color(0xFF0F172A);
+    final textSecondary = isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569);
+    final textMuted = isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader(tr.secGeoAssets),
         DoubleBezelCard(
+          backgroundColor: cardBg,
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -610,10 +621,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   Expanded(
                     child: Text(
                       tr.geoAssetsDesc,
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: textSecondary,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 16),
                   ElevatedButton.icon(
                     onPressed: geoState.isUpdating
                         ? null
@@ -627,48 +642,82 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
                         : const Icon(Icons.download_rounded, size: 16),
-                    label: Text(tr.updateAllGeo, style: const TextStyle(fontSize: 12)),
+                    label: Text(tr.updateAllGeo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6366F1),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      elevation: 2,
                     ),
                   ),
                 ],
               ),
               if (geoState.isUpdating) ...[
-                const SizedBox(height: 14),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: geoState.progress > 0 ? geoState.progress : null,
-                    backgroundColor: const Color(0xFF334155),
-                    color: const Color(0xFF38BDF8),
-                    minHeight: 4,
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF0C4A6E).withValues(alpha: 0.3) : const Color(0xFFE0F2FE),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF0284C7) : const Color(0xFFBAE6FD),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  geoState.statusMessage,
-                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Color(0xFF38BDF8)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: geoState.progress > 0 ? geoState.progress : null,
+                          backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFBAE6FD),
+                          color: const Color(0xFF0284C7),
+                          minHeight: 6,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(Icons.sync_rounded, size: 14, color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0369A1)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              geoState.statusMessage,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'monospace',
+                                color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0369A1),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
               if (geoState.successMessage != null) ...[
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                    color: isDark ? const Color(0xFF064E3B).withValues(alpha: 0.4) : const Color(0xFFDCFCE7),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: isDark ? const Color(0xFF059669) : const Color(0xFF86EFAC)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF10B981)),
+                      const Icon(Icons.check_circle_rounded, size: 18, color: Color(0xFF10B981)),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           geoState.successMessage!,
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF10B981), fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF166534),
+                          ),
                         ),
                       ),
                     ],
@@ -678,20 +727,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               if (geoState.errorMessage != null) ...[
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF43F5E).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFFF43F5E).withValues(alpha: 0.3)),
+                    color: isDark ? const Color(0xFF881337).withValues(alpha: 0.3) : const Color(0xFFFEE2E2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: isDark ? const Color(0xFFE11D48) : const Color(0xFFFECDD3)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.error_outline_rounded, size: 16, color: Color(0xFFF43F5E)),
+                      const Icon(Icons.error_outline_rounded, size: 18, color: Color(0xFFF43F5E)),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           geoState.errorMessage!,
-                          style: const TextStyle(fontSize: 12, color: Color(0xFFF43F5E)),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? const Color(0xFFFDA4AF) : const Color(0xFF991B1B),
+                          ),
                         ),
                       ),
                     ],
@@ -706,24 +759,36 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     : 'Bundled (内置)';
 
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF151E33),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF334155).withValues(alpha: 0.5)),
+                    color: itemBg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: itemBorder, width: 1.2),
+                    boxShadow: isDark
+                        ? null
+                        : [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.03),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                   ),
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF818CF8).withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
+                          color: const Color(0xFF6366F1).withValues(alpha: isDark ? 0.18 : 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: const Color(0xFF6366F1).withValues(alpha: 0.25),
+                          ),
                         ),
-                        child: const Icon(Icons.storage_rounded, size: 18, color: Color(0xFF818CF8)),
+                        child: const Icon(Icons.storage_rounded, size: 20, color: Color(0xFF818CF8)),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -732,56 +797,94 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                               children: [
                                 Text(
                                   asset.displayName,
-                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: textPrimary,
+                                  ),
                                 ),
                                 const SizedBox(width: 8),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                                   decoration: BoxDecoration(
                                     color: asset.isInstalled
-                                        ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                                        : const Color(0xFF64748B).withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(4),
+                                        ? (isDark ? const Color(0xFF10B981).withValues(alpha: 0.2) : const Color(0xFFDCFCE7))
+                                        : (isDark ? const Color(0xFF64748B).withValues(alpha: 0.2) : const Color(0xFFF1F5F9)),
+                                    borderRadius: BorderRadius.circular(6),
                                     border: Border.all(
                                       color: asset.isInstalled
-                                          ? const Color(0xFF10B981).withValues(alpha: 0.3)
-                                          : const Color(0xFF64748B).withValues(alpha: 0.3),
+                                          ? (isDark ? const Color(0xFF10B981).withValues(alpha: 0.5) : const Color(0xFF86EFAC))
+                                          : (isDark ? const Color(0xFF64748B).withValues(alpha: 0.4) : const Color(0xFFCBD5E1)),
                                     ),
                                   ),
                                   child: Text(
                                     asset.isInstalled ? tr.geoInstalled : 'Missing',
                                     style: TextStyle(
-                                      fontSize: 10,
+                                      fontSize: 11,
                                       fontWeight: FontWeight.bold,
-                                      color: asset.isInstalled ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                                      color: asset.isInstalled
+                                          ? (isDark ? const Color(0xFF34D399) : const Color(0xFF166534))
+                                          : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 5),
                             Text(
                               asset.description,
-                              style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: textSecondary,
+                              ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 6),
                             Row(
                               children: [
-                                Text(
-                                  '${tr.fileSize}${ByteFormatter.formatBytes(asset.sizeInBytes)}',
-                                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Color(0xFF64748B)),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: isDark ? const Color(0xFF334155).withValues(alpha: 0.5) : const Color(0xFFE2E8F0),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '${tr.fileSize}${ByteFormatter.formatBytes(asset.sizeInBytes)}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      fontFamily: 'monospace',
+                                      color: textMuted,
+                                    ),
+                                  ),
                                 ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  '${tr.lastUpdated}$dateStr',
-                                  style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                const SizedBox(width: 10),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: isDark ? const Color(0xFF334155).withValues(alpha: 0.5) : const Color(0xFFE2E8F0),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '${tr.lastUpdated}$dateStr',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: textMuted,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 14),
                       OutlinedButton.icon(
                         onPressed: geoState.isUpdating
                             ? null
@@ -795,9 +898,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Icon(Icons.refresh_rounded, size: 14),
-                        label: Text(tr.updateSingle, style: const TextStyle(fontSize: 11)),
+                        label: Text(tr.updateSingle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          foregroundColor: const Color(0xFF818CF8),
+                          side: const BorderSide(color: Color(0xFF818CF8), width: 1.2),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                     ],
