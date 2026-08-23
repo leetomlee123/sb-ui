@@ -14,6 +14,9 @@ import 'core/services/app_updater_service.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/system_proxy_manager.dart';
 import 'features/shell/main_shell_view.dart';
+import 'shared/widgets/close_confirm_dialog.dart';
+
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   runZonedGuarded(() async {
@@ -186,6 +189,21 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
   @override
   void onWindowClose() async {
     final settings = ref.read(settingsProvider);
+    if (!settings.hasAskedCloseToTray) {
+      await windowManager.show();
+      await windowManager.focus();
+      if (!mounted) return;
+      final ctx = rootNavigatorKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        await showDialog(
+          context: ctx,
+          barrierDismissible: false,
+          builder: (dialogCtx) => const CloseConfirmDialog(),
+        );
+      }
+      return;
+    }
+
     if (settings.closeToTray) {
       await windowManager.hide();
     } else {
@@ -221,6 +239,7 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
     }
 
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       title: 'Singular',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,

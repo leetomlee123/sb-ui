@@ -71,6 +71,13 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     await updateSettings(state.copyWith(closeToTray: enabled));
   }
 
+  Future<void> setCloseToTrayPreference({required bool closeToTray, required bool rememberChoice}) async {
+    await updateSettings(state.copyWith(
+      closeToTray: closeToTray,
+      hasAskedCloseToTray: rememberChoice,
+    ));
+  }
+
   Future<void> setSelectedProxyNode(String nodeName) async {
     await updateSettings(state.copyWith(selectedProxyNode: nodeName));
   }

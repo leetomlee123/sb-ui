@@ -5,6 +5,7 @@ import 'package:window_manager/window_manager.dart';
 import '../../core/i18n/translations.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/providers/settings_provider.dart';
+import 'close_confirm_dialog.dart';
 import 'status_badge.dart';
 
 class AppTitleBar extends ConsumerWidget {
@@ -138,10 +139,21 @@ class AppTitleBar extends ConsumerWidget {
                   hoverColor: const Color(0xFFF43F5E).withValues(alpha: 0.2),
                   onTap: () async {
                     final settings = ref.read(settingsProvider);
+                    if (!settings.hasAskedCloseToTray) {
+                      if (!context.mounted) return;
+                      await showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (ctx) => const CloseConfirmDialog(),
+                      );
+                      return;
+                    }
                     if (settings.closeToTray) {
                       await windowManager.hide();
                     } else {
-                      await ref.read(coreProvider.notifier).stopCore();
+                      try {
+                        await ref.read(coreProvider.notifier).stopCore();
+                      } catch (_) {}
                       exit(0);
                     }
                   },

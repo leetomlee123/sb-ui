@@ -16,10 +16,19 @@ class Translations {
   String get saveChanges => isZh ? '保存更改' : 'Save Changes';
   String get savedSuccess => isZh ? '设置已成功保存' : 'Settings saved successfully';
   String get cancel => isZh ? '取消' : 'Cancel';
+  String get confirm => isZh ? '确定' : 'Confirm';
   String get delete => isZh ? '删除' : 'Delete';
   String get edit => isZh ? '编辑' : 'Edit';
   String get copy => isZh ? '复制' : 'Copy';
   String get refresh => isZh ? '刷新' : 'Refresh';
+
+  // Close confirmation dialog
+  String get closeDialogTitle => isZh ? '关闭窗口选项' : 'Close Window Options';
+  String get closeActionMinimize => isZh ? '最小化到系统托盘 (推荐)' : 'Minimize to System Tray (Recommended)';
+  String get closeActionMinimizeDesc => isZh ? '在后台静默运行，保持网络代理与分流不中断' : 'Keep running in background without interrupting proxy';
+  String get closeActionExit => isZh ? '直接退出应用程序' : 'Exit Application Completely';
+  String get closeActionExitDesc => isZh ? '关闭代理核心服务并完全退出程序' : 'Stop proxy core and close application';
+  String get rememberChoice => isZh ? '记住我的选择，下次不再提示' : 'Remember my choice and do not ask again';
 
   // Navigation Rail
   String get navDashboard => isZh ? '仪表盘' : 'Dashboard';

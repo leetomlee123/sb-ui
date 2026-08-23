@@ -29,6 +29,7 @@ class AppSettings {
   final bool autoStart;
   final bool startMinimized;
   final bool closeToTray;
+  final bool hasAskedCloseToTray; // Whether the user has made a permanent close action choice
   final String themeMode; // 'dark', 'light', 'system'
   final String language; // 'zh', 'en', 'system'
   final String customSingboxPath;
@@ -51,7 +52,8 @@ class AppSettings {
     this.routingMode = RoutingMode.rule,
     this.autoStart = false,
     this.startMinimized = false,
-    this.closeToTray = false,
+    this.closeToTray = true,
+    this.hasAskedCloseToTray = false,
     this.themeMode = 'dark',
     this.language = 'zh',
     this.customSingboxPath = '',
@@ -77,6 +79,7 @@ class AppSettings {
       'autoStart': autoStart,
       'startMinimized': startMinimized,
       'closeToTray': closeToTray,
+      'hasAskedCloseToTray': hasAskedCloseToTray,
       'themeMode': themeMode,
       'language': language,
       'customSingboxPath': customSingboxPath,
@@ -105,7 +108,8 @@ class AppSettings {
       ),
       autoStart: json['autoStart'] as bool? ?? false,
       startMinimized: json['startMinimized'] as bool? ?? false,
-      closeToTray: json['closeToTray'] as bool? ?? false,
+      closeToTray: json['closeToTray'] as bool? ?? true,
+      hasAskedCloseToTray: json['hasAskedCloseToTray'] as bool? ?? false,
       themeMode: json['themeMode'] as String? ?? 'dark',
       language: json['language'] as String? ?? 'zh',
       customSingboxPath: json['customSingboxPath'] as String? ?? '',
@@ -131,6 +135,7 @@ class AppSettings {
     bool? autoStart,
     bool? startMinimized,
     bool? closeToTray,
+    bool? hasAskedCloseToTray,
     String? themeMode,
     String? language,
     String? customSingboxPath,
@@ -154,6 +159,7 @@ class AppSettings {
       autoStart: autoStart ?? this.autoStart,
       startMinimized: startMinimized ?? this.startMinimized,
       closeToTray: closeToTray ?? this.closeToTray,
+      hasAskedCloseToTray: hasAskedCloseToTray ?? this.hasAskedCloseToTray,
       themeMode: themeMode ?? this.themeMode,
       language: language ?? this.language,
       customSingboxPath: customSingboxPath ?? this.customSingboxPath,
