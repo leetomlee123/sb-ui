@@ -33,6 +33,14 @@ class SingboxProcessManager {
   final _outputController = StreamController<LogEntry>.broadcast();
   DateTime? _startedAt;
 
+  // Watchdog crash recovery state
+  bool _intentionalStop = false;
+  int _consecutiveCrashes = 0;
+  String? _lastConfigPath;
+  String? _lastCustomBinaryPath;
+  bool _lastRequireElevated = false;
+  Timer? _crashResetTimer;
+
   CoreStatus get status => _status;
   Stream<CoreStatus> get statusStream => _statusController.stream;
   Stream<LogEntry> get outputStream => _outputController.stream;
@@ -141,6 +149,11 @@ class SingboxProcessManager {
       return true;
     }
 
+    _intentionalStop = false;
+    _lastConfigPath = configPath;
+    _lastCustomBinaryPath = customBinaryPath;
+    _lastRequireElevated = requireElevated;
+
     _updateStatus(CoreStatus.starting);
     _outputController.add(LogEntry(level: LogLevel.info, message: 'Finding sing-box binary...'));
 
@@ -217,6 +230,12 @@ class SingboxProcessManager {
       _startedAt = DateTime.now();
       _updateStatus(CoreStatus.running);
 
+      // Reset crash counter after 30s of healthy operation
+      _crashResetTimer?.cancel();
+      _crashResetTimer = Timer(const Duration(seconds: 30), () {
+        _consecutiveCrashes = 0;
+      });
+
       _process!.stdout
           .transform(utf8.decoder)
           .transform(const LineSplitter())
@@ -231,13 +250,39 @@ class SingboxProcessManager {
         _outputController.add(LogEntry(level: LogLevel.warn, message: line));
       });
 
-      _process!.exitCode.then((code) {
+      _process!.exitCode.then((code) async {
         _outputController.add(LogEntry(
           level: code == 0 ? LogLevel.info : LogLevel.error,
           message: 'sing-box process exited with code $code',
         ));
         _process = null;
         _startedAt = null;
+
+        // Auto-restart Watchdog if unexpected termination occurs
+        if (!_intentionalStop && code != 0 && _lastConfigPath != null) {
+          if (_consecutiveCrashes < 3) {
+            _consecutiveCrashes++;
+            _outputController.add(LogEntry(
+              level: LogLevel.warn,
+              message: '[Watchdog] Core exited unexpectedly (code $code). Auto-recovering in 1.5s (Attempt $_consecutiveCrashes/3)...',
+            ));
+            await Future.delayed(const Duration(milliseconds: 1500));
+            if (!_intentionalStop) {
+              await start(
+                configPath: _lastConfigPath!,
+                customBinaryPath: _lastCustomBinaryPath,
+                requireElevated: _lastRequireElevated,
+              );
+              return;
+            }
+          } else {
+            _outputController.add(LogEntry(
+              level: LogLevel.error,
+              message: '[Watchdog] Max auto-restart attempts reached. Please inspect config and diagnostic logs.',
+            ));
+          }
+        }
+
         _updateStatus(CoreStatus.stopped);
       });
 
@@ -253,6 +298,10 @@ class SingboxProcessManager {
   }
 
   Future<void> stop() async {
+    _intentionalStop = true;
+    _consecutiveCrashes = 0;
+    _crashResetTimer?.cancel();
+
     _outputController.add(LogEntry(level: LogLevel.info, message: 'Stopping sing-box process...'));
 
     if (_process != null) {
@@ -293,6 +342,7 @@ class SingboxProcessManager {
 
   void dispose() {
     stop();
+    _crashResetTimer?.cancel();
     _statusController.close();
     _outputController.close();
   }

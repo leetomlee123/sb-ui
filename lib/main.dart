@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,46 +10,61 @@ import 'core/providers/core_provider.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/providers/storage_provider.dart';
 import 'core/services/storage_service.dart';
+import 'core/services/system_proxy_manager.dart';
 import 'features/shell/main_shell_view.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize persistent storage & ensure offline rule sets are extracted
-  final storageService = await StorageService.init();
-  await StorageService.ensureBundledRulesExtracted();
+    // 1. Flutter framework error handler (prevent UI termination)
+    FlutterError.onError = (FlutterErrorDetails details) {
+      FlutterError.presentError(details);
+    };
 
-  // Desktop window & tray setup
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    // 2. Clear any stale orphan system proxy on app startup
     try {
-      await windowManager.ensureInitialized();
-
-      const windowOptions = WindowOptions(
-        size: Size(1020, 680),
-        minimumSize: Size(820, 560),
-        center: true,
-        backgroundColor: Colors.transparent,
-        skipTaskbar: false,
-        titleBarStyle: TitleBarStyle.hidden,
-        title: 'sing-box Desktop',
-      );
-
-      await windowManager.waitUntilReadyToShow(windowOptions, () async {
-        await windowManager.setPreventClose(true);
-        await windowManager.show();
-        await windowManager.focus();
-      });
+      await SystemProxyManager.clearProxy();
     } catch (_) {}
-  }
 
-  runApp(
-    ProviderScope(
-      overrides: [
-        storageServiceProvider.overrideWithValue(storageService),
-      ],
-      child: const SingboxApp(),
-    ),
-  );
+    // 3. Initialize persistent storage & ensure offline rule sets are extracted
+    final storageService = await StorageService.init();
+    await StorageService.ensureBundledRulesExtracted();
+
+    // 4. Desktop window & tray setup
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      try {
+        await windowManager.ensureInitialized();
+
+        const windowOptions = WindowOptions(
+          size: Size(1020, 680),
+          minimumSize: Size(820, 560),
+          center: true,
+          backgroundColor: Colors.transparent,
+          skipTaskbar: false,
+          titleBarStyle: TitleBarStyle.hidden,
+          title: 'sing-box Desktop',
+        );
+
+        await windowManager.waitUntilReadyToShow(windowOptions, () async {
+          await windowManager.setPreventClose(true);
+          await windowManager.show();
+          await windowManager.focus();
+        });
+      } catch (_) {}
+    }
+
+    runApp(
+      ProviderScope(
+        overrides: [
+          storageServiceProvider.overrideWithValue(storageService),
+        ],
+        child: const SingboxApp(),
+      ),
+    );
+  }, (error, stackTrace) {
+    debugPrint('[Unhandled Exception Shield] $error\n$stackTrace');
+  });
 }
 
 class SingboxApp extends ConsumerStatefulWidget {
