@@ -85,18 +85,30 @@ class ClashApiClient {
     return null;
   }
 
-  Future<List<ActiveConnection>> getConnections() async {
+  Future<ConnectionsData> getConnectionsData() async {
     try {
       final response = await _dio.get('/connections');
       if (response.statusCode == 200 && response.data is Map) {
+        final downloadTotal = response.data['downloadTotal'] as int? ?? 0;
+        final uploadTotal = response.data['uploadTotal'] as int? ?? 0;
         final conns = (response.data['connections'] as List<dynamic>?) ?? [];
-        return conns
+        final list = conns
             .whereType<Map<String, dynamic>>()
             .map((e) => ActiveConnection.fromJson(e))
             .toList();
+        return ConnectionsData(
+          downloadTotal: downloadTotal,
+          uploadTotal: uploadTotal,
+          connections: list,
+        );
       }
     } catch (_) {}
-    return [];
+    return const ConnectionsData();
+  }
+
+  Future<List<ActiveConnection>> getConnections() async {
+    final data = await getConnectionsData();
+    return data.connections;
   }
 
   Future<bool> closeConnection(String id) async {

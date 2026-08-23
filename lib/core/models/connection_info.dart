@@ -80,3 +80,15 @@ class ActiveConnection {
     );
   }
 }
+
+class ConnectionsData {
+  final int downloadTotal;
+  final int uploadTotal;
+  final List<ActiveConnection> connections;
+
+  const ConnectionsData({
+    this.downloadTotal = 0,
+    this.uploadTotal = 0,
+    this.connections = const [],
+  });
+}

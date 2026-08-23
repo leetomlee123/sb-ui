@@ -96,8 +96,8 @@ class Translations {
   String get copyConfigPayload => isZh ? '复制配置文本' : 'Copy Config Payload';
   String get copiedSubSuccess => isZh ? '订阅链接已成功复制到剪贴板' : 'Subscription URL copied to clipboard';
 
-  // Connections Page
-  String get activeConnections => isZh ? '实时活动连接' : 'ACTIVE CONNECTIONS';
+  // Connections & Analytics Page
+  String get activeConnections => isZh ? '实时连接与流量分析' : 'CONNECTIONS & TRAFFIC ANALYTICS';
   String get trackingSessions => isZh ? '当前正在追踪' : 'Tracking';
   String get sessionsSuffix => isZh ? '个网络会话' : 'live sessions';
   String get searchConnections => isZh ? '搜索域名、IP 或规则...' : 'Search host, IP, or rule...';
@@ -106,6 +106,15 @@ class Translations {
   String get rulePrefix => isZh ? '命中规则: ' : 'Rule: ';
   String get routePrefix => isZh ? '路由链: ' : 'Route: ';
   String get killSession => isZh ? '切断连接' : 'Kill Connection';
+  String get totalTraffic => isZh ? '总计消耗流量' : 'Total Combined Traffic';
+  String get totalTrafficStats => isZh ? '流量总计与统计' : 'Total Traffic Statistics';
+  String get trafficAnalytics => isZh ? '流量深度分析' : 'Traffic Analytics';
+  String get domainRanking => isZh ? '域名访问流量排行榜 (Top 10)' : 'Top Domains by Traffic (Top 10)';
+  String get outboundDistribution => isZh ? '出口节点流量分布' : 'Outbound Traffic Share';
+  String get protocolDistribution => isZh ? '网络协议分布' : 'Protocol Breakdown';
+  String get connectionsTab => isZh ? '实时连接' : 'Active Connections';
+  String get analyticsTab => isZh ? '流量分析' : 'Traffic Analytics';
+  String get noTrafficData => isZh ? '暂无流量统计数据' : 'No traffic data available';
 
   // Logs Page
   String get logStream => isZh ? '核心诊断日志' : 'SYSTEM LOG STREAM';

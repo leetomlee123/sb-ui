@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/i18n/translations.dart';
 import '../../core/models/app_settings.dart';
+import '../../core/providers/connections_provider.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/providers/proxies_provider.dart';
 import '../../core/providers/settings_provider.dart';
@@ -17,11 +18,15 @@ class DashboardPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final coreState = ref.watch(coreProvider);
     final trafficState = ref.watch(trafficProvider);
+    final connState = ref.watch(connectionsProvider);
     final settings = ref.watch(settingsProvider);
     final proxiesState = ref.watch(proxiesProvider);
     final tr = ref.watch(translationsProvider);
 
     final isRunning = coreState.isRunning;
+    final totalDown = connState.downloadTotal > 0 ? connState.downloadTotal : trafficState.totalDown;
+    final totalUp = connState.uploadTotal > 0 ? connState.uploadTotal : trafficState.totalUp;
+    final totalCombined = totalDown + totalUp;
 
     // Get current active proxy node
     final activeGroup = proxiesState.groups['Proxy'];
@@ -264,14 +269,14 @@ class DashboardPage extends ConsumerWidget {
 
           const SizedBox(height: 16),
 
-          // Row 2: Metrics Bento Strip (Down/Up Speeds + Totals + Current Node)
+          // Row 2: Metrics Bento Strip (Down/Up Speeds + Totals + Combined Total + Current Node)
           Row(
             children: [
               _buildMetricCard(
                 context,
                 title: tr.downloadSpeed,
                 value: ByteFormatter.formatSpeed(trafficState.currentDown),
-                total: '${tr.totalDownload}: ${ByteFormatter.formatBytes(trafficState.totalDown)}',
+                total: '${tr.totalDownload}: ${ByteFormatter.formatBytes(totalDown)}',
                 icon: Icons.arrow_downward_rounded,
                 color: const Color(0xFF38BDF8),
               ),
@@ -280,9 +285,18 @@ class DashboardPage extends ConsumerWidget {
                 context,
                 title: tr.uploadSpeed,
                 value: ByteFormatter.formatSpeed(trafficState.currentUp),
-                total: '${tr.totalUpload}: ${ByteFormatter.formatBytes(trafficState.totalUp)}',
+                total: '${tr.totalUpload}: ${ByteFormatter.formatBytes(totalUp)}',
                 icon: Icons.arrow_upward_rounded,
                 color: const Color(0xFF818CF8),
+              ),
+              const SizedBox(width: 12),
+              _buildMetricCard(
+                context,
+                title: tr.totalTraffic,
+                value: ByteFormatter.formatBytes(totalCombined),
+                total: isRunning ? (tr.isZh ? '实时累计流量' : 'Session Total') : tr.standby,
+                icon: Icons.data_usage_rounded,
+                color: const Color(0xFF10B981),
               ),
               const SizedBox(width: 12),
               _buildActiveNodeCard(
