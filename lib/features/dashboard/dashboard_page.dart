@@ -534,6 +534,18 @@ class _TelemetryGraphCard extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
+                      color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      tr.isZh ? '90s 时间线' : '90s Timeline',
+                      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
                       color: const Color(0xFF151E33),
                       borderRadius: BorderRadius.circular(4),
                     ),
@@ -555,7 +567,7 @@ class _TelemetryGraphCard extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
           SizedBox(
-            height: 190,
+            height: 205,
             child: trafficState.history.isEmpty
                 ? Center(
                     child: Text(
@@ -577,11 +589,27 @@ class _TelemetryGraphCard extends ConsumerWidget {
                             strokeWidth: 1,
                           ),
                         ),
-                        titlesData: const FlTitlesData(
-                          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        titlesData: FlTitlesData(
+                          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 20,
+                              interval: 15,
+                              getTitlesWidget: (value, meta) {
+                                final total = trafficState.history.length;
+                                final diff = (total - 1 - value.toInt()).abs();
+                                if (diff == 0) {
+                                  return Text(tr.isZh ? '实时' : 'Now', style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)));
+                                } else if (diff == 30 || diff == 60 || diff == 90) {
+                                  return Text('${diff}s', style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)));
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                          ),
                         ),
                         borderData: FlBorderData(show: false),
                         lineBarsData: [

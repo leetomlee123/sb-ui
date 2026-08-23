@@ -56,7 +56,7 @@ class TrafficNotifier extends StateNotifier<TrafficState> {
 
     _sub = client.trafficStream().listen((point) {
       final updatedHistory = [...state.history, point];
-      if (updatedHistory.length > 30) {
+      if (updatedHistory.length > 90) {
         updatedHistory.removeAt(0);
       }
 
