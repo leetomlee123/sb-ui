@@ -1,4 +1,4 @@
-name: Multi-Platform Release Pipeline
+name: Windows Release Pipeline
 
 on:
   push:
@@ -15,102 +15,8 @@ permissions:
   contents: write
 
 jobs:
-  # ==========================================
-  # 1. Build Linux (x86_64)
-  # ==========================================
-  build-linux:
-    name: Build Linux (x86_64)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install system build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libayatana-appindicator3-dev libsecret-1-dev dpkg-dev curl tar gzip
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          cache: true
-
-      - name: Download bundled sing-box binary (Linux amd64)
-        run: |
-          mkdir -p core-bin
-          TAG=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-          VERSION=${TAG#v}
-          echo "Fetching sing-box ${TAG} for linux-amd64..."
-          curl -Lo singbox.tar.gz "https://github.com/SagerNet/sing-box/releases/download/${TAG}/sing-box-${VERSION}-linux-amd64.tar.gz"
-          tar -xzf singbox.tar.gz
-          cp sing-box-${VERSION}-linux-amd64/sing-box core-bin/sing-box
-          chmod +x core-bin/sing-box
-
-      - name: Build Flutter Linux Release
-        run: |
-          flutter pub get
-          flutter build linux --release
-
-      - name: Package Linux Artifacts (.tar.gz & .deb)
-        run: |
-          TAG_NAME="${{ github.ref_name || github.event.inputs.tag_name || 'latest' }}"
-          BUNDLE_DIR="build/linux/x64/release/bundle"
-          
-          # Copy sing-box core into bundle data directory
-          mkdir -p "${BUNDLE_DIR}/data/core"
-          cp core-bin/sing-box "${BUNDLE_DIR}/data/core/sing-box"
-
-          # 1. Create .tar.gz archive
-          ARCHIVE_NAME="sb-ui-linux-x86_64.tar.gz"
-          tar -czf "${ARCHIVE_NAME}" -C "${BUNDLE_DIR}" .
-
-          # 2. Create .deb package
-          DEB_ROOT="deb_package"
-          mkdir -p "${DEB_ROOT}/usr/bin"
-          mkdir -p "${DEB_ROOT}/opt/sb-ui"
-          mkdir -p "${DEB_ROOT}/usr/share/applications"
-          mkdir -p "${DEB_ROOT}/DEBIAN"
-
-          cp -r "${BUNDLE_DIR}/." "${DEB_ROOT}/opt/sb-ui/"
-          ln -sf /opt/sb-ui/sb_ui "${DEB_ROOT}/usr/bin/sb-ui"
-
-          cat << 'EOF' > "${DEB_ROOT}/usr/share/applications/sb-ui.desktop"
-          [Desktop Entry]
-          Name=sing-box UI
-          Comment=sing-box Desktop Client
-          Exec=/usr/bin/sb-ui
-          Icon=/opt/sb-ui/data/flutter_assets/assets/icons/app_icon.png
-          Terminal=false
-          Type=Application
-          Categories=Network;Utility;
-          EOF
-
-          cat << EOF > "${DEB_ROOT}/DEBIAN/control"
-          Package: sb-ui
-          Version: ${TAG_NAME#v}
-          Section: net
-          Priority: optional
-          Architecture: amd64
-          Maintainer: sing-box UI Team
-          Description: Modern desktop GUI client for sing-box built with Flutter
-          EOF
-
-          dpkg-deb --build "${DEB_ROOT}" "sb-ui-linux-amd64.deb"
-
-      - name: Upload Linux Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-artifacts
-          path: |
-            sb-ui-linux-x86_64.tar.gz
-            sb-ui-linux-amd64.deb
-
-  # ==========================================
-  # 2. Build Windows (x86_64)
-  # ==========================================
-  build-windows:
-    name: Build Windows (x86_64)
+  build-and-release-windows:
+    name: Build & Release Windows (x64)
     runs-on: windows-latest
     steps:
       - name: Checkout repository
@@ -134,109 +40,44 @@ jobs:
           Expand-Archive -Path "singbox.zip" -DestinationPath "singbox_extracted"
           Copy-Item -Path "singbox_extracted/sing-box-$version-windows-amd64/sing-box.exe" -Destination "core-bin/sing-box.exe"
 
+      - name: Install dependencies & verify
+        run: |
+          flutter pub get
+          flutter test
+
       - name: Build Flutter Windows Release
         run: |
-          flutter pub get
           flutter build windows --release
 
-      - name: Package Windows Artifacts (.zip)
+      - name: Package Windows Binary (.zip)
         shell: pwsh
         run: |
+          $tag = "${{ github.ref_name || github.event.inputs.tag_name || 'latest' }}"
           $bundleDir = "build/windows/x64/runner/Release"
+          
+          # Copy sing-box core into bundle
           New-Item -ItemType Directory -Force -Path "$bundleDir/data/core"
           Copy-Item -Path "core-bin/sing-box.exe" -Destination "$bundleDir/data/core/sing-box.exe"
-          Compress-Archive -Path "$bundleDir/*" -DestinationPath "sb-ui-windows-x86_64.zip" -Force
+          Copy-Item -Path "core-bin/sing-box.exe" -Destination "$bundleDir/sing-box.exe"
 
-      - name: Upload Windows Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-artifacts
-          path: sb-ui-windows-x86_64.zip
+          # Compress to zip
+          $zipName = "sb-ui-windows-x64-$tag.zip"
+          Compress-Archive -Path "$bundleDir/*" -DestinationPath $zipName -Force
 
-  # ==========================================
-  # 3. Build macOS (Universal)
-  # ==========================================
-  build-macos:
-    name: Build macOS (Universal)
-    runs-on: macos-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+          # Generate SHA256 Checksum
+          $hash = (Get-FileHash -Path $zipName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $zipName" | Out-File -FilePath "SHA256SUMS.txt" -Encoding ascii
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          cache: true
-
-      - name: Download bundled sing-box binary (macOS universal/arm64/amd64)
-        run: |
-          mkdir -p core-bin
-          TAG=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-          VERSION=${TAG#v}
-          echo "Fetching sing-box ${TAG} for darwin-universal..."
-          curl -Lo singbox-darwin.tar.gz "https://github.com/SagerNet/sing-box/releases/download/${TAG}/sing-box-${VERSION}-darwin-universal.tar.gz" || \
-          curl -Lo singbox-darwin.tar.gz "https://github.com/SagerNet/sing-box/releases/download/${TAG}/sing-box-${VERSION}-darwin-arm64.tar.gz"
-          tar -xzf singbox-darwin.tar.gz
-          cp sing-box-*/sing-box core-bin/sing-box
-          chmod +x core-bin/sing-box
-
-      - name: Build Flutter macOS Release
-        run: |
-          flutter pub get
-          flutter build macos --release
-
-      - name: Package macOS Application (.dmg & .zip)
-        run: |
-          APP_PATH="build/macos/Build/Products/Release/sb_ui.app"
-          
-          # Embed sing-box binary inside Resources
-          mkdir -p "${APP_PATH}/Contents/Resources/core"
-          cp core-bin/sing-box "${APP_PATH}/Contents/Resources/core/sing-box"
-
-          # 1. Create .zip
-          cd "build/macos/Build/Products/Release"
-          zip -r -q ../../../../../sb-ui-macos-universal.zip sb_ui.app
-          cd -
-
-          # 2. Create .dmg (using hdiutil)
-          hdiutil create -volname "sing-box UI" -srcfolder "${APP_PATH}" -ov -format UDZO sb-ui-macos-universal.dmg
-
-      - name: Upload macOS Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-artifacts
-          path: |
-            sb-ui-macos-universal.dmg
-            sb-ui-macos-universal.zip
-
-  # ==========================================
-  # 4. Create GitHub Release & Publish
-  # ==========================================
-  publish-release:
-    name: Publish Release & Assets
-    needs: [build-linux, build-windows, build-macos]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download all matrix build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release_assets
-          merge-multiple: true
-
-      - name: Generate Checksums
-        working-directory: release_assets
-        run: |
-          sha256sum * > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          Write-Host "Created $zipName (SHA256: $hash)"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name || github.event.inputs.tag_name }}
-          name: sing-box UI ${{ github.ref_name || github.event.inputs.tag_name }}
+          name: sing-box UI ${{ github.ref_name || github.event.inputs.tag_name }} (Windows)
           draft: false
           prerelease: false
           generate_release_notes: true
           files: |
-            release_assets/*
+            sb-ui-windows-x64-*.zip
+            SHA256SUMS.txt
