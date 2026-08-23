@@ -81,19 +81,56 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
                       final isSelected = groupName == selectedGroupName;
                       final grp = groups[groupName];
                       final isAutoType = grp?.type == OutboundType.urltest;
+                      final typeLabel = isAutoType ? 'URLTest' : 'Selector';
+                      final currentTarget = grp?.current ?? '';
 
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: ChoiceChip(
                           avatar: isAutoType
                               ? const Icon(Icons.bolt_rounded, size: 14, color: Color(0xFFF59E0B))
-                              : null,
-                          label: Text(
-                            groupName,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            ),
+                              : const Icon(Icons.alt_route_rounded, size: 14, color: Color(0xFF818CF8)),
+                          label: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                groupName,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: isAutoType
+                                      ? const Color(0xFFF59E0B).withValues(alpha: 0.15)
+                                      : const Color(0xFF818CF8).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Text(
+                                  typeLabel,
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: isAutoType ? const Color(0xFFF59E0B) : const Color(0xFF818CF8),
+                                  ),
+                                ),
+                              ),
+                              if (currentTarget.isNotEmpty) ...[
+                                const SizedBox(width: 4),
+                                Text(
+                                  ':: $currentTarget',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontFamily: 'monospace',
+                                    fontWeight: FontWeight.bold,
+                                    color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                           selected: isSelected,
                           onSelected: (selected) {
@@ -112,8 +149,8 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
 
               // Search Filter Field
               SizedBox(
-                width: 200,
-                height: 40,
+                width: 180,
+                height: 38,
                 child: TextField(
                   decoration: InputDecoration(
                     hintText: tr.filterNodes,
@@ -132,25 +169,25 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
                 ),
               ),
 
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
 
               // Speed Test Button
               ElevatedButton.icon(
                 onPressed: () {
                   ref.read(proxiesProvider.notifier).testAllInSelectedGroup();
                 },
-                icon: const Icon(Icons.speed_rounded, size: 16),
+                icon: const Icon(Icons.speed_rounded, size: 15),
                 label: Text(tr.pingAll, style: const TextStyle(fontSize: 12)),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 ),
               ),
 
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
 
               // Refresh
               IconButton(
-                icon: const Icon(Icons.refresh_rounded, size: 20),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
                 tooltip: tr.refresh,
                 onPressed: () {
                   ref.read(proxiesProvider.notifier).fetchProxies();
@@ -161,8 +198,8 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
 
           const SizedBox(height: 12),
 
-          // Status indicator bar showing currently active routing outbound
-          if (proxyGroup != null)
+          // Status indicator bar showing currently active group & routing outbound
+          if (activeGroup != null)
             Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -173,27 +210,29 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.hub_rounded, size: 14, color: Color(0xFF818CF8)),
+                  Icon(
+                    activeGroup.type == OutboundType.urltest ? Icons.bolt_rounded : Icons.alt_route_rounded,
+                    size: 14,
+                    color: activeGroup.type == OutboundType.urltest ? const Color(0xFFF59E0B) : const Color(0xFF818CF8),
+                  ),
                   const SizedBox(width: 8),
                   Text(
-                    tr.isZh ? '主路由出口 (Proxy): ' : 'Active Routing Outbound (Proxy): ',
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                    '${activeGroup.name} (${activeGroup.type == OutboundType.urltest ? "URLTest" : "Selector"}): ',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)),
                   ),
                   Text(
-                    proxyGroup.current,
+                    activeGroup.current,
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF38BDF8),
                     ),
                   ),
-                  if (proxyGroup.current.toLowerCase() == 'auto' && autoGroup != null) ...[
-                    const SizedBox(width: 6),
-                    Text(
-                      tr.isZh
-                          ? '⚡ (自动优选中: ${autoGroup.current})'
-                          : '⚡ (auto active: ${autoGroup.current})',
-                      style: const TextStyle(
+                  if (activeGroup.type == OutboundType.urltest) ...[
+                    const SizedBox(width: 8),
+                    const Text(
+                      '⚡ (自动优选中)',
+                      style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF10B981),

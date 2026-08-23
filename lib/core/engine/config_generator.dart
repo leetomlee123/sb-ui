@@ -29,16 +29,22 @@ class ConfigGenerator {
 
     final List<Map<String, dynamic>> finalOutbounds = [];
 
-    // Check if user already defined a "Proxy" or "Auto" group
+    // Check if user already defined a primary Selector group or Auto group
     Map<String, dynamic>? existingProxyGroup;
     Map<String, dynamic>? existingAutoGroup;
 
+    const proxyGroupKeywords = ['proxy', 'proxies', '节点选择', '节点', 'select', 'default', 'main', '国外流量', '漏网之鱼'];
+    const autoGroupKeywords = ['auto', 'urltest', 'url-test', 'auto-select', '自动选择', '自动优选', '自动', 'fallback', 'fastest'];
+
     for (final g in rawGroups) {
-      final tagLower = (g['tag'] ?? '').toString().toLowerCase();
-      if (tagLower == 'proxy' && existingProxyGroup == null) {
+      final tag = (g['tag'] ?? '').toString();
+      final tagLower = tag.toLowerCase();
+      final type = (g['type'] ?? '').toString().toLowerCase();
+
+      if (existingProxyGroup == null && (proxyGroupKeywords.any((k) => tagLower.contains(k) || tag.contains(k)) || type == 'selector')) {
         existingProxyGroup = g;
       }
-      if ((tagLower == 'auto' || tagLower == 'url-test' || tagLower == 'auto-select') && existingAutoGroup == null) {
+      if (existingAutoGroup == null && (autoGroupKeywords.any((k) => tagLower.contains(k) || tag.contains(k)) || type == 'urltest')) {
         existingAutoGroup = g;
       }
     }
@@ -63,7 +69,7 @@ class ConfigGenerator {
       existingAutoGroup['tolerance'] = 50;
     }
 
-    // 3. Add or enhance "Proxy" selector
+    // 3. Add or enhance primary selector group (e.g. "节点选择" or "Proxy")
     String primaryProxyTag = existingProxyGroup != null ? (existingProxyGroup['tag'] ?? 'Proxy').toString() : 'Proxy';
     if (existingProxyGroup == null) {
       final List<String> proxyDestinations = [
@@ -84,7 +90,7 @@ class ConfigGenerator {
         existingOutbounds.insert(0, autoGroupTag);
       }
       existingProxyGroup['outbounds'] = existingOutbounds;
-      if (nodeTags.isNotEmpty) {
+      if (nodeTags.isNotEmpty && existingProxyGroup['default'] == null) {
         existingProxyGroup['default'] = autoGroupTag;
       }
     }
