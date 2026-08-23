@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/traffic_data.dart';
 import 'core_provider.dart';
@@ -8,7 +9,7 @@ class TrafficState {
   final int currentDown; // B/s
   final int totalUp; // B
   final int totalDown; // B
-  final List<TrafficPoint> history; // last 30 points
+  final List<TrafficPoint> history; // last 90 points
 
   TrafficState({
     this.currentUp = 0,
@@ -38,6 +39,7 @@ class TrafficState {
 class TrafficNotifier extends StateNotifier<TrafficState> {
   final Ref _ref;
   StreamSubscription<TrafficPoint>? _sub;
+  final ListQueue<TrafficPoint> _historyQueue = ListQueue<TrafficPoint>(90);
 
   TrafficNotifier(this._ref) : super(TrafficState()) {
     _ref.listen<CoreState>(coreProvider, (previous, next) {
@@ -55,17 +57,17 @@ class TrafficNotifier extends StateNotifier<TrafficState> {
     if (client == null) return;
 
     _sub = client.trafficStream().listen((point) {
-      final updatedHistory = [...state.history, point];
-      if (updatedHistory.length > 90) {
-        updatedHistory.removeAt(0);
+      if (_historyQueue.length >= 90) {
+        _historyQueue.removeFirst();
       }
+      _historyQueue.addLast(point);
 
       state = state.copyWith(
         currentUp: point.up,
         currentDown: point.down,
         totalUp: state.totalUp + point.up,
         totalDown: state.totalDown + point.down,
-        history: updatedHistory,
+        history: _historyQueue.toList(growable: false),
       );
     });
   }

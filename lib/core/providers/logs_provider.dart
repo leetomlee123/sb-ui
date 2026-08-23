@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/log_entry.dart';
 import 'core_provider.dart';
@@ -46,7 +47,8 @@ class LogsNotifier extends StateNotifier<LogsState> {
   StreamSubscription<LogEntry>? _wsLogSub;
   StreamSubscription<LogEntry>? _processOutputSub;
 
-  final List<LogEntry> _logBuffer = [];
+  final ListQueue<LogEntry> _logsQueue = ListQueue<LogEntry>(500);
+  final List<LogEntry> _incomingBuffer = [];
   Timer? _flushTimer;
 
   LogsNotifier(this._ref) : super(LogsState()) {
@@ -83,7 +85,7 @@ class LogsNotifier extends StateNotifier<LogsState> {
 
   void _addLog(LogEntry entry) {
     if (state.isPaused) return;
-    _logBuffer.add(entry);
+    _incomingBuffer.add(entry);
 
     if (_flushTimer == null || !_flushTimer!.isActive) {
       _flushTimer = Timer(const Duration(milliseconds: 250), _flushLogs);
@@ -91,15 +93,16 @@ class LogsNotifier extends StateNotifier<LogsState> {
   }
 
   void _flushLogs() {
-    if (_logBuffer.isEmpty) return;
-    final List<LogEntry> toAdd = List.from(_logBuffer);
-    _logBuffer.clear();
-
-    final updated = [...state.logs, ...toAdd];
-    if (updated.length > 500) {
-      updated.removeRange(0, updated.length - 500);
+    if (_incomingBuffer.isEmpty) return;
+    for (final e in _incomingBuffer) {
+      if (_logsQueue.length >= 500) {
+        _logsQueue.removeFirst();
+      }
+      _logsQueue.addLast(e);
     }
-    state = state.copyWith(logs: updated);
+    _incomingBuffer.clear();
+
+    state = state.copyWith(logs: _logsQueue.toList(growable: false));
   }
 
   void setFilterLevel(LogLevel level) {
@@ -115,7 +118,8 @@ class LogsNotifier extends StateNotifier<LogsState> {
   }
 
   void clearLogs() {
-    _logBuffer.clear();
+    _incomingBuffer.clear();
+    _logsQueue.clear();
     state = state.copyWith(logs: []);
   }
 
