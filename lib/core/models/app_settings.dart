@@ -1,0 +1,137 @@
+enum RoutingMode {
+  rule,
+  global,
+  direct;
+
+  String get displayName {
+    switch (this) {
+      case RoutingMode.rule:
+        return 'Rule';
+      case RoutingMode.global:
+        return 'Global';
+      case RoutingMode.direct:
+        return 'Direct';
+    }
+  }
+}
+
+class AppSettings {
+  final int mixedPort;
+  final int clashApiPort;
+  final String clashApiSecret;
+  final bool systemProxyEnabled;
+  final bool tunModeEnabled;
+  final String tunStack; // 'mixed', 'system', 'gvisor'
+  final String logLevel; // 'trace', 'debug', 'info', 'warn', 'error'
+  final RoutingMode routingMode;
+  final bool autoStart;
+  final bool startMinimized;
+  final bool closeToTray;
+  final String themeMode; // 'dark', 'light', 'system'
+  final String customSingboxPath;
+  final String remoteDns;
+  final String directDns;
+  final bool allowLan;
+
+  const AppSettings({
+    this.mixedPort = 2080,
+    this.clashApiPort = 9090,
+    this.clashApiSecret = '',
+    this.systemProxyEnabled = false,
+    this.tunModeEnabled = false,
+    this.tunStack = 'mixed',
+    this.logLevel = 'info',
+    this.routingMode = RoutingMode.rule,
+    this.autoStart = false,
+    this.startMinimized = false,
+    this.closeToTray = true,
+    this.themeMode = 'dark',
+    this.customSingboxPath = '',
+    this.remoteDns = 'https://1.1.1.1/dns-query',
+    this.directDns = '223.5.5.5',
+    this.allowLan = false,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'mixedPort': mixedPort,
+      'clashApiPort': clashApiPort,
+      'clashApiSecret': clashApiSecret,
+      'systemProxyEnabled': systemProxyEnabled,
+      'tunModeEnabled': tunModeEnabled,
+      'tunStack': tunStack,
+      'logLevel': logLevel,
+      'routingMode': routingMode.name,
+      'autoStart': autoStart,
+      'startMinimized': startMinimized,
+      'closeToTray': closeToTray,
+      'themeMode': themeMode,
+      'customSingboxPath': customSingboxPath,
+      'remoteDns': remoteDns,
+      'directDns': directDns,
+      'allowLan': allowLan,
+    };
+  }
+
+  factory AppSettings.fromJson(Map<String, dynamic> json) {
+    return AppSettings(
+      mixedPort: json['mixedPort'] as int? ?? 2080,
+      clashApiPort: json['clashApiPort'] as int? ?? 9090,
+      clashApiSecret: json['clashApiSecret'] as String? ?? '',
+      systemProxyEnabled: json['systemProxyEnabled'] as bool? ?? false,
+      tunModeEnabled: json['tunModeEnabled'] as bool? ?? false,
+      tunStack: json['tunStack'] as String? ?? 'mixed',
+      logLevel: json['logLevel'] as String? ?? 'info',
+      routingMode: RoutingMode.values.firstWhere(
+        (e) => e.name == json['routingMode'],
+        orElse: () => RoutingMode.rule,
+      ),
+      autoStart: json['autoStart'] as bool? ?? false,
+      startMinimized: json['startMinimized'] as bool? ?? false,
+      closeToTray: json['closeToTray'] as bool? ?? true,
+      themeMode: json['themeMode'] as String? ?? 'dark',
+      customSingboxPath: json['customSingboxPath'] as String? ?? '',
+      remoteDns: json['remoteDns'] as String? ?? 'https://1.1.1.1/dns-query',
+      directDns: json['directDns'] as String? ?? '223.5.5.5',
+      allowLan: json['allowLan'] as bool? ?? false,
+    );
+  }
+
+  AppSettings copyWith({
+    int? mixedPort,
+    int? clashApiPort,
+    String? clashApiSecret,
+    bool? systemProxyEnabled,
+    bool? tunModeEnabled,
+    String? tunStack,
+    String? logLevel,
+    RoutingMode? routingMode,
+    bool? autoStart,
+    bool? startMinimized,
+    bool? closeToTray,
+    String? themeMode,
+    String? customSingboxPath,
+    String? remoteDns,
+    String? directDns,
+    bool? allowLan,
+  }) {
+    return AppSettings(
+      mixedPort: mixedPort ?? this.mixedPort,
+      clashApiPort: clashApiPort ?? this.clashApiPort,
+      clashApiSecret: clashApiSecret ?? this.clashApiSecret,
+      systemProxyEnabled: systemProxyEnabled ?? this.systemProxyEnabled,
+      tunModeEnabled: tunModeEnabled ?? this.tunModeEnabled,
+      tunStack: tunStack ?? this.tunStack,
+      logLevel: logLevel ?? this.logLevel,
+      routingMode: routingMode ?? this.routingMode,
+      autoStart: autoStart ?? this.autoStart,
+      startMinimized: startMinimized ?? this.startMinimized,
+      closeToTray: closeToTray ?? this.closeToTray,
+      themeMode: themeMode ?? this.themeMode,
+      customSingboxPath: customSingboxPath ?? this.customSingboxPath,
+      remoteDns: remoteDns ?? this.remoteDns,
+      directDns: directDns ?? this.directDns,
+      allowLan: allowLan ?? this.allowLan,
+    );
+  }
+}
