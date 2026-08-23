@@ -137,7 +137,8 @@ class AppTitleBar extends ConsumerWidget {
                     if (settings.closeToTray) {
                       await windowManager.hide();
                     } else {
-                      await windowManager.close();
+                      await ref.read(coreProvider.notifier).stopCore();
+                      exit(0);
                     }
                   },
                 ),

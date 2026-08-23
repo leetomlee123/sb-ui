@@ -32,6 +32,7 @@ void main() async {
       );
 
       await windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.setPreventClose(true);
         await windowManager.show();
         await windowManager.focus();
       });
@@ -55,29 +56,39 @@ class SingboxApp extends ConsumerStatefulWidget {
   ConsumerState<SingboxApp> createState() => _SingboxAppState();
 }
 
-class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener {
+class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, WindowListener {
   @override
   void initState() {
     super.initState();
     trayManager.addListener(this);
+    windowManager.addListener(this);
     _initTray();
   }
 
   @override
   void dispose() {
     trayManager.removeListener(this);
+    windowManager.removeListener(this);
     super.dispose();
   }
 
   Future<void> _initTray() async {
     try {
       if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-        // Set context menu for tray
+        final iconPath = Platform.isWindows
+            ? 'assets/icons/app_icon.ico'
+            : 'assets/icons/app_icon.png';
+
+        try {
+          await trayManager.setIcon(iconPath);
+          await trayManager.setToolTip('sing-box Desktop');
+        } catch (_) {}
+
         final menu = Menu(
           items: [
             MenuItem(
               key: 'show_window',
-              label: 'Show sing-box',
+              label: 'Open Dashboard',
             ),
             MenuItem.separator(),
             MenuItem(
@@ -103,19 +114,38 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener {
   }
 
   @override
-  void onTrayMenuItemClick(MenuItem menuItem) {
+  void onTrayMenuItemClick(MenuItem menuItem) async {
     switch (menuItem.key) {
       case 'show_window':
-        windowManager.show();
-        windowManager.focus();
+        await windowManager.show();
+        await windowManager.focus();
         break;
       case 'toggle_core':
         ref.read(coreProvider.notifier).toggleCore();
         break;
       case 'exit_app':
-        ref.read(coreProvider.notifier).stopCore();
-        exit(0);
+        await _exitApplication();
+        break;
     }
+  }
+
+  @override
+  void onWindowClose() async {
+    final settings = ref.read(settingsProvider);
+    if (settings.closeToTray) {
+      await windowManager.hide();
+    } else {
+      await _exitApplication();
+    }
+  }
+
+  Future<void> _exitApplication() async {
+    try {
+      await ref.read(coreProvider.notifier).stopCore();
+      await trayManager.destroy();
+      await windowManager.destroy();
+    } catch (_) {}
+    exit(0);
   }
 
   @override
