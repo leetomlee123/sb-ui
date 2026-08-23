@@ -33,10 +33,26 @@ class _LogsPageState extends ConsumerState<LogsPage> {
     }
   }
 
+  Color _getLevelColor(LogLevel level) {
+    switch (level) {
+      case LogLevel.trace:
+        return const Color(0xFF94A3B8);
+      case LogLevel.debug:
+        return const Color(0xFF38BDF8);
+      case LogLevel.info:
+        return const Color(0xFF10B981);
+      case LogLevel.warn:
+        return const Color(0xFFF59E0B);
+      case LogLevel.error:
+        return const Color(0xFFF43F5E);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final logsState = ref.watch(logsProvider);
     final tr = ref.watch(translationsProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final logs = logsState.filteredLogs;
 
     // Trigger auto scroll after build
@@ -74,31 +90,8 @@ class _LogsPageState extends ConsumerState<LogsPage> {
               ),
               const Spacer(),
 
-              // Level dropdown
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0E1424),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5)),
-                ),
-                child: DropdownButton<LogLevel>(
-                  value: logsState.filterLevel,
-                  underline: const SizedBox(),
-                  dropdownColor: const Color(0xFF0E1424),
-                  items: LogLevel.values.map((level) {
-                    return DropdownMenuItem(
-                      value: level,
-                      child: Text('${tr.levelPrefix}${level.nameStr}', style: const TextStyle(fontSize: 12)),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      ref.read(logsProvider.notifier).setFilterLevel(val);
-                    }
-                  },
-                ),
-              ),
+              // Level dropdown selector
+              _buildLevelSelector(context, logsState.filterLevel, tr, isDark),
 
               const SizedBox(width: 12),
 
@@ -197,26 +190,113 @@ class _LogsPageState extends ConsumerState<LogsPage> {
     );
   }
 
-  Widget _buildLogLine(LogEntry entry, int lineNumber) {
-    Color levelColor;
-    switch (entry.level) {
-      case LogLevel.trace:
-        levelColor = const Color(0xFF94A3B8);
-        break;
-      case LogLevel.debug:
-        levelColor = const Color(0xFF38BDF8);
-        break;
-      case LogLevel.info:
-        levelColor = const Color(0xFF10B981);
-        break;
-      case LogLevel.warn:
-        levelColor = const Color(0xFFF59E0B);
-        break;
-      case LogLevel.error:
-        levelColor = const Color(0xFFF43F5E);
-        break;
-    }
+  Widget _buildLevelSelector(
+    BuildContext context,
+    LogLevel currentLevel,
+    Translations tr,
+    bool isDark,
+  ) {
+    final currentColor = _getLevelColor(currentLevel);
 
+    return PopupMenuButton<LogLevel>(
+      initialValue: currentLevel,
+      tooltip: tr.levelPrefix.replaceAll(':', '').trim(),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
+        ),
+      ),
+      color: isDark ? const Color(0xFF0E1424) : Colors.white,
+      elevation: 8,
+      onSelected: (level) {
+        ref.read(logsProvider.notifier).setFilterLevel(level);
+      },
+      itemBuilder: (context) => LogLevel.values.map((level) {
+        final color = _getLevelColor(level);
+        final isSelected = level == currentLevel;
+
+        return PopupMenuItem<LogLevel>(
+          value: level,
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: color.withValues(alpha: 0.6),
+                            blurRadius: 4,
+                            spreadRadius: 1,
+                          )
+                        ]
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                level.nameStr,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  color: isSelected ? color : Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const Spacer(),
+              if (isSelected)
+                Icon(Icons.check_rounded, size: 14, color: color),
+            ],
+          ),
+        );
+      }).toList(),
+      child: Container(
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0E1424) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: currentColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '${tr.levelPrefix}${currentLevel.nameStr}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 16,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogLine(LogEntry entry, int lineNumber) {
+    final levelColor = _getLevelColor(entry.level);
     final timeStr = DateFormat('HH:mm:ss').format(entry.timestamp.toLocal());
 
     return Padding(
