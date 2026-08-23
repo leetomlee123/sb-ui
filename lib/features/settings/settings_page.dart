@@ -1,10 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../core/i18n/translations.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/providers/core_updater_provider.dart';
+import '../../core/providers/geo_updater_provider.dart';
 import '../../core/providers/settings_provider.dart';
+import '../../core/utils/byte_formatter.dart';
 import '../../shared/widgets/double_bezel_card.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -98,6 +101,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final settings = ref.watch(settingsProvider);
     final coreState = ref.watch(coreProvider);
     final updaterState = ref.watch(coreUpdaterProvider);
+    final geoState = ref.watch(geoUpdaterProvider);
     final tr = ref.watch(translationsProvider);
 
     return SingleChildScrollView(
@@ -335,6 +339,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               ],
             ),
           ),
+
+          const SizedBox(height: 24),
+
+          // Geo Assets & Routing Datasets (v2rayNG style)
+          _buildGeoAssetsSection(context, geoState, tr),
 
           const SizedBox(height: 24),
 
@@ -578,6 +587,227 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           letterSpacing: 1.0,
         ),
       ),
+    );
+  }
+
+  Widget _buildGeoAssetsSection(
+    BuildContext context,
+    GeoUpdaterState geoState,
+    Translations tr,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(tr.secGeoAssets),
+        DoubleBezelCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      tr.geoAssetsDesc,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: geoState.isUpdating
+                        ? null
+                        : () {
+                            ref.read(geoUpdaterProvider.notifier).updateAllAssets();
+                          },
+                    icon: geoState.isUpdating && geoState.activeAssetName == null
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.download_rounded, size: 16),
+                    label: Text(tr.updateAllGeo, style: const TextStyle(fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6366F1),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    ),
+                  ),
+                ],
+              ),
+              if (geoState.isUpdating) ...[
+                const SizedBox(height: 14),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: geoState.progress > 0 ? geoState.progress : null,
+                    backgroundColor: const Color(0xFF334155),
+                    color: const Color(0xFF38BDF8),
+                    minHeight: 4,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  geoState.statusMessage,
+                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Color(0xFF38BDF8)),
+                ),
+              ],
+              if (geoState.successMessage != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF10B981)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          geoState.successMessage!,
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF10B981), fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              if (geoState.errorMessage != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF43F5E).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFF43F5E).withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded, size: 16, color: Color(0xFFF43F5E)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          geoState.errorMessage!,
+                          style: const TextStyle(fontSize: 12, color: Color(0xFFF43F5E)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              ...geoState.assets.map((asset) {
+                final isCurrentUpdating = geoState.isUpdating && geoState.activeAssetName == asset.name;
+                final dateStr = asset.lastModified != null
+                    ? DateFormat('yyyy-MM-dd HH:mm').format(asset.lastModified!)
+                    : 'Bundled (内置)';
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF151E33),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF334155).withValues(alpha: 0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF818CF8).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.storage_rounded, size: 18, color: Color(0xFF818CF8)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  asset.displayName,
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: asset.isInstalled
+                                        ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                                        : const Color(0xFF64748B).withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: asset.isInstalled
+                                          ? const Color(0xFF10B981).withValues(alpha: 0.3)
+                                          : const Color(0xFF64748B).withValues(alpha: 0.3),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    asset.isInstalled ? tr.geoInstalled : 'Missing',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: asset.isInstalled ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              asset.description,
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text(
+                                  '${tr.fileSize}${ByteFormatter.formatBytes(asset.sizeInBytes)}',
+                                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Color(0xFF64748B)),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  '${tr.lastUpdated}$dateStr',
+                                  style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed: geoState.isUpdating
+                            ? null
+                            : () {
+                                ref.read(geoUpdaterProvider.notifier).updateSingleAsset(asset);
+                              },
+                        icon: isCurrentUpdating
+                            ? const SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.refresh_rounded, size: 14),
+                        label: Text(tr.updateSingle, style: const TextStyle(fontSize: 11)),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

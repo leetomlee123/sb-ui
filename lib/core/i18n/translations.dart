@@ -163,6 +163,16 @@ class Translations {
   String get coreNewBadge => isZh ? '有新版本' : 'New Version';
   String get releaseNotesLabel => isZh ? '版本更新说明' : 'Release Notes';
 
+  String get secGeoAssets => isZh ? 'GEO 规则与分流数据库 (仿 v2rayNG)' : 'GEO ASSETS & ROUTING DATABASES';
+  String get geoAssetsDesc => isZh ? '维护本地离线 GeoIP 与 GeoSite 二进制分流规则库，支持高速 CDN 一键更新' : 'Manage and update offline GeoIP & GeoSite binary routing datasets';
+  String get updateAllGeo => isZh ? '更新全部 Geo 规则' : 'Update All Geo Assets';
+  String get updatingGeo => isZh ? '正在更新 Geo 规则库...' : 'Updating Geo Assets...';
+  String get geoUpdatedSuccess => isZh ? 'Geo 规则库已成功更新为最新版本' : 'Geo assets updated successfully';
+  String get lastUpdated => isZh ? '最后更新: ' : 'Last updated: ';
+  String get fileSize => isZh ? '大小: ' : 'Size: ';
+  String get updateSingle => isZh ? '更新' : 'Update';
+  String get geoInstalled => isZh ? '已就绪' : 'Ready';
+
   String get autoStartTitle => isZh ? '开机自启动' : 'Launch at System Startup';
   String get autoStartSubtitle => isZh ? '系统登录后自动在后台启动应用并准备代理' : 'Automatically launch application on system startup';
   String get startMinimizedTitle => isZh ? '静默启动至托盘' : 'Start Minimized to Tray';
