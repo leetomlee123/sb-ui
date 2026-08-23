@@ -61,6 +61,8 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
         : null;
 
     final filteredNodes = proxiesState.filteredNodes;
+    final autoGroup = groups['auto'] ?? groups['Auto'];
+    final proxyGroup = groups['Proxy'];
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -77,9 +79,15 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
                   child: Row(
                     children: groups.keys.map((groupName) {
                       final isSelected = groupName == selectedGroupName;
+                      final grp = groups[groupName];
+                      final isAutoType = grp?.type == OutboundType.urltest;
+
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: ChoiceChip(
+                          avatar: isAutoType
+                              ? const Icon(Icons.bolt_rounded, size: 14, color: Color(0xFFF59E0B))
+                              : null,
                           label: Text(
                             groupName,
                             style: TextStyle(
@@ -104,7 +112,7 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
 
               // Search Filter Field
               SizedBox(
-                width: 220,
+                width: 200,
                 height: 40,
                 child: TextField(
                   decoration: InputDecoration(
@@ -151,7 +159,50 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
             ],
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+
+          // Status indicator bar showing currently active routing outbound
+          if (proxyGroup != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B).withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF334155), width: 0.8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.hub_rounded, size: 14, color: Color(0xFF818CF8)),
+                  const SizedBox(width: 8),
+                  Text(
+                    tr.isZh ? '主路由出口 (Proxy): ' : 'Active Routing Outbound (Proxy): ',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                  ),
+                  Text(
+                    proxyGroup.current,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF38BDF8),
+                    ),
+                  ),
+                  if (proxyGroup.current.toLowerCase() == 'auto' && autoGroup != null) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      tr.isZh
+                          ? '⚡ (自动优选中: ${autoGroup.current})'
+                          : '⚡ (auto active: ${autoGroup.current})',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF10B981),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
 
           // Nodes Grid (Asymmetrical Double-Bezel Cards)
           Expanded(
@@ -172,16 +223,21 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
                     itemCount: filteredNodes.length,
                     itemBuilder: (context, index) {
                       final node = filteredNodes[index];
-                      final isSelectedInGroup = activeGroup?.current == node.name;
+                      final isAutoNode = node.type == OutboundType.urltest || node.name.toLowerCase() == 'auto';
+                      
+                      // Active check: in Proxy group or urltest group
+                      final isSelectedInGroup = activeGroup?.current == node.name ||
+                          (proxyGroup != null && proxyGroup.current == node.name);
 
                       return DoubleBezelCard(
                         padding: const EdgeInsets.all(12),
                         borderRadius: 14,
                         isSelected: isSelectedInGroup,
                         onTap: () {
-                          if (selectedGroupName != null) {
-                            ref.read(proxiesProvider.notifier).selectNode(selectedGroupName, node.name);
-                          }
+                          ref.read(proxiesProvider.notifier).selectNode(
+                            selectedGroupName ?? 'Proxy',
+                            node.name,
+                          );
                         },
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,27 +246,44 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
                             // Top: Node Name + Radio Circle
                             Row(
                               children: [
+                                if (isAutoNode)
+                                  const Padding(
+                                    padding: EdgeInsets.only(right: 6),
+                                    child: Icon(Icons.bolt_rounded, size: 16, color: Color(0xFFF59E0B)),
+                                  ),
                                 Expanded(
-                                  child: Text(
-                                    node.name,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: isSelectedInGroup ? FontWeight.bold : FontWeight.w600,
-                                      color: isSelectedInGroup ? const Color(0xFF818CF8) : null,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        isAutoNode ? (tr.isZh ? 'Auto 自动优选' : 'Auto Failover') : node.name,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: isSelectedInGroup ? FontWeight.bold : FontWeight.w600,
+                                          color: isSelectedInGroup ? const Color(0xFF818CF8) : null,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if (isAutoNode && autoGroup != null && autoGroup.current.isNotEmpty)
+                                        Text(
+                                          '-> ${autoGroup.current}',
+                                          style: const TextStyle(fontSize: 10, color: Color(0xFF10B981)),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
                                   ),
                                 ),
                                 if (isSelectedInGroup)
                                   Container(
-                                    width: 16,
-                                    height: 16,
+                                    width: 18,
+                                    height: 18,
                                     decoration: const BoxDecoration(
                                       color: Color(0xFF6366F1),
                                       shape: BoxShape.circle,
                                     ),
-                                    child: const Icon(Icons.check, size: 11, color: Colors.white),
+                                    child: const Icon(Icons.check, size: 12, color: Colors.white),
                                   ),
                               ],
                             ),
@@ -300,7 +373,7 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
     required Translations tr,
     required VoidCallback onTest,
   }) {
-    if (['direct', 'block', 'dns', 'Auto'].contains(node.name)) {
+    if (['direct', 'block', 'dns'].contains(node.name)) {
       return const SizedBox();
     }
 

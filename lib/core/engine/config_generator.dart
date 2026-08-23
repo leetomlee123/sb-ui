@@ -256,9 +256,6 @@ class ConfigGenerator {
         'auto_detect_interface': true,
       },
       'experimental': {
-        'cache_file': {
-          'enabled': true,
-        },
         'clash_api': {
           'external_controller': '127.0.0.1:${settings.clashApiPort}',
           if (settings.clashApiSecret.isNotEmpty) 'secret': settings.clashApiSecret,

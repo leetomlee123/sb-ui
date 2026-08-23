@@ -168,6 +168,14 @@ class SingboxProcessManager {
 
     try {
       final configParentDir = File(configPath).parent.path;
+      // Clean up any stale cache.db files to prevent DB lock contention
+      try {
+        final cacheDb = File(p.join(configParentDir, 'cache.db'));
+        if (await cacheDb.exists()) await cacheDb.delete();
+        final cacheWal = File(p.join(configParentDir, 'cache.db-wal'));
+        if (await cacheWal.exists()) await cacheWal.delete();
+      } catch (_) {}
+
       final alreadyAdmin = await isElevated();
 
       // If TUN mode requested and not yet elevated on Windows, request UAC elevation

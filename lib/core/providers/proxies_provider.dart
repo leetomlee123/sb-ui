@@ -75,7 +75,6 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
       }
     });
 
-    // Populate fallback nodes from active profile immediately
     _populateFromActiveProfile();
   }
 
@@ -115,6 +114,8 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
           if (initialGroup == null || !groups.containsKey(initialGroup)) {
             if (groups.containsKey('Proxy')) {
               initialGroup = 'Proxy';
+            } else if (groups.containsKey('auto')) {
+              initialGroup = 'auto';
             } else if (groups.isNotEmpty) {
               initialGroup = groups.keys.first;
             }
@@ -132,7 +133,7 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
 
   void _startAutoRefresh() {
     _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => fetchProxies(silent: true));
+    _refreshTimer = Timer.periodic(const Duration(seconds: 8), (_) => fetchProxies(silent: true));
   }
 
   void _stopAutoRefresh() {
@@ -206,14 +207,29 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
     final client = _ref.read(clashApiClientProvider);
     if (client == null) return false;
 
-    final success = await client.selectProxy(groupName, nodeName);
-    if (success) {
-      if (state.groups.containsKey(groupName)) {
-        final currentGroup = state.groups[groupName]!;
-        final updatedGroups = Map<String, ProxyGroup>.from(state.groups);
-        updatedGroups[groupName] = currentGroup.copyWith(current: nodeName);
-        state = state.copyWith(groups: updatedGroups);
+    // Direct selection target to parent selector (e.g. 'Proxy') if requested on urltest
+    String targetGroup = groupName;
+    if (state.groups.containsKey(groupName) && state.groups[groupName]!.type == OutboundType.urltest) {
+      if (state.groups.containsKey('Proxy')) {
+        targetGroup = 'Proxy';
+      } else {
+        final selector = state.groups.values.firstWhere(
+          (g) => g.type == OutboundType.selector,
+          orElse: () => state.groups.values.first,
+        );
+        targetGroup = selector.name;
       }
+    }
+
+    final success = await client.selectProxy(targetGroup, nodeName);
+    if (success) {
+      final updatedGroups = Map<String, ProxyGroup>.from(state.groups);
+      if (updatedGroups.containsKey(targetGroup)) {
+        updatedGroups[targetGroup] = updatedGroups[targetGroup]!.copyWith(current: nodeName);
+      }
+      state = state.copyWith(groups: updatedGroups);
+      // Immediately resync
+      fetchProxies(silent: true);
     }
     return success;
   }
