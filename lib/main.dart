@@ -30,6 +30,7 @@ void main() async {
     // 3. Initialize persistent storage & ensure offline rule sets are extracted
     final storageService = await StorageService.init();
     await StorageService.ensureBundledRulesExtracted();
+    final initialSettings = storageService.loadSettings();
 
     // 4. Desktop window & tray setup
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -48,8 +49,10 @@ void main() async {
 
         await windowManager.waitUntilReadyToShow(windowOptions, () async {
           await windowManager.setPreventClose(true);
-          await windowManager.show();
-          await windowManager.focus();
+          if (!initialSettings.startMinimized) {
+            await windowManager.show();
+            await windowManager.focus();
+          }
         });
       } catch (_) {}
     }

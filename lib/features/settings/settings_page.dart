@@ -376,12 +376,33 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ),
                 ),
                 Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
+                // Auto start on boot
+                SwitchListTile(
+                  title: Text(tr.autoStartTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  subtitle: Text(tr.autoStartSubtitle, style: const TextStyle(fontSize: 12)),
+                  value: settings.autoStart,
+                  onChanged: (val) {
+                    ref.read(settingsProvider.notifier).toggleAutoStart(val);
+                  },
+                ),
+                Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
+                // Start minimized to tray
+                SwitchListTile(
+                  title: Text(tr.startMinimizedTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  subtitle: Text(tr.startMinimizedSubtitle, style: const TextStyle(fontSize: 12)),
+                  value: settings.startMinimized,
+                  onChanged: (val) {
+                    ref.read(settingsProvider.notifier).toggleStartMinimized(val);
+                  },
+                ),
+                Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
+                // Close to tray
                 SwitchListTile(
                   title: Text(tr.closeToTrayTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                   subtitle: Text(tr.closeToTraySubtitle, style: const TextStyle(fontSize: 12)),
                   value: settings.closeToTray,
                   onChanged: (val) {
-                    ref.read(settingsProvider.notifier).updateSettings(settings.copyWith(closeToTray: val));
+                    ref.read(settingsProvider.notifier).toggleCloseToTray(val);
                   },
                 ),
               ],

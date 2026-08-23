@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/app_settings.dart';
+import '../services/autostart_service.dart';
 import '../services/storage_service.dart';
 import 'storage_provider.dart';
 
@@ -55,6 +56,19 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   Future<void> toggleAllowLan(bool allow) async {
     await updateSettings(state.copyWith(allowLan: allow));
+  }
+
+  Future<void> toggleAutoStart(bool enabled) async {
+    await AutoStartService.setAutoStart(enabled);
+    await updateSettings(state.copyWith(autoStart: enabled));
+  }
+
+  Future<void> toggleStartMinimized(bool enabled) async {
+    await updateSettings(state.copyWith(startMinimized: enabled));
+  }
+
+  Future<void> toggleCloseToTray(bool enabled) async {
+    await updateSettings(state.copyWith(closeToTray: enabled));
   }
 }
 

@@ -163,6 +163,10 @@ class Translations {
   String get coreNewBadge => isZh ? '有新版本' : 'New Version';
   String get releaseNotesLabel => isZh ? '版本更新说明' : 'Release Notes';
 
+  String get autoStartTitle => isZh ? '开机自启动' : 'Launch at System Startup';
+  String get autoStartSubtitle => isZh ? '系统登录后自动在后台启动应用并准备代理' : 'Automatically launch application on system startup';
+  String get startMinimizedTitle => isZh ? '静默启动至托盘' : 'Start Minimized to Tray';
+  String get startMinimizedSubtitle => isZh ? '启动时不弹出主窗口，仅驻留系统托盘' : 'Start in background without opening main window';
   String get closeToTrayTitle => isZh ? '关闭窗口时最小化到系统托盘' : 'Minimize to System Tray on Close';
   String get closeToTraySubtitle => isZh ? '点击右上角 X 时将程序隐藏至后台托盘继续保持代理' : 'Keep core active in background when clicking window close button';
   String get themeTitle => isZh ? '界面主题模式' : 'Application Color Theme';
