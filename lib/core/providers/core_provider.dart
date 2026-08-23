@@ -132,10 +132,17 @@ class CoreNotifier extends StateNotifier<CoreState> {
           );
         }
       } else {
-        state = state.copyWith(
-          status: CoreStatus.error,
-          errorMessage: 'Failed to start sing-box core.',
-        );
+        if (_processManager.status == CoreStatus.stopped) {
+          state = state.copyWith(
+            status: CoreStatus.stopped,
+            errorMessage: 'TUN 开启已取消（未获得管理员授权）',
+          );
+        } else {
+          state = state.copyWith(
+            status: CoreStatus.error,
+            errorMessage: '启动 sing-box 失败，请查看日志排查。',
+          );
+        }
       }
       return success;
     } catch (e) {

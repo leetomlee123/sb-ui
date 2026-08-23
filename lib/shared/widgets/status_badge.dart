@@ -26,6 +26,11 @@ class StatusBadge extends ConsumerWidget {
         bgColor = const Color(0xFFF59E0B).withValues(alpha: 0.12);
         text = tr.starting;
         break;
+      case CoreStatus.waitingUac:
+        color = const Color(0xFF6366F1);
+        bgColor = const Color(0xFF6366F1).withValues(alpha: 0.15);
+        text = tr.isZh ? '等待 UAC 授权...' : 'Waiting for UAC...';
+        break;
       case CoreStatus.error:
         color = const Color(0xFFF43F5E);
         bgColor = const Color(0xFFF43F5E).withValues(alpha: 0.12);

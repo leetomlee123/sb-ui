@@ -4,10 +4,12 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../models/log_entry.dart';
 import '../services/storage_service.dart';
+import '../services/win_tun_service.dart';
 
 enum CoreStatus {
   stopped,
   starting,
+  waitingUac,
   running,
   error;
 
@@ -17,6 +19,8 @@ enum CoreStatus {
         return 'Stopped';
       case CoreStatus.starting:
         return 'Starting...';
+      case CoreStatus.waitingUac:
+        return 'Waiting for UAC...';
       case CoreStatus.running:
         return 'Running';
       case CoreStatus.error:
@@ -45,6 +49,7 @@ class SingboxProcessManager {
   Stream<CoreStatus> get statusStream => _statusController.stream;
   Stream<LogEntry> get outputStream => _outputController.stream;
   DateTime? get startedAt => _startedAt;
+  int? get elevatedPid => _elevatedPid;
 
   void _updateStatus(CoreStatus newStatus) {
     _status = newStatus;
@@ -97,19 +102,7 @@ class SingboxProcessManager {
 
   static Future<bool> isElevated() async {
     if (Platform.isWindows) {
-      try {
-        final res = await Process.run('net', ['session']);
-        return res.exitCode == 0;
-      } catch (_) {
-        return false;
-      }
-    } else if (Platform.isLinux || Platform.isMacOS) {
-      try {
-        final res = await Process.run('id', ['-u']);
-        return res.stdout.toString().trim() == '0';
-      } catch (_) {
-        return false;
-      }
+      return await WinTunService.isCurrentProcessElevated();
     }
     return false;
   }
@@ -123,19 +116,21 @@ class SingboxProcessManager {
         workingDirectory: configParentDir,
         environment: _coreEnvironment,
       );
-      if (result.exitCode != 0) {
+      if (result.exitCode == 0) {
+        _outputController.add(LogEntry(level: LogLevel.info, message: 'Config validation passed.'));
+        return true;
+      } else {
+        final errText = result.stderr.toString().trim();
+        final outText = result.stdout.toString().trim();
+        final combined = errText.isNotEmpty ? errText : outText;
         _outputController.add(LogEntry(
           level: LogLevel.error,
-          message: 'Config check failed:\n${result.stderr}\n${result.stdout}',
+          message: 'Config check failed (exit code ${result.exitCode}): $combined',
         ));
         return false;
       }
-      return true;
     } catch (e) {
-      _outputController.add(LogEntry(
-        level: LogLevel.error,
-        message: 'Error during config check: $e',
-      ));
+      _outputController.add(LogEntry(level: LogLevel.error, message: 'Failed to run config check: $e'));
       return false;
     }
   }
@@ -145,8 +140,8 @@ class SingboxProcessManager {
     String? customBinaryPath,
     bool requireElevated = false,
   }) async {
-    if (_status == CoreStatus.running || _status == CoreStatus.starting) {
-      return true;
+    if (_status == CoreStatus.running) {
+      await stop();
     }
 
     _intentionalStop = false;
@@ -186,38 +181,47 @@ class SingboxProcessManager {
 
       final alreadyAdmin = await isElevated();
 
-      // If TUN mode requested and not yet elevated on Windows, request UAC elevation
+      // If TUN mode requested and Flutter is non-elevated on Windows, trigger native UAC elevation
       if (requireElevated && !alreadyAdmin && Platform.isWindows) {
+        _updateStatus(CoreStatus.waitingUac);
         _outputController.add(LogEntry(
           level: LogLevel.info,
-          message: 'Requesting Administrator privileges for TUN mode...',
+          message: '正在请求 Windows UAC 管理员权限以启动 TUN 虚拟网卡...',
         ));
 
-        final escapedBinary = binary.replaceAll("'", "''");
-        final escapedConfig = configPath.replaceAll("'", "''");
-        final escapedDir = configParentDir.replaceAll("'", "''");
+        final res = await WinTunService.startElevated(
+          binaryPath: binary,
+          configPath: configPath,
+          workingDir: configParentDir,
+        );
 
-        final psScript = "Start-Process -FilePath '$escapedBinary' -ArgumentList 'run', '-c', '$escapedConfig' -WorkingDirectory '$escapedDir' -Verb RunAs -WindowStyle Hidden";
-        final result = await Process.run('powershell', ['-NoProfile', '-Command', psScript]);
-        if (result.exitCode == 0) {
+        if (res.isSuccess) {
+          _elevatedPid = res.pid;
           _startedAt = DateTime.now();
           _updateStatus(CoreStatus.running);
           _outputController.add(LogEntry(
             level: LogLevel.info,
-            message: 'sing-box TUN service started with Administrator privileges',
+            message: 'sing-box TUN 核心已通过管理员权限成功启动 (PID: ${res.pid})',
           ));
           return true;
+        } else if (res.isCancelled) {
+          _outputController.add(LogEntry(
+            level: LogLevel.warn,
+            message: 'TUN 开启失败：用户取消了管理员授权 (UAC)',
+          ));
+          _updateStatus(CoreStatus.stopped);
+          return false;
         } else {
           _outputController.add(LogEntry(
             level: LogLevel.error,
-            message: 'Administrator authorization was cancelled or failed: ${result.stderr}',
+            message: 'TUN 模式提权启动失败: ${res.message}',
           ));
           _updateStatus(CoreStatus.error);
           return false;
         }
       }
 
-      // Normal process start
+      // Normal process start (Standard Proxy or non-Windows / already Admin)
       _outputController.add(LogEntry(level: LogLevel.info, message: 'Launching sing-box process...'));
       _process = await Process.start(
         binary,
@@ -278,12 +282,14 @@ class SingboxProcessManager {
           } else {
             _outputController.add(LogEntry(
               level: LogLevel.error,
-              message: '[Watchdog] Max auto-restart attempts reached. Please inspect config and diagnostic logs.',
+              message: '[Watchdog] Consecutive crash limit reached (3). Stopping auto-restart.',
             ));
           }
         }
 
-        _updateStatus(CoreStatus.stopped);
+        if (_status == CoreStatus.running) {
+          _updateStatus(code == 0 ? CoreStatus.stopped : CoreStatus.error);
+        }
       });
 
       return true;
@@ -315,9 +321,9 @@ class SingboxProcessManager {
       _process = null;
     }
 
-    if (_elevatedPid != null || Platform.isWindows) {
+    if (Platform.isWindows) {
       try {
-        await Process.run('taskkill', ['/F', '/IM', 'sing-box.exe', '/T']);
+        await WinTunService.stopElevated();
       } catch (_) {}
       _elevatedPid = null;
     }
