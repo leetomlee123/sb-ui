@@ -219,10 +219,9 @@ class ProfileParser {
 
       final ruleType = parts[0].toUpperCase();
       if (ruleType == 'MATCH') {
-        final target = parts[1];
-        rules.add({
-          'outbound': target,
-        });
+        // MATCH in Clash is the final fallback outbound, handled natively by sing-box 'final'.
+        // Do not add as an unconditional rule at the top of route.rules.
+        continue;
       } else if (parts.length >= 3) {
         final payload = parts[1];
         final target = parts[2];
@@ -282,10 +281,21 @@ class ProfileParser {
     final List<Map<String, dynamic>> extraDnsRules = [];
 
     if (policy is YamlMap) {
-      int idx = 1;
+      final Map<String, List<String>> serverToDomains = {};
       for (final entry in policy.entries) {
-        final rawDomain = entry.key.toString().replaceAll('*.', '').replaceAll('*', '');
-        final serverAddr = entry.value.toString();
+        final rawDomain = entry.key.toString().replaceAll('*.', '').replaceAll('*', '').trim();
+        final serverAddr = entry.value.toString().trim();
+        if (serverAddr.isEmpty) continue;
+        final list = serverToDomains.putIfAbsent(serverAddr, () => []);
+        if (rawDomain.isNotEmpty && !list.contains(rawDomain)) {
+          list.add(rawDomain);
+        }
+      }
+
+      int idx = 1;
+      for (final entry in serverToDomains.entries) {
+        final serverAddr = entry.key;
+        final domains = entry.value;
         final serverTag = 'company-dns-$idx';
         idx++;
 
@@ -293,9 +303,9 @@ class ProfileParser {
           'tag': serverTag,
           'address': serverAddr,
         });
-        if (rawDomain.isNotEmpty) {
+        if (domains.isNotEmpty) {
           extraDnsRules.add({
-            'domain_suffix': [rawDomain],
+            'domain_suffix': domains,
             'server': serverTag,
           });
         }

@@ -219,7 +219,7 @@ rules:
 
     final parseResult = ProfileParser.parse(yamlContent);
     expect(parseResult.outbounds.length, 4); // hy2-fast, 内网直连, 热点直连, auto group
-    expect(parseResult.customRules.length, 5);
+    expect(parseResult.customRules.length, 4); // 4 conditional rules (MATCH is skipped as fallback)
     expect(parseResult.customDns, isNotNull);
 
     // Verify outbounds
@@ -246,6 +246,10 @@ rules:
 
     final domainRule = routeRules.firstWhere((r) => r['domain_suffix'] != null && (r['domain_suffix'] as List).contains('cpic.com.cn'));
     expect(domainRule['outbound'], '内网直连');
+
+    // Verify NO unconditional rule in routeRules
+    final unconditionalRules = routeRules.where((r) => r['outbound'] != null && (r as Map).keys.length == 1).toList();
+    expect(unconditionalRules.length, 1, reason: 'Only the single final catch-all at the bottom of route.rules is allowed');
 
     final dns = config['dns'] as Map<String, dynamic>;
     final dnsServers = dns['servers'] as List;

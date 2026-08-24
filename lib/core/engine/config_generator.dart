@@ -200,7 +200,8 @@ class ConfigGenerator {
     if (customRules.isNotEmpty) {
       for (final rule in customRules) {
         final target = rule['outbound']?.toString();
-        if (target != null && allExistingTags.contains(target)) {
+        final hasCondition = rule.keys.any((k) => k != 'outbound');
+        if (target != null && allExistingTags.contains(target) && hasCondition) {
           routeRules.add(Map<String, dynamic>.from(rule));
         }
       }
