@@ -44,7 +44,7 @@ proxy-groups:
     expect(result.count, 4); // 3 proxies + 1 group
 
     const settings = AppSettings(
-      mixedPort: 2080,
+      mixedPort: 7890,
       clashApiPort: 9090,
       systemProxyEnabled: true,
       tunModeEnabled: false,
@@ -91,7 +91,7 @@ proxy-groups:
     const defaultSettings = AppSettings();
     expect(defaultSettings.closeToTray, isTrue);
     expect(defaultSettings.hasAskedCloseToTray, isFalse);
-    expect(defaultSettings.mixedPort, 2080);
+    expect(defaultSettings.mixedPort, 7890);
     expect(defaultSettings.clashApiPort, 9090);
 
     final json = defaultSettings.toJson();

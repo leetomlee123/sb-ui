@@ -204,7 +204,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           labelText: tr.mixedPortLabel,
-                          hintText: '2080',
+                          hintText: '7890',
                         ),
                       ),
                     ),

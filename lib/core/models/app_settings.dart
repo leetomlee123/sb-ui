@@ -42,7 +42,7 @@ class AppSettings {
   final bool autoCheckAppUpdates; // Settings: silent update check on startup
 
   const AppSettings({
-    this.mixedPort = 2080,
+    this.mixedPort = 7890,
     this.clashApiPort = 9090,
     this.clashApiSecret = '',
     this.systemProxyEnabled = true,
@@ -95,7 +95,7 @@ class AppSettings {
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
     return AppSettings(
-      mixedPort: json['mixedPort'] as int? ?? 2080,
+      mixedPort: json['mixedPort'] as int? ?? 7890,
       clashApiPort: json['clashApiPort'] as int? ?? 9090,
       clashApiSecret: json['clashApiSecret'] as String? ?? '',
       systemProxyEnabled: json['systemProxyEnabled'] as bool? ?? false,
