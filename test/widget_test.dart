@@ -250,5 +250,10 @@ rules:
     final dns = config['dns'] as Map<String, dynamic>;
     final dnsServers = dns['servers'] as List;
     expect(dnsServers.any((s) => s['address'] == '202.96.209.133'), isTrue);
+
+    // Verify auto urltest group only contains proxy nodes, not direct outbounds
+    final outbounds = config['outbounds'] as List;
+    final autoGroup = outbounds.firstWhere((o) => o['tag'] == 'auto');
+    expect(autoGroup['outbounds'], equals(['hy2-fast']), reason: 'Auto group must strictly contain hy2-fast and exclude direct outbounds');
   });
 }

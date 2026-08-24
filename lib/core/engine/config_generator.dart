@@ -3,6 +3,19 @@ import '../models/app_settings.dart';
 
 class ConfigGenerator {
   static const Set<String> _groupTypes = {'selector', 'urltest', 'loadbalance'};
+  static const Set<String> _proxyTypes = {
+    'ss',
+    'shadowsocks',
+    'vmess',
+    'vless',
+    'trojan',
+    'hysteria2',
+    'hy2',
+    'tuic',
+    'wireguard',
+    'socks',
+    'http',
+  };
 
   static Map<String, dynamic> generate({
     required AppSettings settings,
@@ -10,7 +23,7 @@ class ConfigGenerator {
     List<Map<String, dynamic>> customRules = const [],
     Map<String, dynamic>? customDns,
   }) {
-    // 1. Separate individual proxy nodes from existing group outbounds
+    // 1. Separate individual proxy nodes, local direct outbounds, and group outbounds
     final List<Map<String, dynamic>> rawNodes = [];
     final List<Map<String, dynamic>> rawGroups = [];
 
@@ -23,11 +36,20 @@ class ConfigGenerator {
       }
     }
 
-    // List of individual proxy node tags
-    final List<String> nodeTags = rawNodes
+    // List of real remote proxy node tags (excludes local direct/block outbounds)
+    final List<String> proxyNodeTags = rawNodes
+        .where((e) => _proxyTypes.contains((e['type'] ?? '').toString().toLowerCase()))
         .map((e) => (e['tag'] ?? '').toString())
         .where((tag) => tag.isNotEmpty)
         .toList();
+
+    // Fallback: if no typed proxy found, use all non-group node tags
+    final List<String> allNodeTags = rawNodes
+        .map((e) => (e['tag'] ?? '').toString())
+        .where((tag) => tag.isNotEmpty)
+        .toList();
+
+    final List<String> eligibleNodeTags = proxyNodeTags.isNotEmpty ? proxyNodeTags : allNodeTags;
 
     final List<Map<String, dynamic>> finalOutbounds = [];
 
@@ -53,22 +75,20 @@ class ConfigGenerator {
 
     // 2. Add or enhance "Auto" URL-Test if proxy nodes exist
     String autoGroupTag = existingAutoGroup != null ? (existingAutoGroup['tag'] ?? 'Auto').toString() : 'Auto';
-    if (existingAutoGroup == null && nodeTags.isNotEmpty) {
+    if (existingAutoGroup == null && eligibleNodeTags.isNotEmpty) {
       finalOutbounds.add({
         'type': 'urltest',
         'tag': 'Auto',
-        'outbounds': List<String>.from(nodeTags),
+        'outbounds': List<String>.from(eligibleNodeTags),
         'url': 'https://www.gstatic.com/generate_204',
         'interval': '2m',
         'tolerance': 50,
       });
       autoGroupTag = 'Auto';
-    } else if (existingAutoGroup != null && nodeTags.isNotEmpty) {
-      final existingOutbounds = (existingAutoGroup['outbounds'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
-      final mergedOutbounds = <String>{...existingOutbounds, ...nodeTags}.toList();
-      existingAutoGroup['outbounds'] = mergedOutbounds;
-      existingAutoGroup['interval'] = '2m';
-      existingAutoGroup['tolerance'] = 50;
+    } else if (existingAutoGroup != null) {
+      // Respect user's explicit group membership; do NOT forcibly inject direct outbounds
+      existingAutoGroup['interval'] ??= '2m';
+      existingAutoGroup['tolerance'] ??= 50;
     }
 
     // 3. Add or enhance primary selector group (e.g. "节点选择" or "Proxy")
@@ -77,13 +97,13 @@ class ConfigGenerator {
 
     if (existingProxyGroup == null) {
       final List<String> proxyDestinations = [
-        if (nodeTags.isNotEmpty) autoGroupTag,
-        ...nodeTags,
+        if (existingAutoGroup != null || eligibleNodeTags.isNotEmpty) autoGroupTag,
+        ...allNodeTags,
         'direct',
       ];
       final defaultTarget = (preferredNode.isNotEmpty && proxyDestinations.contains(preferredNode))
           ? preferredNode
-          : (nodeTags.isNotEmpty ? autoGroupTag : 'direct');
+          : (existingAutoGroup != null ? autoGroupTag : (eligibleNodeTags.isNotEmpty ? autoGroupTag : 'direct'));
 
       finalOutbounds.add({
         'type': 'selector',
@@ -92,17 +112,6 @@ class ConfigGenerator {
         'default': defaultTarget,
       });
       primaryProxyTag = 'Proxy';
-    } else {
-      final existingOutbounds = (existingProxyGroup['outbounds'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
-      if (nodeTags.isNotEmpty && !existingOutbounds.contains(autoGroupTag)) {
-        existingOutbounds.insert(0, autoGroupTag);
-      }
-      existingProxyGroup['outbounds'] = existingOutbounds;
-      if (preferredNode.isNotEmpty && existingOutbounds.contains(preferredNode)) {
-        existingProxyGroup['default'] = preferredNode;
-      } else if (nodeTags.isNotEmpty && existingProxyGroup['default'] == null) {
-        existingProxyGroup['default'] = autoGroupTag;
-      }
     }
 
     // 4. Append existing user groups
@@ -141,7 +150,7 @@ class ConfigGenerator {
 
         // If list became empty, fallback to available node tags or direct
         if (sanitized.isEmpty) {
-          sanitized = nodeTags.isNotEmpty ? List<String>.from(nodeTags) : ['direct'];
+          sanitized = eligibleNodeTags.isNotEmpty ? List<String>.from(eligibleNodeTags) : ['direct'];
         }
 
         ob['outbounds'] = sanitized;
