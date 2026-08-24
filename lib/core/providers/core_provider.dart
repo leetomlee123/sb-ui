@@ -106,6 +106,8 @@ class CoreNotifier extends StateNotifier<CoreState> {
       final configJson = ConfigGenerator.generate(
         settings: settings,
         parsedOutbounds: parseResult.outbounds,
+        customRules: parseResult.customRules,
+        customDns: parseResult.customDns,
       );
 
       final configDir = await StorageService.getAppConfigDir();

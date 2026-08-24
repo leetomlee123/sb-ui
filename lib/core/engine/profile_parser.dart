@@ -3,11 +3,15 @@ import 'package:yaml/yaml.dart';
 
 class ProfileParserResult {
   final List<Map<String, dynamic>> outbounds;
+  final List<Map<String, dynamic>> customRules;
+  final Map<String, dynamic>? customDns;
   final int count;
   final String format; // 'sing-box', 'clash', 'uri-list'
 
   ProfileParserResult({
     required this.outbounds,
+    this.customRules = const [],
+    this.customDns,
     required this.count,
     required this.format,
   });
@@ -71,7 +75,11 @@ class ProfileParser {
     }
 
     // 2. Try parsing as YAML (Clash / Clash Meta config)
-    if (trimmed.contains('proxies:') || trimmed.contains('Proxy:') || trimmed.contains('proxy-groups:')) {
+    if (trimmed.contains('proxies:') ||
+        trimmed.contains('Proxy:') ||
+        trimmed.contains('proxy-groups:') ||
+        trimmed.contains('rules:') ||
+        trimmed.contains('dns:')) {
       try {
         final yamlDoc = loadYaml(trimmed);
         if (yamlDoc is YamlMap) {
@@ -102,9 +110,25 @@ class ProfileParser {
             }
           }
 
-          if (outbounds.isNotEmpty) {
+          // Parse Clash routing rules if present
+          final List<Map<String, dynamic>> customRules = [];
+          final rawRules = yamlDoc['rules'];
+          if (rawRules is YamlList) {
+            customRules.addAll(_parseClashRules(rawRules));
+          }
+
+          // Parse Clash DNS policy if present
+          final rawDns = yamlDoc['dns'];
+          Map<String, dynamic>? customDns;
+          if (rawDns is YamlMap) {
+            customDns = _parseClashDns(rawDns);
+          }
+
+          if (outbounds.isNotEmpty || customRules.isNotEmpty) {
             return ProfileParserResult(
               outbounds: outbounds,
+              customRules: customRules,
+              customDns: customDns,
               count: outbounds.length,
               format: 'clash',
             );
@@ -185,12 +209,125 @@ class ProfileParser {
     }
   }
 
+  static List<Map<String, dynamic>> _parseClashRules(YamlList rulesList) {
+    final List<Map<String, dynamic>> rules = [];
+    for (final r in rulesList) {
+      final line = r.toString().trim();
+      if (line.isEmpty || line.startsWith('#')) continue;
+      final parts = line.split(',').map((e) => e.trim()).toList();
+      if (parts.length < 2) continue;
+
+      final ruleType = parts[0].toUpperCase();
+      if (ruleType == 'MATCH') {
+        final target = parts[1];
+        rules.add({
+          'outbound': target,
+        });
+      } else if (parts.length >= 3) {
+        final payload = parts[1];
+        final target = parts[2];
+        switch (ruleType) {
+          case 'PROCESS-NAME':
+            rules.add({
+              'process_name': [payload],
+              'outbound': target,
+            });
+            break;
+          case 'DOMAIN-KEYWORD':
+            rules.add({
+              'domain_keyword': [payload],
+              'outbound': target,
+            });
+            break;
+          case 'DOMAIN-SUFFIX':
+            rules.add({
+              'domain_suffix': [payload],
+              'outbound': target,
+            });
+            break;
+          case 'DOMAIN':
+            rules.add({
+              'domain': [payload],
+              'outbound': target,
+            });
+            break;
+          case 'IP-CIDR':
+          case 'IP-CIDR6':
+            rules.add({
+              'ip_cidr': [payload],
+              'outbound': target,
+            });
+            break;
+          case 'GEOIP':
+            rules.add({
+              'geoip': [payload.toLowerCase()],
+              'outbound': target,
+            });
+            break;
+          case 'GEOSITE':
+            rules.add({
+              'geosite': [payload.toLowerCase()],
+              'outbound': target,
+            });
+            break;
+        }
+      }
+    }
+    return rules;
+  }
+
+  static Map<String, dynamic>? _parseClashDns(YamlMap dnsMap) {
+    final policy = dnsMap['nameserver-policy'] ?? dnsMap['nameserver_policy'];
+    final List<Map<String, dynamic>> extraServers = [];
+    final List<Map<String, dynamic>> extraDnsRules = [];
+
+    if (policy is YamlMap) {
+      int idx = 1;
+      for (final entry in policy.entries) {
+        final rawDomain = entry.key.toString().replaceAll('*.', '').replaceAll('*', '');
+        final serverAddr = entry.value.toString();
+        final serverTag = 'company-dns-$idx';
+        idx++;
+
+        extraServers.add({
+          'tag': serverTag,
+          'address': serverAddr,
+          'detour': 'direct',
+        });
+        if (rawDomain.isNotEmpty) {
+          extraDnsRules.add({
+            'domain_suffix': [rawDomain],
+            'server': serverTag,
+          });
+        }
+      }
+    }
+
+    if (extraServers.isNotEmpty || extraDnsRules.isNotEmpty) {
+      return {
+        'servers': extraServers,
+        'rules': extraDnsRules,
+      };
+    }
+    return null;
+  }
+
   static Map<String, dynamic>? _convertClashProxyToSingbox(YamlMap proxy) {
     final type = (proxy['type'] ?? '').toString().toLowerCase();
     final name = (proxy['name'] ?? 'Proxy').toString();
     final server = (proxy['server'] ?? '').toString();
     final port = int.tryParse((proxy['port'] ?? '').toString()) ?? 443;
     final password = (proxy['password'] ?? proxy['uuid'] ?? '').toString();
+    final iface = proxy['interface-name'] ?? proxy['interface_name'];
+
+    // Direct outbound with optional network interface binding (e.g. Wi-Fi / Wi-Fi 2)
+    if (type == 'direct') {
+      return {
+        'type': 'direct',
+        'tag': name,
+        if (iface != null) 'bind_interface': iface.toString(),
+      };
+    }
 
     // Parse transport if present
     Map<String, dynamic>? transport;
@@ -229,6 +366,7 @@ class ProfileParser {
           'server_port': port,
           'method': (proxy['cipher'] ?? 'aes-256-gcm').toString(),
           'password': password,
+          if (iface != null) 'bind_interface': iface.toString(),
           if (proxy['plugin'] != null) 'plugin': proxy['plugin'].toString(),
           if (proxy['plugin-opts'] != null)
             'plugin_opts': (proxy['plugin-opts'] as YamlMap).value,
@@ -243,6 +381,7 @@ class ProfileParser {
           'uuid': password,
           'security': (proxy['cipher'] ?? 'auto').toString(),
           'alter_id': int.tryParse((proxy['alterId'] ?? '0').toString()) ?? 0,
+          if (iface != null) 'bind_interface': iface.toString(),
           'transport': ?transport,
           'tls': {
             'enabled': proxy['tls'] == true,
@@ -263,6 +402,7 @@ class ProfileParser {
           'server': server,
           'server_port': port,
           'uuid': password,
+          if (iface != null) 'bind_interface': iface.toString(),
           if (proxy['flow'] != null && proxy['flow'].toString().isNotEmpty)
             'flow': proxy['flow'].toString(),
           'transport': ?transport,
@@ -291,6 +431,7 @@ class ProfileParser {
           'server': server,
           'server_port': port,
           'password': password,
+          if (iface != null) 'bind_interface': iface.toString(),
           'transport': ?transport,
           'tls': {
             'enabled': true,
@@ -307,11 +448,12 @@ class ProfileParser {
           'server': server,
           'server_port': port,
           'password': (proxy['password'] ?? proxy['auth'] ?? '').toString(),
+          if (iface != null) 'bind_interface': iface.toString(),
           if (proxy['up'] != null) 'up_mbps': int.tryParse(proxy['up'].toString()),
           if (proxy['down'] != null) 'down_mbps': int.tryParse(proxy['down'].toString()),
           'tls': {
             'enabled': true,
-            'server_name': (proxy['sni'] ?? server).toString(),
+            'server_name': (proxy['sni'] ?? proxy['servername'] ?? server).toString(),
             'insecure': proxy['skip-cert-verify'] == true,
           }
         };
@@ -325,9 +467,10 @@ class ProfileParser {
           'uuid': password,
           'password': (proxy['token'] ?? proxy['password'] ?? '').toString(),
           'congestion_controller': (proxy['congestion-controller'] ?? 'bbr').toString(),
+          if (iface != null) 'bind_interface': iface.toString(),
           'tls': {
             'enabled': true,
-            'server_name': (proxy['sni'] ?? server).toString(),
+            'server_name': (proxy['sni'] ?? proxy['servername'] ?? server).toString(),
             'insecure': proxy['skip-cert-verify'] == true,
           }
         };

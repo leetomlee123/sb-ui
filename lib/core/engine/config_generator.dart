@@ -7,6 +7,8 @@ class ConfigGenerator {
   static Map<String, dynamic> generate({
     required AppSettings settings,
     required List<Map<String, dynamic>> parsedOutbounds,
+    List<Map<String, dynamic>> customRules = const [],
+    Map<String, dynamic>? customDns,
   }) {
     // 1. Separate individual proxy nodes from existing group outbounds
     final List<Map<String, dynamic>> rawNodes = [];
@@ -183,11 +185,22 @@ class ConfigGenerator {
         'protocol': 'dns',
         'action': 'hijack-dns',
       },
-      {
-        'ip_is_private': true,
-        'outbound': 'direct',
-      },
     ];
+
+    // Inject custom profile rules (e.g. Clash PROCESS-NAME, DOMAIN-SUFFIX, IP-CIDR) with highest priority
+    if (customRules.isNotEmpty) {
+      for (final rule in customRules) {
+        final target = rule['outbound']?.toString();
+        if (target != null && allExistingTags.contains(target)) {
+          routeRules.add(Map<String, dynamic>.from(rule));
+        }
+      }
+    }
+
+    routeRules.add({
+      'ip_is_private': true,
+      'outbound': 'direct',
+    });
 
     if (settings.routingMode == RoutingMode.global) {
       routeRules.add({
@@ -218,43 +231,69 @@ class ConfigGenerator {
       ]);
     }
 
+    final List<Map<String, dynamic>> dnsServers = [
+      _buildDnsServer('remote-dns', settings.remoteDns, detour: primaryProxyTag),
+      _buildDnsServer('local-dns', settings.directDns),
+    ];
+
+    final List<Map<String, dynamic>> dnsRules = [];
+
+    // Inject custom DNS policies (e.g. nameserver-policy)
+    if (customDns != null) {
+      final extraServers = customDns['servers'] as List<dynamic>?;
+      if (extraServers != null) {
+        for (final s in extraServers) {
+          if (s is Map<String, dynamic>) {
+            dnsServers.add(s);
+          }
+        }
+      }
+      final extraRules = customDns['rules'] as List<dynamic>?;
+      if (extraRules != null) {
+        for (final r in extraRules) {
+          if (r is Map<String, dynamic>) {
+            dnsRules.add(r);
+          }
+        }
+      }
+    }
+
+    dnsRules.addAll([
+      {
+        'domain_suffix': [
+          '.cn',
+          'jsdelivr.net',
+          'jsdelivr.com',
+          'aliyun.com',
+          'alicdn.com',
+          '189.cn',
+          'qq.com',
+          'baidu.com',
+        ],
+        'server': 'local-dns',
+      },
+      {
+        'rule_set': 'geosite-cn',
+        'server': 'local-dns',
+      },
+      {
+        'clash_mode': 'Direct',
+        'server': 'local-dns',
+      },
+      {
+        'clash_mode': 'Global',
+        'server': 'remote-dns',
+      }
+    ]);
+
     final config = {
       'log': {
         'level': settings.logLevel,
         'timestamp': true,
       },
       'dns': {
-        'servers': [
-          _buildDnsServer('remote-dns', settings.remoteDns, detour: primaryProxyTag),
-          _buildDnsServer('local-dns', settings.directDns),
-        ],
-        'rules': [
-          {
-            'domain_suffix': [
-              '.cn',
-              'jsdelivr.net',
-              'jsdelivr.com',
-              'aliyun.com',
-              'alicdn.com',
-              '189.cn',
-              'qq.com',
-              'baidu.com',
-            ],
-            'server': 'local-dns',
-          },
-          {
-            'rule_set': 'geosite-cn',
-            'server': 'local-dns',
-          },
-          {
-            'clash_mode': 'Direct',
-            'server': 'local-dns',
-          },
-          {
-            'clash_mode': 'Global',
-            'server': 'remote-dns',
-          }
-        ],
+        'servers': dnsServers,
+        'rules': dnsRules,
         'final': 'remote-dns',
         'strategy': 'prefer_ipv4',
       },

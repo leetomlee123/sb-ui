@@ -169,4 +169,86 @@ proxy-groups:
     expect(identical(result1, result3), isFalse, reason: 'clearCache should flush the cached instance');
     expect(result3.count, result1.count);
   });
+
+  test('Clash Dual-NIC interface binding, process rules, and DNS policy test', () {
+    const yamlContent = '''
+dns:
+  enable: true
+  ipv6: false
+  nameserver:
+    - 202.96.209.133
+    - 114.114.114.114
+  nameserver-policy:
+    "cpic.com.cn": 202.96.209.133
+    "*.cpic.com.cn": 202.96.209.133
+
+proxies:
+  - name: hy2-fast
+    type: hysteria2
+    server: 158.180.92.85
+    port: 3366
+    password: lix@2wsx
+    tls: true
+    servername: a.189.cn
+    skip-cert-verify: true
+    interface-name: Wi-Fi 2
+
+  - name: 内网直连
+    type: direct
+    interface-name: Wi-Fi
+
+  - name: 热点直连
+    type: direct
+    interface-name: Wi-Fi 2
+
+proxy-groups:
+  - name: auto
+    type: url-test
+    proxies:
+      - hy2-fast
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+
+rules:
+  - PROCESS-NAME,uSmartView.exe,内网直连
+  - DOMAIN-KEYWORD,uSmart,内网直连
+  - DOMAIN-SUFFIX,cpic.com.cn,内网直连
+  - IP-CIDR,10.0.0.0/8,内网直连
+  - MATCH,auto
+''';
+
+    final parseResult = ProfileParser.parse(yamlContent);
+    expect(parseResult.outbounds.length, 4); // hy2-fast, 内网直连, 热点直连, auto group
+    expect(parseResult.customRules.length, 5);
+    expect(parseResult.customDns, isNotNull);
+
+    // Verify outbounds
+    final hy2 = parseResult.outbounds.firstWhere((o) => o['tag'] == 'hy2-fast');
+    expect(hy2['type'], 'hysteria2');
+    expect(hy2['bind_interface'], 'Wi-Fi 2');
+
+    final intranet = parseResult.outbounds.firstWhere((o) => o['tag'] == '内网直连');
+    expect(intranet['type'], 'direct');
+    expect(intranet['bind_interface'], 'Wi-Fi');
+
+    // Generate config
+    final config = ConfigGenerator.generate(
+      settings: const AppSettings(),
+      parsedOutbounds: parseResult.outbounds,
+      customRules: parseResult.customRules,
+      customDns: parseResult.customDns,
+    );
+
+    final routeRules = config['route']['rules'] as List;
+    final processRule = routeRules.firstWhere((r) => r['process_name'] != null);
+    expect(processRule['process_name'], contains('uSmartView.exe'));
+    expect(processRule['outbound'], '内网直连');
+
+    final domainRule = routeRules.firstWhere((r) => r['domain_suffix'] != null && (r['domain_suffix'] as List).contains('cpic.com.cn'));
+    expect(domainRule['outbound'], '内网直连');
+
+    final dns = config['dns'] as Map<String, dynamic>;
+    final dnsServers = dns['servers'] as List;
+    expect(dnsServers.any((s) => s['address'] == '202.96.209.133'), isTrue);
+  });
 }
