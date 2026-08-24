@@ -278,7 +278,7 @@ for (\$attempt = 1; \$attempt -le 5; \$attempt++) {
                 Copy-Item -Path \$_.FullName -Destination \$destPath -Force -ErrorAction SilentlyContinue
             }
         }
-        if (Test-Path (Join-Path \$appDir \$exeName)) {
+        if (Test-Path (Join-Path \$appDir "singular.exe") -or (Test-Path (Join-Path \$appDir \$exeName))) {
             \$copySuccess = \$true
             break
         }
@@ -288,12 +288,13 @@ for (\$attempt = 1; \$attempt -le 5; \$attempt++) {
 }
 
 # 4. Rollback safety: if copy failed, restore backup
-if (-not (Test-Path (Join-Path \$appDir \$exeName))) {
+if (-not (Test-Path (Join-Path \$appDir "singular.exe")) -and -not (Test-Path (Join-Path \$appDir \$exeName))) {
     if (Test-Path "\$targetExePath.old") {
         Move-Item -Path "\$targetExePath.old" -Destination \$targetExePath -Force -ErrorAction SilentlyContinue
     }
 } else {
     Remove-Item -Path (Join-Path \$appDir "\$exeName.old") -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path (Join-Path \$appDir "singular.exe.old") -Force -ErrorAction SilentlyContinue
 }
 
 # Remove updater script from destination if copied over
@@ -303,7 +304,11 @@ if (Test-Path \$copiedScript) {
 }
 
 # 5. Resolve and launch the new executable
-\$launchTarget = Join-Path \$appDir \$exeName
+\$launchTarget = Join-Path \$appDir "singular.exe"
+if (-not (Test-Path \$launchTarget)) {
+    \$launchTarget = Join-Path \$appDir \$exeName
+}
+
 if (Test-Path \$launchTarget) {
     Start-Process -FilePath \$launchTarget -WorkingDirectory \$appDir
 }
