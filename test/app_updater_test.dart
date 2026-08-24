@@ -36,7 +36,7 @@ void main() {
     late Directory stagingDir;
 
     setUp(() async {
-      stagingDir = await Directory.systemTemp.createTemp('sb_ui_update_test');
+      stagingDir = await Directory.systemTemp.createTemp('singular_update_test');
     });
 
     tearDown(() async {

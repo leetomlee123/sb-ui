@@ -150,7 +150,7 @@ class AppUpdaterService {
     }
 
     onProgress(0.90, 'Extracting update package...');
-    final stagingDir = await Directory.systemTemp.createTemp('sb_ui_update');
+    final stagingDir = await Directory.systemTemp.createTemp('singular_update');
     final archive = ZipDecoder().decodeBytes(bytes);
     await _extractArchive(archive, stagingDir.path);
 
@@ -207,12 +207,6 @@ class AppUpdaterService {
     } catch (_) {}
   }
 
-  /// Writes the Windows self-swap batch script used to replace a running exe.
-  ///
-  /// Flow: poll until the app process exits -> rename old exe to `.old`
-  /// (allowed even while running) -> xcopy the staged bundle over the app dir
-  /// -> delete `.old` only if the new exe landed -> relaunch -> remove the
-  /// staging dir -> self-delete.
   /// Writes the Windows self-swap PowerShell script used to safely replace
   /// the running executable and relaunch the updated application.
   Future<String> writeSwapScript({
@@ -229,7 +223,7 @@ class AppUpdaterService {
 \$targetPid = $currentPid
 \$appDir = "$appDir"
 \$srcDir = "$stagingDir"
-\$oldExeName = "$exeName"
+\$exeName = "$exeName"
 
 # 1. Wait for the old process to fully exit (max 8 seconds)
 for (\$i = 0; \$i -lt 40; \$i++) {
@@ -244,22 +238,16 @@ if (\$proc -and -not \$proc.HasExited) {
     Stop-Process -Id \$targetPid -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 300
 }
-Get-Process -Name "singular", "sb_ui" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "singular" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
 # Ensure file handles are fully released
 Start-Sleep -Milliseconds 500
 
 # 2. Backup or rename old executable files
-\$oldExePath = Join-Path \$appDir \$oldExeName
-if (Test-Path \$oldExePath) {
+\$targetExePath = Join-Path \$appDir \$exeName
+if (Test-Path \$targetExePath) {
     try {
-        Move-Item -Path \$oldExePath -Destination "\$oldExePath.old" -Force -ErrorAction SilentlyContinue
-    } catch {}
-}
-\$singularExePath = Join-Path \$appDir "singular.exe"
-if (Test-Path \$singularExePath) {
-    try {
-        Move-Item -Path \$singularExePath -Destination "\$singularExePath.old" -Force -ErrorAction SilentlyContinue
+        Move-Item -Path \$targetExePath -Destination "\$targetExePath.old" -Force -ErrorAction SilentlyContinue
     } catch {}
 }
 
@@ -290,7 +278,7 @@ for (\$attempt = 1; \$attempt -le 5; \$attempt++) {
                 Copy-Item -Path \$_.FullName -Destination \$destPath -Force -ErrorAction SilentlyContinue
             }
         }
-        if (Test-Path (Join-Path \$appDir "singular.exe")) {
+        if (Test-Path (Join-Path \$appDir \$exeName)) {
             \$copySuccess = \$true
             break
         }
@@ -300,17 +288,12 @@ for (\$attempt = 1; \$attempt -le 5; \$attempt++) {
 }
 
 # 4. Rollback safety: if copy failed, restore backup
-if (-not (Test-Path (Join-Path \$appDir "singular.exe"))) {
-    if (Test-Path "\$singularExePath.old") {
-        Move-Item -Path "\$singularExePath.old" -Destination \$singularExePath -Force -ErrorAction SilentlyContinue
-    } elseif (Test-Path "\$oldExePath.old") {
-        Move-Item -Path "\$oldExePath.old" -Destination \$oldExePath -Force -ErrorAction SilentlyContinue
+if (-not (Test-Path (Join-Path \$appDir \$exeName))) {
+    if (Test-Path "\$targetExePath.old") {
+        Move-Item -Path "\$targetExePath.old" -Destination \$targetExePath -Force -ErrorAction SilentlyContinue
     }
 } else {
-    # Clean up legacy sb_ui.exe and old backup binaries
-    Remove-Item -Path (Join-Path \$appDir "sb_ui.exe") -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path (Join-Path \$appDir "sb_ui.exe.old") -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path (Join-Path \$appDir "singular.exe.old") -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path (Join-Path \$appDir "\$exeName.old") -Force -ErrorAction SilentlyContinue
 }
 
 # Remove updater script from destination if copied over
@@ -320,11 +303,7 @@ if (Test-Path \$copiedScript) {
 }
 
 # 5. Resolve and launch the new executable
-\$launchTarget = Join-Path \$appDir "singular.exe"
-if (-not (Test-Path \$launchTarget)) {
-    \$launchTarget = Join-Path \$appDir \$oldExeName
-}
-
+\$launchTarget = Join-Path \$appDir \$exeName
 if (Test-Path \$launchTarget) {
     Start-Process -FilePath \$launchTarget -WorkingDirectory \$appDir
 }
@@ -377,10 +356,6 @@ Remove-Item -Path \$srcDir -Recurse -Force -ErrorAction SilentlyContinue
       if (await oldBinary.exists()) {
         await oldBinary.delete();
       }
-      final legacyOldBinary = File(p.join(exeDir, 'sb_ui.exe.old'));
-      if (await legacyOldBinary.exists()) {
-        await legacyOldBinary.delete();
-      }
     } catch (_) {}
 
     try {
@@ -388,7 +363,7 @@ Remove-Item -Path \$srcDir -Recurse -Force -ErrorAction SilentlyContinue
       await for (final entity in tmp.list(followLinks: false)) {
         if (entity is Directory) {
           final base = p.basename(entity.path);
-          if (base.startsWith('sb_ui_update') || base.startsWith('singular_update')) {
+          if (base.startsWith('singular_update')) {
             try {
               await entity.delete(recursive: true);
             } catch (_) {}
