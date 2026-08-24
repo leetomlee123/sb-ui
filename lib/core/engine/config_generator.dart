@@ -341,43 +341,12 @@ class ConfigGenerator {
 
   static Map<String, dynamic> _buildDnsServer(String tag, String address, {String? detour}) {
     final trimmed = address.trim();
-    final effectiveDetour = (detour != null && detour.isNotEmpty) ? detour : 'direct';
-    if (trimmed.startsWith('https://')) {
-      final uri = Uri.parse(trimmed);
-      return {
-        'tag': tag,
-        'type': 'https',
-        'server': uri.host,
-        if (uri.port != 0 && uri.port != 443) 'server_port': uri.port,
-        if (uri.path.isNotEmpty && uri.path != '/') 'path': uri.path,
-        'detour': effectiveDetour,
-      };
-    } else if (trimmed.startsWith('tls://')) {
-      final uri = Uri.parse(trimmed);
-      return {
-        'tag': tag,
-        'type': 'tls',
-        'server': uri.host,
-        if (uri.port != 0 && uri.port != 853) 'server_port': uri.port,
-        'detour': effectiveDetour,
-      };
-    } else if (trimmed.startsWith('tcp://')) {
-      final uri = Uri.parse(trimmed);
-      return {
-        'tag': tag,
-        'type': 'tcp',
-        'server': uri.host,
-        if (uri.port != 0 && uri.port != 53) 'server_port': uri.port,
-        'detour': effectiveDetour,
-      };
-    } else {
-      return {
-        'tag': tag,
-        'type': 'udp',
-        'server': trimmed.replaceAll('udp://', ''),
-        'detour': effectiveDetour,
-      };
-    }
+    final effectiveDetour = (detour != null && detour.isNotEmpty && detour != 'direct') ? detour : null;
+    return {
+      'tag': tag,
+      'address': trimmed,
+      'detour': ?effectiveDetour,
+    };
   }
 
   static String generateJsonString({

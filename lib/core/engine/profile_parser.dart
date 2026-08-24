@@ -292,7 +292,6 @@ class ProfileParser {
         extraServers.add({
           'tag': serverTag,
           'address': serverAddr,
-          'detour': 'direct',
         });
         if (rawDomain.isNotEmpty) {
           extraDnsRules.add({
