@@ -58,7 +58,6 @@ jobs:
           # Copy sing-box core into bundle
           New-Item -ItemType Directory -Force -Path "$bundleDir/data/core"
           Copy-Item -Path "core-bin/sing-box.exe" -Destination "$bundleDir/data/core/sing-box.exe"
-          Copy-Item -Path "core-bin/sing-box.exe" -Destination "$bundleDir/sing-box.exe"
 
           # Copy offline rule sets into bundle config
           New-Item -ItemType Directory -Force -Path "$bundleDir/config"
