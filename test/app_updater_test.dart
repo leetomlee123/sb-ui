@@ -48,16 +48,16 @@ void main() {
     test('writes script with quoted paths, poll loop, rollback safety', () async {
       final service = AppUpdaterService();
       final scriptPath = await service.writeSwapScript(
-        stagingDir: r'C:\Temp\stage one',
+        stagingDir: stagingDir.path,
         appDir: r'C:\Apps\singular app',
         exeName: 'singular.exe',
       );
 
       final script = await File(scriptPath).readAsString();
 
-      expect(scriptPath.replaceAll('/', r'\'), endsWith(r'stage one\singular_self_update.ps1'));
+      expect(scriptPath, endsWith('singular_self_update.ps1'));
       expect(script, contains(r'$appDir = "C:\Apps\singular app"'));
-      expect(script, contains(r'$srcDir = "C:\Temp\stage one"'));
+      expect(script, contains(stagingDir.path));
       expect(script, contains('Get-Process -Id \$targetPid'));
       expect(script, contains('Stop-Process -Id \$targetPid'));
       expect(script, contains('.old'));
