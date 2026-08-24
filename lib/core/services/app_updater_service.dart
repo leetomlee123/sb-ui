@@ -231,43 +231,83 @@ class AppUpdaterService {
 \$srcDir = "$stagingDir"
 \$oldExeName = "$exeName"
 
-# 1. Wait for the old process to fully exit (max 6 seconds)
-for (\$i = 0; \$i -lt 30; \$i++) {
+# 1. Wait for the old process to fully exit (max 8 seconds)
+for (\$i = 0; \$i -lt 40; \$i++) {
     \$proc = Get-Process -Id \$targetPid -ErrorAction SilentlyContinue
     if (-not \$proc -or \$proc.HasExited) { break }
     Start-Sleep -Milliseconds 200
 }
 
-# Force terminate any lingering instance of the target process
+# Force terminate any lingering instances of the target process
 \$proc = Get-Process -Id \$targetPid -ErrorAction SilentlyContinue
 if (\$proc -and -not \$proc.HasExited) {
     Stop-Process -Id \$targetPid -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 300
 }
+Get-Process -Name "singular", "sb_ui" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
 # Ensure file handles are fully released
-Start-Sleep -Milliseconds 400
+Start-Sleep -Milliseconds 500
 
-# 2. Backup or rename old executable files if locked
+# 2. Backup or rename old executable files
 \$oldExePath = Join-Path \$appDir \$oldExeName
 if (Test-Path \$oldExePath) {
     try {
         Move-Item -Path \$oldExePath -Destination "\$oldExePath.old" -Force -ErrorAction SilentlyContinue
     } catch {}
 }
-
-# 3. Copy staged files into destination directory with retry loop
-for (\$attempt = 1; \$attempt -le 5; \$attempt++) {
+\$singularExePath = Join-Path \$appDir "singular.exe"
+if (Test-Path \$singularExePath) {
     try {
-        Copy-Item -Path (Join-Path \$srcDir "*") -Destination \$appDir -Recurse -Force -ErrorAction Stop
-        break
-    } catch {
-        Start-Sleep -Milliseconds 600
-    }
+        Move-Item -Path \$singularExePath -Destination "\$singularExePath.old" -Force -ErrorAction SilentlyContinue
+    } catch {}
 }
 
-# Clean up legacy sb_ui.exe and old backup binaries
-if (Test-Path (Join-Path \$appDir "singular.exe")) {
+# 3. Robust directory tree copy (uses robocopy or recursive file sync without directory collisions)
+\$copySuccess = \$false
+for (\$attempt = 1; \$attempt -le 5; \$attempt++) {
+    try {
+        & robocopy \$srcDir \$appDir /E /IS /IT /R:2 /W:1 /NP /NFL /NDL /NJH /NJS | Out-Null
+        if (\$LASTEXITCODE -ge 0 -and \$LASTEXITCODE -le 7) {
+            \$copySuccess = \$true
+            break
+        }
+    } catch {}
+
+    try {
+        Get-ChildItem -Path \$srcDir -Recurse | ForEach-Object {
+            \$relPath = \$_.FullName.Substring(\$srcDir.Length).TrimStart('\\\\', '/')
+            \$destPath = Join-Path \$appDir \$relPath
+            if (\$_.PSIsContainer) {
+                if (-not (Test-Path \$destPath)) {
+                    New-Item -ItemType Directory -Path \$destPath -Force | Out-Null
+                }
+            } else {
+                \$destParent = Split-Path \$destPath -Parent
+                if (-not (Test-Path \$destParent)) {
+                    New-Item -ItemType Directory -Path \$destParent -Force | Out-Null
+                }
+                Copy-Item -Path \$_.FullName -Destination \$destPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+        if (Test-Path (Join-Path \$appDir "singular.exe")) {
+            \$copySuccess = \$true
+            break
+        }
+    } catch {}
+
+    Start-Sleep -Milliseconds 600
+}
+
+# 4. Rollback safety: if copy failed, restore backup
+if (-not (Test-Path (Join-Path \$appDir "singular.exe"))) {
+    if (Test-Path "\$singularExePath.old") {
+        Move-Item -Path "\$singularExePath.old" -Destination \$singularExePath -Force -ErrorAction SilentlyContinue
+    } elseif (Test-Path "\$oldExePath.old") {
+        Move-Item -Path "\$oldExePath.old" -Destination \$oldExePath -Force -ErrorAction SilentlyContinue
+    }
+} else {
+    # Clean up legacy sb_ui.exe and old backup binaries
     Remove-Item -Path (Join-Path \$appDir "sb_ui.exe") -Force -ErrorAction SilentlyContinue
     Remove-Item -Path (Join-Path \$appDir "sb_ui.exe.old") -Force -ErrorAction SilentlyContinue
     Remove-Item -Path (Join-Path \$appDir "singular.exe.old") -Force -ErrorAction SilentlyContinue
@@ -279,7 +319,7 @@ if (Test-Path \$copiedScript) {
     Remove-Item -Path \$copiedScript -Force -ErrorAction SilentlyContinue
 }
 
-# 4. Resolve and launch the new executable
+# 5. Resolve and launch the new executable
 \$launchTarget = Join-Path \$appDir "singular.exe"
 if (-not (Test-Path \$launchTarget)) {
     \$launchTarget = Join-Path \$appDir \$oldExeName
@@ -289,7 +329,7 @@ if (Test-Path \$launchTarget) {
     Start-Process -FilePath \$launchTarget -WorkingDirectory \$appDir
 }
 
-# 5. Clean up temporary staging directory
+# 6. Clean up temporary staging directory
 Start-Sleep -Seconds 1
 Remove-Item -Path \$srcDir -Recurse -Force -ErrorAction SilentlyContinue
 ''';
