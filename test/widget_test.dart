@@ -155,4 +155,18 @@ proxy-groups:
     expect(hy2['up_mbps'], 100);
     expect(hy2['obfs']['type'], 'salamander');
   });
+
+  test('ProfileParser in-memory LRU caching', () {
+    ProfileParser.clearCache();
+    const testContent = 'proxies:\n  - name: test-ss\n    type: ss\n    server: 1.1.1.1\n    port: 8388\n    cipher: aes-128-gcm\n    password: pwd';
+    
+    final result1 = ProfileParser.parse(testContent);
+    final result2 = ProfileParser.parse(testContent);
+    expect(identical(result1, result2), isTrue, reason: 'Repeated parse should return identical cached instance');
+
+    ProfileParser.clearCache();
+    final result3 = ProfileParser.parse(testContent);
+    expect(identical(result1, result3), isFalse, reason: 'clearCache should flush the cached instance');
+    expect(result3.count, result1.count);
+  });
 }

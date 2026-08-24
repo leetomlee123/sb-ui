@@ -337,16 +337,22 @@ Remove-Item -Path \$srcDir -Recurse -Force -ErrorAction SilentlyContinue
       if (await oldBinary.exists()) {
         await oldBinary.delete();
       }
+      final legacyOldBinary = File(p.join(exeDir, 'sb_ui.exe.old'));
+      if (await legacyOldBinary.exists()) {
+        await legacyOldBinary.delete();
+      }
     } catch (_) {}
 
     try {
       final tmp = Directory.systemTemp;
-      await for (final entity in tmp.list()) {
-        if (entity is Directory &&
-            p.basename(entity.path).startsWith('sb_ui_update')) {
-          try {
-            await entity.delete(recursive: true);
-          } catch (_) {}
+      await for (final entity in tmp.list(followLinks: false)) {
+        if (entity is Directory) {
+          final base = p.basename(entity.path);
+          if (base.startsWith('sb_ui_update') || base.startsWith('singular_update')) {
+            try {
+              await entity.delete(recursive: true);
+            } catch (_) {}
+          }
         }
       }
     } catch (_) {}

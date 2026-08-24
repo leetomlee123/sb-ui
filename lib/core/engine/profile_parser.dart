@@ -14,12 +14,35 @@ class ProfileParserResult {
 }
 
 class ProfileParser {
+  static const int _maxCacheEntries = 50;
+  static final Map<int, ProfileParserResult> _parseCache = {};
+
+  /// Clears the in-memory parse cache (e.g. for testing or memory pressure).
+  static void clearCache() {
+    _parseCache.clear();
+  }
+
   static ProfileParserResult parse(String content) {
     final trimmed = content.trim();
     if (trimmed.isEmpty) {
       return ProfileParserResult(outbounds: [], count: 0, format: 'empty');
     }
 
+    final cacheKey = Object.hash(trimmed.length, trimmed.hashCode);
+    final cached = _parseCache[cacheKey];
+    if (cached != null) {
+      return cached;
+    }
+
+    final result = _doParse(trimmed);
+    if (_parseCache.length >= _maxCacheEntries) {
+      _parseCache.remove(_parseCache.keys.first);
+    }
+    _parseCache[cacheKey] = result;
+    return result;
+  }
+
+  static ProfileParserResult _doParse(String trimmed) {
     // 1. Try parsing as JSON (sing-box config or JSON array)
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
       try {
