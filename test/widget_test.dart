@@ -231,15 +231,25 @@ rules:
     expect(intranet['type'], 'direct');
     expect(intranet['bind_interface'], 'Wi-Fi');
 
-    // Generate config
+    // Generate config with TUN enabled
     final config = ConfigGenerator.generate(
-      settings: const AppSettings(),
+      settings: const AppSettings(tunModeEnabled: true),
       parsedOutbounds: parseResult.outbounds,
       customRules: parseResult.customRules,
       customDns: parseResult.customDns,
     );
 
+    // Verify TUN strict_route is false
+    final inbounds = config['inbounds'] as List;
+    final tunInbound = inbounds.firstWhere((i) => i['type'] == 'tun');
+    expect(tunInbound['strict_route'], isFalse);
+
     final routeRules = config['route']['rules'] as List;
+
+    // Verify auto-bypass rule for proxy server IP
+    final proxyBypassRule = routeRules.firstWhere((r) => r['ip_cidr'] != null && (r['ip_cidr'] as List).contains('158.180.92.85/32'));
+    expect(proxyBypassRule['outbound'], '热点直连');
+
     final processRule = routeRules.firstWhere((r) => r['process_name'] != null);
     expect(processRule['process_name'], contains('uSmartView.exe'));
     expect(processRule['outbound'], '内网直连');
@@ -253,7 +263,8 @@ rules:
 
     final dns = config['dns'] as Map<String, dynamic>;
     final dnsServers = dns['servers'] as List;
-    expect(dnsServers.any((s) => s['address'] == '202.96.209.133'), isTrue);
+    final companyDns = dnsServers.firstWhere((s) => s['address'] == '202.96.209.133');
+    expect(companyDns['detour'], '内网直连');
 
     // Verify auto urltest group only contains proxy nodes, not direct outbounds
     final outbounds = config['outbounds'] as List;

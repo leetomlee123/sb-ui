@@ -180,7 +180,7 @@ class ConfigGenerator {
         'interface_name': 'singbox-tun',
         'address': ['172.19.0.1/30'],
         'auto_route': true,
-        'strict_route': true,
+        'strict_route': false,
         'stack': settings.tunStack,
       });
     }
@@ -196,15 +196,69 @@ class ConfigGenerator {
       },
     ];
 
+    // Auto-bypass proxy server IP addresses from TUN to prevent routing loops / deadlocks
+    final ipv4Regex = RegExp(r'^(\d{1,3}\.){3}\d{1,3}$');
+    for (final ob in finalOutbounds) {
+      final type = (ob['type'] ?? '').toString().toLowerCase();
+      if (_proxyTypes.contains(type)) {
+        final server = (ob['server'] ?? '').toString().trim();
+        if (ipv4Regex.hasMatch(server)) {
+          final iface = ob['bind_interface']?.toString();
+          String directOutboundTag = 'direct';
+          if (iface != null && iface.isNotEmpty) {
+            for (final d in finalOutbounds) {
+              if (d['type'] == 'direct' && d['bind_interface'] == iface) {
+                directOutboundTag = (d['tag'] ?? 'direct').toString();
+                break;
+              }
+            }
+          }
+          routeRules.add({
+            'ip_cidr': ['$server/32'],
+            'outbound': directOutboundTag,
+          });
+        }
+      }
+    }
+
     // Inject custom profile rules (e.g. Clash PROCESS-NAME, DOMAIN-SUFFIX, IP-CIDR) with highest priority
     if (customRules.isNotEmpty) {
+      final List<Map<String, dynamic>> mergedCustomRules = [];
       for (final rule in customRules) {
         final target = rule['outbound']?.toString();
         final hasCondition = rule.keys.any((k) => k != 'outbound');
-        if (target != null && allExistingTags.contains(target) && hasCondition) {
-          routeRules.add(Map<String, dynamic>.from(rule));
+        if (target == null || !allExistingTags.contains(target) || !hasCondition) {
+          continue;
+        }
+
+        final matchKey = rule.keys.firstWhere((k) => k != 'outbound');
+        final matchVal = rule[matchKey];
+
+        if (mergedCustomRules.isNotEmpty &&
+            mergedCustomRules.last['outbound'] == target &&
+            mergedCustomRules.last.containsKey(matchKey)) {
+          final prevList = mergedCustomRules.last[matchKey] as List<dynamic>;
+          if (matchVal is List) {
+            for (final item in matchVal) {
+              if (!prevList.contains(item)) {
+                prevList.add(item);
+              }
+            }
+          } else if (!prevList.contains(matchVal)) {
+            prevList.add(matchVal);
+          }
+        } else {
+          final newRule = <String, dynamic>{};
+          if (matchVal is List) {
+            newRule[matchKey] = List<dynamic>.from(matchVal);
+          } else {
+            newRule[matchKey] = [matchVal];
+          }
+          newRule['outbound'] = target;
+          mergedCustomRules.add(newRule);
         }
       }
+      routeRules.addAll(mergedCustomRules);
     }
 
     routeRules.add({
@@ -252,9 +306,25 @@ class ConfigGenerator {
     if (customDns != null) {
       final extraServers = customDns['servers'] as List<dynamic>?;
       if (extraServers != null) {
+        String? intranetDetour;
+        for (final ob in finalOutbounds) {
+          if (ob['type'] == 'direct') {
+            final tag = (ob['tag'] ?? '').toString();
+            final iface = (ob['bind_interface'] ?? '').toString();
+            if (tag.contains('内网') || iface == 'Wi-Fi') {
+              intranetDetour = tag;
+              break;
+            }
+          }
+        }
+
         for (final s in extraServers) {
           if (s is Map<String, dynamic>) {
-            dnsServers.add(s);
+            final copy = Map<String, dynamic>.from(s);
+            if (intranetDetour != null && copy['detour'] == null) {
+              copy['detour'] = intranetDetour;
+            }
+            dnsServers.add(copy);
           }
         }
       }
