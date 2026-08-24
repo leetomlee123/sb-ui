@@ -49,25 +49,21 @@ void main() {
       final service = AppUpdaterService();
       final scriptPath = await service.writeSwapScript(
         stagingDir: r'C:\Temp\stage one',
-        appDir: r'C:\Apps\sb ui',
+        appDir: r'C:\Apps\singular app',
         exeName: 'singular.exe',
       );
 
       final script = await File(scriptPath).readAsString();
 
-      expect(scriptPath.replaceAll('/', r'\'), endsWith(r'stage one\sb_ui_self_update.bat'));
-      expect(script, contains(r'set "APP_DIR=C:\Apps\sb ui"'));
-      expect(script, contains(r'set "SRC_DIR=C:\Temp\stage one"'));
-      expect(script, contains(r'tasklist /FI "IMAGENAME eq %EXE_NAME%"'));
-      // Poll loop must not rely on `timeout` (fails without a console).
-      expect(script, isNot(contains('timeout /t')));
-      expect(script, contains('ping -n 2 127.0.0.1'));
-      // Rollback copy only removed after the new exe landed.
+      expect(scriptPath.replaceAll('/', r'\'), endsWith(r'stage one\singular_self_update.ps1'));
+      expect(script, contains(r'$appDir = "C:\Apps\singular app"'));
+      expect(script, contains(r'$srcDir = "C:\Temp\stage one"'));
+      expect(script, contains('Get-Process -Id \$targetPid'));
+      expect(script, contains('Stop-Process -Id \$targetPid'));
       expect(script, contains('.old'));
-      expect(script, contains('xcopy /e /y /i'));
-      // Staging dir cleanup + self delete.
-      expect(script, contains(r'rd /s /q "%SRC_DIR%"'));
-      expect(script, contains(r'del /f /q "%~f0"'));
+      expect(script, contains('Copy-Item'));
+      expect(script, contains('Start-Process'));
+      expect(script, contains('Remove-Item'));
     });
   });
 }

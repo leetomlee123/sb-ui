@@ -213,59 +213,94 @@ class AppUpdaterService {
   /// (allowed even while running) -> xcopy the staged bundle over the app dir
   /// -> delete `.old` only if the new exe landed -> relaunch -> remove the
   /// staging dir -> self-delete.
+  /// Writes the Windows self-swap PowerShell script used to safely replace
+  /// the running executable and relaunch the updated application.
   Future<String> writeSwapScript({
     required String stagingDir,
     required String appDir,
     required String exeName,
+    int? targetPid,
   }) async {
-    final scriptPath = p.join(stagingDir, 'sb_ui_self_update.bat');
-    final lines = [
-      '@echo off',
-      'set "APP_DIR=$appDir"',
-      'set "SRC_DIR=$stagingDir"',
-      'set "EXE_NAME=$exeName"',
-      'set /a RETRIES=0',
-      '',
-      ':wait_exit',
-      'set /a RETRIES+=1',
-      'if %RETRIES% geq 20 goto do_kill',
-      'tasklist /FI "IMAGENAME eq %EXE_NAME%" 2>nul | find /I "%EXE_NAME%" >nul 2>&1',
-      'if not errorlevel 1 (',
-      '  ping -n 2 127.0.0.1 >nul',
-      '  goto wait_exit',
-      ')',
-      'goto do_swap',
-      '',
-      ':do_kill',
-      'taskkill /F /IM "%EXE_NAME%" >nul 2>&1',
-      'ping -n 2 127.0.0.1 >nul',
-      '',
-      ':do_swap',
-      'if exist "%APP_DIR%\\%EXE_NAME%" move /y "%APP_DIR%\\%EXE_NAME%" "%APP_DIR%\\%EXE_NAME%.old" >nul 2>&1',
-      '',
-      'xcopy /e /y /i "%SRC_DIR%\\*" "%APP_DIR%\\" >nul 2>&1',
-      '',
-      'rem The staging copy includes this script itself; drop the duplicated one.',
-      'del /f /q "%APP_DIR%\\sb_ui_self_update.bat" >nul 2>&1',
-      '',
-      'if exist "%APP_DIR%\\%EXE_NAME%" (',
-      '  if exist "%APP_DIR%\\%EXE_NAME%.old" del /f /q "%APP_DIR%\\%EXE_NAME%.old" >nul 2>&1',
-      ')',
-      '',
-      'cd /d "%APP_DIR%"',
-      'start "" "%EXE_NAME%"',
-      'rd /s /q "%SRC_DIR%" >nul 2>&1',
-      'del /f /q "%~f0" >nul 2>&1',
-    ];
-    // CRLF line endings required for cmd.exe batch parsing
-    final content = '${lines.join('\r\n')}\r\n';
+    final currentPid = targetPid ?? pid;
+    final scriptPath = p.join(stagingDir, 'singular_self_update.ps1');
+
+    final content = '''
+# Singular Windows Silent Self-Updater
+\$targetPid = $currentPid
+\$appDir = "$appDir"
+\$srcDir = "$stagingDir"
+\$oldExeName = "$exeName"
+
+# 1. Wait for the old process to fully exit (max 6 seconds)
+for (\$i = 0; \$i -lt 30; \$i++) {
+    \$proc = Get-Process -Id \$targetPid -ErrorAction SilentlyContinue
+    if (-not \$proc -or \$proc.HasExited) { break }
+    Start-Sleep -Milliseconds 200
+}
+
+# Force terminate any lingering instance of the target process
+\$proc = Get-Process -Id \$targetPid -ErrorAction SilentlyContinue
+if (\$proc -and -not \$proc.HasExited) {
+    Stop-Process -Id \$targetPid -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 300
+}
+
+# Ensure file handles are fully released
+Start-Sleep -Milliseconds 400
+
+# 2. Backup or rename old executable files if locked
+\$oldExePath = Join-Path \$appDir \$oldExeName
+if (Test-Path \$oldExePath) {
+    try {
+        Move-Item -Path \$oldExePath -Destination "\$oldExePath.old" -Force -ErrorAction SilentlyContinue
+    } catch {}
+}
+
+# 3. Copy staged files into destination directory with retry loop
+for (\$attempt = 1; \$attempt -le 5; \$attempt++) {
+    try {
+        Copy-Item -Path (Join-Path \$srcDir "*") -Destination \$appDir -Recurse -Force -ErrorAction Stop
+        break
+    } catch {
+        Start-Sleep -Milliseconds 600
+    }
+}
+
+# Clean up legacy sb_ui.exe and old backup binaries
+if (Test-Path (Join-Path \$appDir "singular.exe")) {
+    Remove-Item -Path (Join-Path \$appDir "sb_ui.exe") -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path (Join-Path \$appDir "sb_ui.exe.old") -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path (Join-Path \$appDir "singular.exe.old") -Force -ErrorAction SilentlyContinue
+}
+
+# Remove updater script from destination if copied over
+\$copiedScript = Join-Path \$appDir "singular_self_update.ps1"
+if (Test-Path \$copiedScript) {
+    Remove-Item -Path \$copiedScript -Force -ErrorAction SilentlyContinue
+}
+
+# 4. Resolve and launch the new executable
+\$launchTarget = Join-Path \$appDir "singular.exe"
+if (-not (Test-Path \$launchTarget)) {
+    \$launchTarget = Join-Path \$appDir \$oldExeName
+}
+
+if (Test-Path \$launchTarget) {
+    Start-Process -FilePath \$launchTarget -WorkingDirectory \$appDir
+}
+
+# 5. Clean up temporary staging directory
+Start-Sleep -Seconds 1
+Remove-Item -Path \$srcDir -Recurse -Force -ErrorAction SilentlyContinue
+''';
+
     final scriptFile = File(scriptPath);
     await scriptFile.parent.create(recursive: true);
     await scriptFile.writeAsString(content, flush: true);
     return scriptPath;
   }
 
-  /// Launches the swap script detached and silently in background without a visible console window.
+  /// Launches the swap script detached and silently in background without any visible console window.
   Future<void> launchDetached(String scriptPath) async {
     if (Platform.isWindows) {
       try {
@@ -276,8 +311,10 @@ class AppUpdaterService {
             '-NonInteractive',
             '-WindowStyle',
             'Hidden',
-            '-Command',
-            'Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$scriptPath`"" -WindowStyle Hidden',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            scriptPath,
           ],
           mode: ProcessStartMode.detached,
         );
