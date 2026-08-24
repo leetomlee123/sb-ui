@@ -88,6 +88,7 @@ class CoreNotifier extends StateNotifier<CoreState> {
   }
 
   Future<bool> startCore() async {
+    await _ref.read(profilesProvider.notifier).ensureLoaded();
     final profilesState = _ref.read(profilesProvider);
     final settings = _ref.read(settingsProvider);
     final activeProfile = profilesState.activeProfile;

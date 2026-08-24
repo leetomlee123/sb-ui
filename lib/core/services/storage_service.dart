@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -49,17 +50,30 @@ class StorageService {
 
   List<Profile> loadProfiles() {
     final raw = _prefs.getString(_keyProfiles);
-    if (raw != null) {
-      try {
-        final decoded = jsonDecode(raw);
-        if (decoded is List) {
-          return decoded
-              .whereType<Map<String, dynamic>>()
-              .map((e) => Profile.fromJson(e))
-              .toList();
-        }
-      } catch (_) {}
+    return parseProfilesFromJson(raw);
+  }
+
+  Future<List<Profile>> loadProfilesAsync() async {
+    final raw = _prefs.getString(_keyProfiles);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      return await Isolate.run(() => parseProfilesFromJson(raw));
+    } catch (_) {
+      return parseProfilesFromJson(raw);
     }
+  }
+
+  static List<Profile> parseProfilesFromJson(String? raw) {
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map<String, dynamic>>()
+            .map((e) => Profile.fromJson(e))
+            .toList();
+      }
+    } catch (_) {}
     return [];
   }
 

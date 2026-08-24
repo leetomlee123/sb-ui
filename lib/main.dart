@@ -58,10 +58,7 @@ void main() async {
       }));
     }
 
-    // 4. Background Asynchronous Startup Tasks (non-blocking)
-    unawaited(_runBackgroundStartupTasks(storageService));
-
-    // 5. Mount App
+    // 4. Mount App immediately (zero background I/O or pre-frame overhead)
     runApp(
       ProviderScope(
         overrides: [
@@ -79,7 +76,7 @@ void main() async {
   });
 }
 
-/// Asynchronous non-blocking maintenance tasks performed in background on startup.
+/// Asynchronous non-blocking maintenance tasks performed in background strictly after the first frame has rendered.
 Future<void> _runBackgroundStartupTasks(StorageService storageService) async {
   // 1. Clear any orphan system proxy left by abnormal previous shutdowns.
   //    Only spawns PowerShell when the dirty flag says a proxy of ours may
@@ -117,8 +114,14 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
     windowManager.addListener(this);
     // Graceful-shutdown primitive shared with the self-updater.
     appShutdownHook = _exitApplication;
-    unawaited(_initTray());
-    _scheduleSilentUpdateCheck();
+
+    // Defer all maintenance IO and tray registration until after the first frame has rendered on screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_runBackgroundStartupTasks(ref.read(storageServiceProvider)));
+      unawaited(_initTray());
+      _scheduleSilentUpdateCheck();
+    });
   }
 
   @override

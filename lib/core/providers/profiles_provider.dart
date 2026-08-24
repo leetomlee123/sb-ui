@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -53,6 +54,7 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
   final Ref _ref;
   final StorageService _storage;
   final _uuid = const Uuid();
+  Completer<void>? _loadCompleter;
   final _dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 15),
     receiveTimeout: const Duration(seconds: 20),
@@ -61,14 +63,48 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
     },
   ));
 
-  ProfilesNotifier(this._ref, this._storage)
+  ProfilesNotifier(this._ref, this._storage, {List<Profile>? initialProfiles})
       : super(ProfilesState(
-          profiles: _storage.loadProfiles(),
+          profiles: initialProfiles ?? const [],
           activeProfileId: _storage.getActiveProfileId(),
+          isLoading: initialProfiles == null,
         )) {
-    // If no active profile is marked, default to the first one
-    if (state.activeProfileId == null && state.profiles.isNotEmpty) {
-      setActiveProfile(state.profiles.first.id);
+    if (initialProfiles != null) {
+      if (state.activeProfileId == null && state.profiles.isNotEmpty) {
+        setActiveProfile(state.profiles.first.id);
+      }
+    } else {
+      _loadProfilesAsync();
+    }
+  }
+
+  Future<void> _loadProfilesAsync() async {
+    _loadCompleter = Completer<void>();
+    try {
+      final profiles = await _storage.loadProfilesAsync();
+      String? activeId = state.activeProfileId ?? _storage.getActiveProfileId();
+      if (activeId == null && profiles.isNotEmpty) {
+        activeId = profiles.first.id;
+        await _storage.setActiveProfileId(activeId);
+      }
+      state = state.copyWith(
+        profiles: profiles,
+        activeProfileId: activeId,
+        isLoading: false,
+      );
+    } catch (_) {
+      state = state.copyWith(isLoading: false);
+    } finally {
+      if (!(_loadCompleter?.isCompleted ?? true)) {
+        _loadCompleter?.complete();
+      }
+    }
+  }
+
+  /// Ensures profiles have been loaded from disk before critical operations like starting the core.
+  Future<void> ensureLoaded() async {
+    if (_loadCompleter != null && !_loadCompleter!.isCompleted) {
+      await _loadCompleter!.future;
     }
   }
 
