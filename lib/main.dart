@@ -103,11 +103,15 @@ void main(List<String> args) async {
       '[App Startup] 核心基础存储与窗口系统初始化完成 (耗时: ${initStopwatch.elapsedMilliseconds}ms)',
     );
 
-    // 3. Kick off window configuration on desktop (native C++ already shows window at GPU first frame)
+    // 3. Kick off window configuration on desktop (hide native frame & native caption buttons)
     if (isDesktop) {
       final windowStopwatch = Stopwatch()..start();
       unawaited(() async {
         try {
+          await windowManager.setTitleBarStyle(
+            TitleBarStyle.hidden,
+            windowButtonVisibility: false,
+          );
           await windowManager.setPreventClose(true);
           if (initialSettings.startMinimized) {
             await windowManager.hide();
@@ -115,7 +119,7 @@ void main(List<String> args) async {
         } catch (_) {}
         windowStopwatch.stop();
         AppLogger.info(
-          '[App Startup] 桌面窗口配置就绪 (耗时: ${windowStopwatch.elapsedMilliseconds}ms)',
+          '[App Startup] 桌面无边框窗口配置就绪 (耗时: ${windowStopwatch.elapsedMilliseconds}ms)',
         );
       }());
     }
