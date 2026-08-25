@@ -17,6 +17,28 @@ class LogsPage extends ConsumerStatefulWidget {
 class _LogsPageState extends ConsumerState<LogsPage> {
   final ScrollController _scrollController = ScrollController();
   static final DateFormat _timeFormat = DateFormat('HH:mm:ss');
+  bool _autoScroll = true;
+  bool _showScrollToBottom = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(() {
+      if (!_scrollController.hasClients) return;
+      final pos = _scrollController.position;
+      final isAtBottom = pos.pixels >= pos.maxScrollExtent - 40;
+      if (isAtBottom && _showScrollToBottom) {
+        setState(() {
+          _showScrollToBottom = false;
+          _autoScroll = true;
+        });
+      } else if (!isAtBottom && !_showScrollToBottom) {
+        setState(() {
+          _showScrollToBottom = true;
+        });
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -24,14 +46,10 @@ class _LogsPageState extends ConsumerState<LogsPage> {
     super.dispose();
   }
 
-  /// Follow the tail only when the user is already near the bottom and the
-  /// page is visible. Uses jumpTo instead of animateTo: a restarted animation
-  /// on every log flush keeps the frame pipeline permanently busy.
+  /// Follow the tail only when auto-scroll is enabled and the page is visible.
   void _followTail() {
-    if (!widget.isVisible || !_scrollController.hasClients) return;
+    if (!widget.isVisible || !_scrollController.hasClients || !_autoScroll) return;
     final position = _scrollController.position;
-    final isNearBottom = position.pixels >= position.maxScrollExtent - 60;
-    if (!isNearBottom) return;
     if (position.pixels < position.maxScrollExtent) {
       _scrollController.jumpTo(position.maxScrollExtent);
     }
@@ -120,7 +138,26 @@ class _LogsPageState extends ConsumerState<LogsPage> {
 
               const SizedBox(width: 12),
 
-              // Pause / Resume
+              // Auto-Scroll Toggle
+              IconButton(
+                icon: Icon(
+                  _autoScroll ? Icons.vertical_align_bottom_rounded : Icons.vertical_align_center_rounded,
+                  size: 19,
+                  color: _autoScroll ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                ),
+                tooltip: _autoScroll ? '自动滚动刷新：开启 (点击暂停跟随)' : '自动滚动刷新：已暂停 (点击恢复跟随)',
+                onPressed: () {
+                  setState(() {
+                    _autoScroll = !_autoScroll;
+                    if (_autoScroll && _scrollController.hasClients) {
+                      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+                      _showScrollToBottom = false;
+                    }
+                  });
+                },
+              ),
+
+              // Pause / Resume Stream
               IconButton(
                 icon: Icon(
                   logsState.isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
@@ -158,41 +195,87 @@ class _LogsPageState extends ConsumerState<LogsPage> {
 
           const SizedBox(height: 16),
 
-          // Logs OLED Console Area
+          // Logs OLED Console Area with Floating Scroll-to-Bottom Button
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF060910),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF1E293B)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: logs.isEmpty
-                  ? Center(
-                      child: Text(
-                        tr.noLogsYet,
-                        style: TextStyle(color: Color(0xFF64748B), fontFamily: 'monospace'),
+            child: Stack(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF060910),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF1E293B)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
                       ),
-                    )
-                  : SelectionArea(
-                      // One shared selection controller for all lines is far
-                      // cheaper than a SelectableText per row.
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        itemCount: logs.length,
-                        itemBuilder: (context, index) {
-                          final entry = logs[index];
-                          return _buildLogLine(entry, index + 1);
+                    ],
+                  ),
+                  child: logs.isEmpty
+                      ? Center(
+                          child: Text(
+                            tr.noLogsYet,
+                            style: const TextStyle(color: Color(0xFF64748B), fontFamily: 'monospace'),
+                          ),
+                        )
+                      : SelectionArea(
+                          child: ListView.builder(
+                            controller: _scrollController,
+                            itemCount: logs.length,
+                            itemBuilder: (context, index) {
+                              final entry = logs[index];
+                              return _buildLogLine(entry, index + 1);
+                            },
+                          ),
+                        ),
+                ),
+                if (_showScrollToBottom)
+                  Positioned(
+                    bottom: 20,
+                    right: 24,
+                    child: Material(
+                      color: const Color(0xFF6366F1),
+                      elevation: 6,
+                      borderRadius: BorderRadius.circular(20),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () {
+                          setState(() {
+                            _autoScroll = true;
+                            _showScrollToBottom = false;
+                          });
+                          if (_scrollController.hasClients) {
+                            _scrollController.animateTo(
+                              _scrollController.position.maxScrollExtent,
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeOutCubic,
+                            );
+                          }
                         },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.arrow_downward_rounded, size: 15, color: Colors.white),
+                              SizedBox(width: 6),
+                              Text(
+                                '滚到底部',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
+                  ),
+              ],
             ),
           ),
         ],
