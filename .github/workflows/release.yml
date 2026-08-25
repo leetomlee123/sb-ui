@@ -64,7 +64,7 @@ jobs:
           Copy-Item -Path "assets/rules/*" -Destination "$bundleDir/config"
 
           # Compress to zip
-          $zipName = "sb-ui-windows-x64-$tag.zip"
+          $zipName = "singular-windows-x64-$tag.zip"
           Compress-Archive -Path "$bundleDir/*" -DestinationPath $zipName -Force
 
           # Generate SHA256 Checksum
@@ -82,5 +82,5 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
-            sb-ui-windows-x64-*.zip
+            singular-windows-x64-*.zip
             SHA256SUMS.txt
