@@ -97,11 +97,26 @@ class AppUpdaterService {
 
   /// Check GitHub for the latest app release (any platform; asset matching is Windows-only).
   Future<RemoteReleaseInfo?> checkLatestRelease() async {
-    try {
-      final response = await _dio.get<Map<String, dynamic>>(repoApiUrl);
-      final data = response.data;
-      if (data == null) return null;
+    final apiUrls = [
+      repoApiUrl,
+      'https://ghproxy.net/$repoApiUrl',
+      'https://mirror.ghproxy.com/$repoApiUrl',
+    ];
 
+    Map<String, dynamic>? data;
+    for (final url in apiUrls) {
+      try {
+        final response = await _dio.get<Map<String, dynamic>>(url);
+        if (response.data != null && response.data!['tag_name'] != null) {
+          data = response.data;
+          break;
+        }
+      } catch (_) {}
+    }
+
+    if (data == null) return null;
+
+    try {
       final tagName = (data['tag_name'] ?? '').toString();
       final version = tagName.startsWith('v') ? tagName.substring(1) : tagName;
       final releaseNotes = (data['body'] ?? '').toString();
@@ -165,8 +180,7 @@ class AppUpdaterService {
   ///
   /// Files that must never clobber the live install are stripped from the
   /// staging copy first:
-  ///  - `config/`           (user's live config dir)
-  ///  - sing-box binaries   (a newer core may already be installed in-place)
+  ///  - `config/` (user's live config dir)
   ///
   /// Returns the staging directory path containing the new bundle.
   Future<String> downloadAndPrepare({
@@ -176,24 +190,41 @@ class AppUpdaterService {
   }) async {
     onProgress(0.05, 'Connecting to download server...');
 
-    final response = await _dio.get<List<int>>(
+    List<int>? bytes;
+    final downloadUrls = [
       downloadUrl,
-      options: Options(responseType: ResponseType.bytes),
-      onReceiveProgress: (received, total) {
-        if (total > 0) {
-          final progress = (received / total).clamp(0.05, 0.85);
-          onProgress(
-            progress,
-            'Downloading: ${(received / (1024 * 1024)).toStringAsFixed(1)} MB / '
-            '${(total / (1024 * 1024)).toStringAsFixed(1)} MB',
-          );
-        }
-      },
-    );
+      'https://ghproxy.net/$downloadUrl',
+      'https://mirror.ghproxy.com/$downloadUrl',
+    ];
 
-    final bytes = response.data;
+    dynamic lastError;
+    for (final url in downloadUrls) {
+      try {
+        final response = await _dio.get<List<int>>(
+          url,
+          options: Options(responseType: ResponseType.bytes),
+          onReceiveProgress: (received, total) {
+            if (total > 0) {
+              final progress = (received / total).clamp(0.05, 0.85);
+              onProgress(
+                progress,
+                'Downloading: ${(received / (1024 * 1024)).toStringAsFixed(1)} MB / '
+                '${(total / (1024 * 1024)).toStringAsFixed(1)} MB',
+              );
+            }
+          },
+        );
+        if (response.data != null && response.data!.isNotEmpty) {
+          bytes = response.data;
+          break;
+        }
+      } catch (e) {
+        lastError = e;
+      }
+    }
+
     if (bytes == null || bytes.isEmpty) {
-      throw Exception('Downloaded update archive is empty.');
+      throw Exception('Failed to download update archive: $lastError');
     }
 
     // Verify integrity via SHA256SUMS.txt when the release provides one.
