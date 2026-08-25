@@ -88,6 +88,7 @@ class CoreNotifier extends StateNotifier<CoreState> {
   }
 
   Future<bool> startCore() async {
+    final totalWatch = Stopwatch()..start();
     await _ref.read(profilesProvider.notifier).ensureLoaded();
     final profilesState = _ref.read(profilesProvider);
     final settings = _ref.read(settingsProvider);
@@ -101,7 +102,10 @@ class CoreNotifier extends StateNotifier<CoreState> {
       return false;
     }
 
+    _processManager.log('[Core] 正在启动 sing-box 核心服务 (配置: ${activeProfile.name})...');
+
     try {
+      final genWatch = Stopwatch()..start();
       final parseResult = ProfileParser.parse(activeProfile.rawConfig);
       final configJson = ConfigGenerator.generate(
         settings: settings,
@@ -115,6 +119,8 @@ class CoreNotifier extends StateNotifier<CoreState> {
       await configFile.writeAsString(
         const JsonEncoder.withIndent('  ').convert(configJson),
       );
+      genWatch.stop();
+      _processManager.log('[Core] 配置解析与规则构建完成 (耗时: ${genWatch.elapsedMilliseconds}ms)');
 
       // Create Clash API client
       _apiClient = ClashApiClient(
@@ -138,13 +144,20 @@ class CoreNotifier extends StateNotifier<CoreState> {
 
         // Configure system proxy if enabled
         if (settings.systemProxyEnabled) {
+          final proxyWatch = Stopwatch()..start();
           final applied = await SystemProxyManager.setProxy(
             host: '127.0.0.1',
             port: settings.mixedPort,
           );
+          proxyWatch.stop();
           await _markSystemProxyDirty(applied);
+          _processManager.log('[Core] 系统代理配置完成 (耗时: ${proxyWatch.elapsedMilliseconds}ms)');
         }
+
+        totalWatch.stop();
+        _processManager.log('[Core] 核心服务启动就绪，全局耗时: ${totalWatch.elapsedMilliseconds}ms');
       } else {
+        totalWatch.stop();
         if (_processManager.status == CoreStatus.stopped) {
           state = state.copyWith(
             status: CoreStatus.stopped,
@@ -159,10 +172,12 @@ class CoreNotifier extends StateNotifier<CoreState> {
       }
       return success;
     } catch (e) {
+      totalWatch.stop();
       state = state.copyWith(
         status: CoreStatus.error,
         errorMessage: 'Error generating configuration: $e',
       );
+      _processManager.log('[Core] 启动核心服务异常 (耗时: ${totalWatch.elapsedMilliseconds}ms): $e');
       return false;
     }
   }

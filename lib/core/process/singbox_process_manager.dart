@@ -131,8 +131,17 @@ class SingboxProcessManager {
     return false;
   }
 
+  void logEntry(LogEntry entry) {
+    _outputController.add(entry);
+  }
+
+  void log(String message, [LogLevel level = LogLevel.info]) {
+    _outputController.add(LogEntry(level: level, message: message));
+  }
+
   Future<bool> checkConfig(String binaryPath, String configPath) async {
     try {
+      final checkStopwatch = Stopwatch()..start();
       final configParentDir = File(configPath).parent.path;
       final result = await Process.run(
         binaryPath,
@@ -140,8 +149,12 @@ class SingboxProcessManager {
         workingDirectory: configParentDir,
         environment: _coreEnvironment,
       );
+      checkStopwatch.stop();
       if (result.exitCode == 0) {
-        _outputController.add(LogEntry(level: LogLevel.info, message: 'Config validation passed.'));
+        _outputController.add(LogEntry(
+          level: LogLevel.info,
+          message: '配置文件校验通过 (耗时: ${checkStopwatch.elapsedMilliseconds}ms)',
+        ));
         return true;
       } else {
         final errText = result.stderr.toString().trim();
@@ -149,12 +162,12 @@ class SingboxProcessManager {
         final combined = errText.isNotEmpty ? errText : outText;
         _outputController.add(LogEntry(
           level: LogLevel.error,
-          message: 'Config check failed (exit code ${result.exitCode}): $combined',
+          message: '配置文件校验未通过 (exit code ${result.exitCode}，耗时: ${checkStopwatch.elapsedMilliseconds}ms): $combined',
         ));
         return false;
       }
     } catch (e) {
-      _outputController.add(LogEntry(level: LogLevel.error, message: 'Failed to run config check: $e'));
+      _outputController.add(LogEntry(level: LogLevel.error, message: '执行配置校验异常: $e'));
       return false;
     }
   }
@@ -164,6 +177,7 @@ class SingboxProcessManager {
     String? customBinaryPath,
     bool requireElevated = false,
   }) async {
+    final coreStartStopwatch = Stopwatch()..start();
     if (_status == CoreStatus.running) {
       await stop();
     }
@@ -174,21 +188,31 @@ class SingboxProcessManager {
     _lastRequireElevated = requireElevated;
 
     _updateStatus(CoreStatus.starting);
-    _outputController.add(LogEntry(level: LogLevel.info, message: 'Finding sing-box binary...'));
+    _outputController.add(LogEntry(level: LogLevel.info, message: '正在检索 sing-box 内核可执行程序...'));
 
+    final binaryStopwatch = Stopwatch()..start();
     final binary = await findSingboxBinary(customPath: customBinaryPath);
+    binaryStopwatch.stop();
+
     if (binary == null) {
+      coreStartStopwatch.stop();
       _outputController.add(LogEntry(
         level: LogLevel.error,
-        message: 'sing-box binary not found. Please specify the binary path in Settings.',
+        message: '未找到 sing-box 内核可执行文件 (耗时: ${binaryStopwatch.elapsedMilliseconds}ms)，请在设置中配置内核路径。',
       ));
       _updateStatus(CoreStatus.error);
       return false;
     }
 
-    _outputController.add(LogEntry(level: LogLevel.info, message: 'Validating config file at $configPath...'));
+    _outputController.add(LogEntry(
+      level: LogLevel.info,
+      message: '已定位内核程序: $binary (耗时: ${binaryStopwatch.elapsedMilliseconds}ms)',
+    ));
+
+    _outputController.add(LogEntry(level: LogLevel.info, message: '正在校验配置文件有效性 ($configPath)...'));
     final valid = await checkConfig(binary, configPath);
     if (!valid) {
+      coreStartStopwatch.stop();
       _updateStatus(CoreStatus.error);
       return false;
     }
@@ -213,11 +237,14 @@ class SingboxProcessManager {
           message: '正在请求 Windows UAC 管理员权限以启动 TUN 虚拟网卡...',
         ));
 
+        final uacStopwatch = Stopwatch()..start();
         final res = await WinTunService.startElevated(
           binaryPath: binary,
           configPath: configPath,
           workingDir: configParentDir,
         );
+        uacStopwatch.stop();
+        coreStartStopwatch.stop();
 
         if (res.isSuccess) {
           _elevatedPid = res.pid;
@@ -225,20 +252,20 @@ class SingboxProcessManager {
           _updateStatus(CoreStatus.running);
           _outputController.add(LogEntry(
             level: LogLevel.info,
-            message: 'sing-box TUN 核心已通过管理员权限成功启动 (PID: ${res.pid})',
+            message: 'sing-box TUN 核心启动成功 (PID: ${res.pid}，提权耗时: ${uacStopwatch.elapsedMilliseconds}ms，核心总启动耗时: ${coreStartStopwatch.elapsedMilliseconds}ms)',
           ));
           return true;
         } else if (res.isCancelled) {
           _outputController.add(LogEntry(
             level: LogLevel.warn,
-            message: 'TUN 开启失败：用户取消了管理员授权 (UAC)',
+            message: 'TUN 开启已取消：用户取消了管理员授权 (UAC，耗时: ${uacStopwatch.elapsedMilliseconds}ms)',
           ));
           _updateStatus(CoreStatus.stopped);
           return false;
         } else {
           _outputController.add(LogEntry(
             level: LogLevel.error,
-            message: 'TUN 模式提权启动失败: ${res.message}',
+            message: 'TUN 模式提权启动失败 (耗时: ${uacStopwatch.elapsedMilliseconds}ms): ${res.message}',
           ));
           _updateStatus(CoreStatus.error);
           return false;
@@ -246,7 +273,8 @@ class SingboxProcessManager {
       }
 
       // Normal process start (Standard Proxy or non-Windows / already Admin)
-      _outputController.add(LogEntry(level: LogLevel.info, message: 'Launching sing-box process...'));
+      _outputController.add(LogEntry(level: LogLevel.info, message: '正在拉起 sing-box 核心进程...'));
+      final launchStopwatch = Stopwatch()..start();
       _process = await Process.start(
         binary,
         ['run', '-c', configPath],
@@ -254,9 +282,16 @@ class SingboxProcessManager {
         workingDirectory: configParentDir,
         environment: _coreEnvironment,
       );
+      launchStopwatch.stop();
+      coreStartStopwatch.stop();
 
       _startedAt = DateTime.now();
       _updateStatus(CoreStatus.running);
+
+      _outputController.add(LogEntry(
+        level: LogLevel.info,
+        message: 'sing-box 核心进程启动成功 (PID: ${_process!.pid}，进程拉起: ${launchStopwatch.elapsedMilliseconds}ms，核心总启动耗时: ${coreStartStopwatch.elapsedMilliseconds}ms)',
+      ));
 
       // Reset crash counter after 30s of healthy operation
       _crashResetTimer?.cancel();

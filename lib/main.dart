@@ -13,18 +13,24 @@ import 'core/providers/storage_provider.dart';
 import 'core/services/app_updater_service.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/system_proxy_manager.dart';
+import 'core/utils/app_logger.dart';
 import 'features/shell/main_shell_view.dart';
 import 'shared/widgets/close_confirm_dialog.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
+  final appStartStopwatch = Stopwatch()..start();
+  AppLogger.info('[App Startup] 应用程序初始化启动...');
+
   runZonedGuarded(() async {
+    final initStopwatch = Stopwatch()..start();
     WidgetsFlutterBinding.ensureInitialized();
 
     // 1. Flutter framework error handler (prevent UI termination)
     FlutterError.onError = (FlutterErrorDetails details) {
       FlutterError.presentError(details);
+      AppLogger.error('[FlutterError] ${details.exceptionAsString()}');
     };
 
     // 2. Parallel Fast Boot: initialize storage & window manager concurrently
@@ -36,9 +42,15 @@ void main() async {
 
     final storageService = results[0] as StorageService;
     final initialSettings = storageService.loadSettings();
+    initStopwatch.stop();
+
+    AppLogger.info(
+      '[App Startup] 核心基础存储与窗口系统初始化完成 (耗时: ${initStopwatch.elapsedMilliseconds}ms)',
+    );
 
     // 3. Kick off window display instantly on desktop
     if (isDesktop) {
+      final windowStopwatch = Stopwatch()..start();
       const windowOptions = WindowOptions(
         size: Size(1020, 680),
         minimumSize: Size(820, 560),
@@ -55,6 +67,10 @@ void main() async {
           await windowManager.show();
           await windowManager.focus();
         }
+        windowStopwatch.stop();
+        AppLogger.info(
+          '[App Startup] 桌面窗口渲染就绪展示 (耗时: ${windowStopwatch.elapsedMilliseconds}ms)',
+        );
       }));
     }
 
@@ -68,16 +84,17 @@ void main() async {
                 initial: initialSettings,
               )),
         ],
-        child: const SingboxApp(),
+        child: SingboxApp(appStartStopwatch: appStartStopwatch),
       ),
     );
   }, (error, stackTrace) {
-    debugPrint('[Unhandled Exception Shield] $error\n$stackTrace');
+    AppLogger.error('[Unhandled Exception Shield] $error\n$stackTrace');
   });
 }
 
 /// Asynchronous non-blocking maintenance tasks performed in background strictly after the first frame has rendered.
 Future<void> _runBackgroundStartupTasks(StorageService storageService) async {
+  final bgStopwatch = Stopwatch()..start();
   // 1. Clear any orphan system proxy left by abnormal previous shutdowns.
   //    Only spawns PowerShell when the dirty flag says a proxy of ours may
   //    still be applied — skips it entirely on normal launches.
@@ -97,10 +114,16 @@ Future<void> _runBackgroundStartupTasks(StorageService storageService) async {
   try {
     await AppUpdaterService.cleanupOnStartup();
   } catch (_) {}
+
+  bgStopwatch.stop();
+  AppLogger.info(
+    '[App Startup] 后台启动自检与维护任务完成 (耗时: ${bgStopwatch.elapsedMilliseconds}ms)',
+  );
 }
 
 class SingboxApp extends ConsumerStatefulWidget {
-  const SingboxApp({super.key});
+  final Stopwatch? appStartStopwatch;
+  const SingboxApp({super.key, this.appStartStopwatch});
 
   @override
   ConsumerState<SingboxApp> createState() => _SingboxAppState();
@@ -118,6 +141,12 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
     // Defer all maintenance IO and tray registration until after the first frame has rendered on screen
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      if (widget.appStartStopwatch != null && widget.appStartStopwatch!.isRunning) {
+        widget.appStartStopwatch!.stop();
+        AppLogger.info(
+          '[App Startup] 应用首帧渲染完成，总冷启动耗时: ${widget.appStartStopwatch!.elapsedMilliseconds}ms',
+        );
+      }
       unawaited(_runBackgroundStartupTasks(ref.read(storageServiceProvider)));
       unawaited(_initTray());
       _scheduleSilentUpdateCheck();

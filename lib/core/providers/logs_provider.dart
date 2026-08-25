@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/log_entry.dart';
+import '../utils/app_logger.dart';
 import 'core_provider.dart';
 
 class LogsState {
@@ -48,19 +49,36 @@ class LogsNotifier extends StateNotifier<LogsState> {
   final Ref _ref;
   StreamSubscription<LogEntry>? _wsLogSub;
   StreamSubscription<LogEntry>? _processOutputSub;
+  StreamSubscription<LogEntry>? _appLoggerSub;
 
   final ListQueue<LogEntry> _logsQueue = ListQueue<LogEntry>(500);
   final List<LogEntry> _incomingBuffer = [];
   Timer? _flushTimer;
 
   LogsNotifier(this._ref) : super(LogsState()) {
-    // Listen to process output
-    final processMgr = _ref.read(coreProvider.notifier).processManager;
-    _processOutputSub = processMgr.outputStream.listen((entry) {
+    // 1. Preload early startup / diagnostic logs from AppLogger buffer
+    for (final e in AppLogger.history) {
+      if (_logsQueue.length >= 500) {
+        _logsQueue.removeFirst();
+      }
+      _logsQueue.addLast(e);
+    }
+    if (_logsQueue.isNotEmpty) {
+      state = state.copyWith(logs: _logsQueue.toList(growable: false));
+    }
+
+    // 2. Listen to AppLogger stream for app-level & routed logs
+    _appLoggerSub = AppLogger.stream.listen((entry) {
       _addLog(entry);
     });
 
-    // Listen to core state to attach WS logs
+    // 3. Listen to core process output and route into AppLogger
+    final processMgr = _ref.read(coreProvider.notifier).processManager;
+    _processOutputSub = processMgr.outputStream.listen((entry) {
+      AppLogger.addEntry(entry);
+    });
+
+    // 4. Listen to core state to attach WS logs
     _ref.listen<CoreState>(coreProvider, (prev, next) {
       if (next.isRunning && (prev == null || !prev.isRunning)) {
         _startWsLogs();
@@ -79,7 +97,7 @@ class LogsNotifier extends StateNotifier<LogsState> {
     final client = _ref.read(clashApiClientProvider);
     if (client != null) {
       _wsLogSub = client.logsStream(level: 'info').listen((entry) {
-        _addLog(entry);
+        AppLogger.addEntry(entry);
       });
     }
   }
@@ -94,7 +112,7 @@ class LogsNotifier extends StateNotifier<LogsState> {
     _incomingBuffer.add(entry);
 
     if (_flushTimer == null || !_flushTimer!.isActive) {
-      _flushTimer = Timer(const Duration(milliseconds: 500), _flushLogs);
+      _flushTimer = Timer(const Duration(milliseconds: 300), _flushLogs);
     }
   }
 
@@ -111,6 +129,10 @@ class LogsNotifier extends StateNotifier<LogsState> {
     state = state.copyWith(logs: _logsQueue.toList(growable: false));
   }
 
+  void addLog(String message, [LogLevel level = LogLevel.info]) {
+    AppLogger.log(message, level: level);
+  }
+
   void setFilterLevel(LogLevel level) {
     state = state.copyWith(filterLevel: level);
   }
@@ -124,6 +146,7 @@ class LogsNotifier extends StateNotifier<LogsState> {
   }
 
   void clearLogs() {
+    AppLogger.clear();
     _incomingBuffer.clear();
     _logsQueue.clear();
     state = state.copyWith(logs: []);
@@ -134,6 +157,7 @@ class LogsNotifier extends StateNotifier<LogsState> {
     _flushTimer?.cancel();
     _wsLogSub?.cancel();
     _processOutputSub?.cancel();
+    _appLoggerSub?.cancel();
     super.dispose();
   }
 }
