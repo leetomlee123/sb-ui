@@ -69,7 +69,7 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Bar: Strategy Group Chips, Search & Speed Test
+          // 1. Top Strategy Groups Row & Quick Actions
           Row(
             children: [
               // Strategy Groups selector chips
@@ -149,7 +149,95 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
                 ),
               ),
 
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
+
+              // Speed Test Button
+              ElevatedButton.icon(
+                onPressed: () {
+                  ref.read(proxiesProvider.notifier).testAllInSelectedGroup();
+                },
+                icon: const Icon(Icons.speed_rounded, size: 15),
+                label: Text(tr.pingAll, style: const TextStyle(fontSize: 12)),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                ),
+              ),
+
+              const SizedBox(width: 6),
+
+              // Refresh Button
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                tooltip: tr.refresh,
+                onPressed: () {
+                  ref.read(proxiesProvider.notifier).fetchProxies();
+                },
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // 2. Sub-Toolbar: Group Info Badge & Filtering Controls (Search, Hide Unavailable, Sort)
+          Row(
+            children: [
+              // Active Group Status Indicator badge
+              if (activeGroup != null)
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B).withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF334155), width: 0.8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          activeGroup.type == OutboundType.urltest ? Icons.bolt_rounded : Icons.alt_route_rounded,
+                          size: 14,
+                          color: activeGroup.type == OutboundType.urltest ? const Color(0xFFF59E0B) : const Color(0xFF818CF8),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${activeGroup.name}: ',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)),
+                        ),
+                        Flexible(
+                          child: Text(
+                            activeGroup.current,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF38BDF8),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (activeGroup.type == OutboundType.urltest) ...[
+                          const SizedBox(width: 6),
+                          const Text(
+                            '⚡ (自动优选)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF10B981),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(width: 8),
+                        Text(
+                          '(${filteredNodes.length}/${activeGroup.all.length} 节点)',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                const Spacer(),
+
+              const SizedBox(width: 12),
 
               // Filter Unavailable Toggle
               FilterChip(
@@ -160,7 +248,7 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
                 },
                 avatar: Icon(
                   proxiesState.hideUnavailable ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                  size: 13,
+                  size: 14,
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 4),
               ),
@@ -207,11 +295,11 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
                   ),
                 ],
                 child: Container(
-                  height: 38,
+                  height: 36,
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     children: [
@@ -219,7 +307,7 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
                         proxiesState.sortMode == ProxySortMode.delayAsc
                             ? Icons.speed_rounded
                             : (proxiesState.sortMode == ProxySortMode.nameAsc ? Icons.sort_by_alpha_rounded : Icons.sort_rounded),
-                        size: 16,
+                        size: 15,
                         color: proxiesState.sortMode != ProxySortMode.defaultOrder ? const Color(0xFF818CF8) : null,
                       ),
                       const SizedBox(width: 4),
@@ -235,21 +323,21 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
                 ),
               ),
 
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
 
               // Search Filter Field
               SizedBox(
-                width: 160,
-                height: 38,
+                width: 170,
+                height: 36,
                 child: TextField(
                   decoration: InputDecoration(
                     hintText: tr.filterNodes,
                     hintStyle: const TextStyle(fontSize: 12),
                     prefixIcon: const Icon(Icons.search_rounded, size: 16),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10),
                     filled: true,
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                       borderSide: BorderSide.none,
                     ),
                   ),
@@ -258,80 +346,10 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
                   },
                 ),
               ),
-
-              const SizedBox(width: 10),
-
-              // Speed Test Button
-              ElevatedButton.icon(
-                onPressed: () {
-                  ref.read(proxiesProvider.notifier).testAllInSelectedGroup();
-                },
-                icon: const Icon(Icons.speed_rounded, size: 15),
-                label: Text(tr.pingAll, style: const TextStyle(fontSize: 12)),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                ),
-              ),
-
-              const SizedBox(width: 6),
-
-              // Refresh
-              IconButton(
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                tooltip: tr.refresh,
-                onPressed: () {
-                  ref.read(proxiesProvider.notifier).fetchProxies();
-                },
-              ),
             ],
           ),
 
           const SizedBox(height: 12),
-
-          // Status indicator bar showing currently active group & routing outbound
-          if (activeGroup != null)
-            Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E293B).withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF334155), width: 0.8),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    activeGroup.type == OutboundType.urltest ? Icons.bolt_rounded : Icons.alt_route_rounded,
-                    size: 14,
-                    color: activeGroup.type == OutboundType.urltest ? const Color(0xFFF59E0B) : const Color(0xFF818CF8),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${activeGroup.name} (${activeGroup.type == OutboundType.urltest ? "URLTest" : "Selector"}): ',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)),
-                  ),
-                  Text(
-                    activeGroup.current,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF38BDF8),
-                    ),
-                  ),
-                  if (activeGroup.type == OutboundType.urltest) ...[
-                    const SizedBox(width: 8),
-                    const Text(
-                      '⚡ (自动优选中)',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF10B981),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
 
           // Nodes Grid (Asymmetrical Double-Bezel Cards)
           Expanded(
