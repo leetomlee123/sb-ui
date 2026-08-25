@@ -58,9 +58,16 @@ class AppUpdaterService {
     } catch (_) {}
   }
 
+  static const kTrustedReleasePublicKeys = <String, String>{
+    'release-5990b8030c853b5353c59397': '/J66UPbmhTRQwNKuGJGejVOFo1rZyXjDQDeizo4SEos=',
+  };
+
+  static const kDefaultAppArchiveUrl =
+      'https://github.com/leetomlee123/singular/releases/latest/download/app-archive.json';
+
   /// Creates a configured DesktopUpdaterController with local recovery store
   static Future<DesktopUpdaterController> createDesktopUpdaterController({
-    required Uri appArchiveUrl,
+    Uri? appArchiveUrl,
     Map<String, String>? trustedReleasePublicKeys,
     String? expectedPackageId,
     String channel = 'stable',
@@ -82,11 +89,12 @@ class AppUpdaterService {
     }
 
     return DesktopUpdaterController(
-      appArchiveUrl: appArchiveUrl,
+      appArchiveUrl: appArchiveUrl ?? Uri.parse(kDefaultAppArchiveUrl),
       expectedPackageId: packageId,
-      trustedReleasePublicKeys: trustedReleasePublicKeys ?? {},
+      trustedReleasePublicKeys: trustedReleasePublicKeys ?? kTrustedReleasePublicKeys,
       recoveryStore: recoveryStore,
       channel: channel,
+      skipInitialVersionCheck: true,
     );
   }
 

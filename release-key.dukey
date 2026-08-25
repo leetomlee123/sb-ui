@@ -1,0 +1,19 @@
+{
+  "format": "desktop-updater-release-key-bundle",
+  "version": 1,
+  "kdf": {
+    "name": "argon2id",
+    "version": 19,
+    "memoryKiB": 65536,
+    "iterations": 3,
+    "parallelism": 1,
+    "salt": "KagZpoomfjO6UOedhe1EDg==",
+    "keyLength": 32
+  },
+  "cipher": {
+    "name": "xchacha20-poly1305",
+    "nonce": "Cr3WaYZSaehM4PdyJGgpxsQp4/csL+Zx",
+    "ciphertext": "UKM9V0+iXeCt9jt5omYc+ssWt0V32mJjoivNetl7/LBnQq9nqasFp2Pr2qZmOw7YLHgVdcCxnFLKOF4CmRXSQiFdmO4otEd/iuzjyVc0kdbSYzrflwDToLO5juOg2I/VucfWRpB3D/j/5wHZmZKP5s2WbOuRUfzeYJMBBQXzTDV+/U5EiAswTu8tN5cpxXZii4NTaQ5so5GwEb9y0MPn1yueF8ACcsj6r8qGTr81LCLQtIe3CZ1SI72Aq5q8jedZMCy9Olqtegki3MCzM+EOtqx278LvIM5Nf3r9OtRSIB2MAkDXhczQY7r3S4bHWk8hT20eEpGskdO/Zt1I9Rajwyt6cGMP4DvOsPztmYbeOHi4ut6Q1MsKaONamubpQU+gOSA/MjHPa9RIFwQ37QF4pQdGAvAf1/Z/NN0Q/C9BIRKBL4BnXKis/SiaQ75+dgRmgYArak8hpOsOV8IZdRcDQGb1Gs/8/qx9uM8/6jfNVIIMnGLNEIOPuhyXEO1WZM9Mo7uZAJ2wIdb23wAv41FXKUHC/JyuLrjiZ/jEZEv8HoyVRhDHU2v3PsJHQFoJKCQh0nlS",
+    "mac": "VDwm6QfankxoNxjBBvcfpg=="
+  }
+}

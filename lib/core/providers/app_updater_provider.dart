@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:desktop_updater/desktop_updater.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
@@ -61,6 +62,7 @@ class AppUpdaterState {
 class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
   final AppUpdaterService _updaterService;
   final Ref _ref;
+  DesktopUpdaterController? _controller;
 
   AppUpdaterNotifier(this._ref, {AppUpdaterService? updaterService})
       : _updaterService = updaterService ?? AppUpdaterService(),
@@ -68,9 +70,49 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
     init();
   }
 
+  DesktopUpdaterController? get controller => _controller;
+
   Future<void> init() async {
     final ver = await getCurrentVersion();
     state = state.copyWith(currentVersion: ver);
+
+    try {
+      _controller = await AppUpdaterService.createDesktopUpdaterController();
+      _controller?.addListener(_onControllerStateChanged);
+    } catch (_) {}
+  }
+
+  void _onControllerStateChanged() {
+    final c = _controller;
+    if (c == null) return;
+    final cState = c.state;
+
+    if (cState is UpdateDownloading) {
+      final total = cState.totalBytes;
+      final progress = total > 0 ? (cState.receivedBytes / total).clamp(0.0, 1.0) : 0.0;
+      state = state.copyWith(
+        status: UpdateStatus.downloading,
+        progress: progress,
+        statusMessage: 'Downloading: ${(cState.receivedBytes / (1024 * 1024)).toStringAsFixed(1)} MB',
+      );
+    } else if (cState is UpdateReadyToInstall) {
+      state = state.copyWith(
+        status: UpdateStatus.installing,
+        progress: 1.0,
+        statusMessage: 'Ready to restart',
+      );
+    } else if (cState is UpdateInstalling) {
+      state = state.copyWith(
+        status: UpdateStatus.installing,
+        progress: 1.0,
+        statusMessage: 'Installing update...',
+      );
+    } else if (cState is UpdateFailed) {
+      state = state.copyWith(
+        status: UpdateStatus.error,
+        errorMessage: cState.error.toString(),
+      );
+    }
   }
 
   Future<String> getCurrentVersion() async {
@@ -109,8 +151,31 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
 
     try {
       final currentVer = await getCurrentVersion();
-      final latest = await _updaterService.checkLatestRelease();
 
+      // 1. Try official desktop_updater controller check first
+      if (_controller != null) {
+        try {
+          final res = await _controller!.checkForUpdates();
+          if (res is ManualUpdateCheckAvailable) {
+            state = state.copyWith(
+              status: UpdateStatus.available,
+              currentVersion: currentVer,
+              statusMessage: 'New version ${res.descriptor.version} is available',
+            );
+            return;
+          } else if (res is ManualUpdateCheckUpToDate) {
+            state = state.copyWith(
+              status: UpdateStatus.idle,
+              currentVersion: currentVer,
+              statusMessage: manual ? 'Currently on the latest version' : null,
+            );
+            return;
+          }
+        } catch (_) {}
+      }
+
+      // 2. Fallback to GitHub Releases API
+      final latest = await _updaterService.checkLatestRelease();
       if (latest == null) {
         state = state.copyWith(
           status: UpdateStatus.idle,
@@ -140,10 +205,40 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
   }
 
   Future<bool> applyUpdate() async {
+    _syncProxy();
+
+    // 1. If desktop_updater controller has an active update, use official desktop_updater flow
+    if (_controller != null && _controller!.state is UpdateAvailable) {
+      try {
+        state = state.copyWith(
+          status: UpdateStatus.downloading,
+          progress: 0.0,
+          statusMessage: 'Downloading update via desktop_updater...',
+        );
+        await _controller!.downloadUpdate();
+
+        state = state.copyWith(
+          status: UpdateStatus.installing,
+          statusMessage: 'Restarting application...',
+        );
+
+        try {
+          await _ref.read(coreProvider.notifier).stopCore();
+        } catch (_) {}
+
+        final hook = appShutdownHook;
+        if (hook != null) await hook();
+
+        await _controller!.restartApp();
+        return true;
+      } catch (_) {
+        // Continue to fallback if desktop_updater controller fails
+      }
+    }
+
+    // 2. Direct release bundle self-update
     final release = state.latestRelease;
     if (release == null || release.downloadUrl.isEmpty) return false;
-
-    _syncProxy();
 
     state = state.copyWith(
       status: UpdateStatus.downloading,
@@ -200,6 +295,13 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
       );
       return false;
     }
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_onControllerStateChanged);
+    _controller?.dispose();
+    super.dispose();
   }
 }
 

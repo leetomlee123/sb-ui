@@ -81,6 +81,14 @@ jobs:
 
           Write-Host "Created $zipName (SHA256: $hash)"
 
+      - name: Package with desktop_updater
+        shell: pwsh
+        env:
+          DESKTOP_UPDATER_KEY_BUNDLE_PASSPHRASE: "SingularAppReleaseKey2026Pass"
+        run: |
+          dart run desktop_updater:release keys import --input release-key.dukey --passphrase-env DESKTOP_UPDATER_KEY_BUNDLE_PASSPHRASE
+          dart run desktop_updater:release publish --platform windows --project-type flutter --initialize-feed
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -92,3 +100,6 @@ jobs:
           files: |
             singular-windows-x64-*.zip
             SHA256SUMS.txt
+            dist/desktop_updater/app-archive.json
+            dist/desktop_updater/releases/**/release.json
+            dist/desktop_updater/releases/**/*.zip
