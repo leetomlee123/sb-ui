@@ -177,14 +177,18 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
       );
 
       // Hand control to the script; it waits for this process to exit,
-      // swaps the files, deletes the rollback copy and relaunches the app.
+      // swaps the files, and relaunches the app.
       await _updaterService.launchDetached(scriptPath);
+
+      // Stop sing-box core cleanly to release TUN handles and port bindings
+      try {
+        await _ref.read(coreProvider.notifier).stopCore();
+      } catch (_) {}
 
       final hook = appShutdownHook;
       if (hook != null) {
         await hook();
       } else {
-        await _updaterService.restartApp();
         exit(0);
       }
       return true;

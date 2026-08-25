@@ -298,7 +298,7 @@ class AppUpdaterService {
     } catch (_) {}
   }
 
-  /// Writes the Windows self-swap PowerShell script used to safely replace
+  /// Writes the Windows self-swap Batch script used to safely replace
   /// the running executable and relaunch the updated application.
   Future<String> writeSwapScript({
     required String stagingDir,
@@ -307,106 +307,53 @@ class AppUpdaterService {
     int? targetPid,
   }) async {
     final currentPid = targetPid ?? pid;
-    final scriptPath = p.join(stagingDir, 'singular_self_update.ps1');
+    final scriptPath = p.join(Directory.systemTemp.path, 'singular_self_update.bat');
 
+    // Windows Batch script is universally supported across all Windows versions,
+    // bypasses PowerShell execution restrictions, and runs outside the staging folder.
     final content = '''
-# Singular Windows Silent Self-Updater
-\$targetPid = $currentPid
-\$appDir = "$appDir"
-\$srcDir = "$stagingDir"
-\$exeName = "$exeName"
+@echo off
+setlocal enabledelayedexpansion
 
-# 1. Wait for the old process to fully exit (max 8 seconds)
-for (\$i = 0; \$i -lt 40; \$i++) {
-    \$proc = Get-Process -Id \$targetPid -ErrorAction SilentlyContinue
-    if (-not \$proc -or \$proc.HasExited) { break }
-    Start-Sleep -Milliseconds 200
-}
+:: 1. Wait for the old process (PID $currentPid) to fully exit (up to 8 seconds)
+for /l %%i in (1, 1, 20) do (
+    tasklist /fi "PID eq $currentPid" 2>nul | findstr /i "$currentPid" >nul
+    if errorlevel 1 goto :PROCEED
+    timeout /t 1 /nobreak >nul
+)
 
-# Force terminate any lingering instances of the target process
-\$proc = Get-Process -Id \$targetPid -ErrorAction SilentlyContinue
-if (\$proc -and -not \$proc.HasExited) {
-    Stop-Process -Id \$targetPid -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 300
-}
-Get-Process -Name "singular" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+:: Force kill if still lingering
+taskkill /f /pid $currentPid >nul 2>&1
+taskkill /f /im "$exeName" >nul 2>&1
+timeout /t 1 /nobreak >nul
 
-# Ensure file handles are fully released
-Start-Sleep -Milliseconds 500
+:PROCEED
+:: 2. Rename existing executable as backup
+if exist "$appDir\\$exeName" (
+    move /y "$appDir\\$exeName" "$appDir\\$exeName.old" >nul 2>&1
+)
+if exist "$appDir\\singular.exe" (
+    move /y "$appDir\\singular.exe" "$appDir\\singular.exe.old" >nul 2>&1
+)
 
-# 2. Backup or rename old executable files
-\$targetExePath = Join-Path \$appDir \$exeName
-if (Test-Path \$targetExePath) {
-    try {
-        Move-Item -Path \$targetExePath -Destination "\$targetExePath.old" -Force -ErrorAction SilentlyContinue
-    } catch {}
-}
+:: 3. Robust directory tree copy from staging dir to app dir
+robocopy "$stagingDir" "$appDir" /E /IS /IT /R:3 /W:1 /NP /NFL /NDL /NJH /NJS >nul 2>&1
+if errorlevel 8 (
+    xcopy "$stagingDir\\*" "$appDir\\" /E /Y /I /Q >nul 2>&1
+)
 
-# 3. Robust directory tree copy (uses robocopy or recursive file sync without directory collisions)
-\$copySuccess = \$false
-for (\$attempt = 1; \$attempt -le 5; \$attempt++) {
-    try {
-        & robocopy \$srcDir \$appDir /E /IS /IT /R:2 /W:1 /NP /NFL /NDL /NJH /NJS | Out-Null
-        if (\$LASTEXITCODE -ge 0 -and \$LASTEXITCODE -le 7) {
-            \$copySuccess = \$true
-            break
-        }
-    } catch {}
+:: 4. Resolve and launch the updated application
+cd /d "$appDir"
+if exist "$appDir\\singular.exe" (
+    start "" "$appDir\\singular.exe"
+) else if exist "$appDir\\$exeName" (
+    start "" "$appDir\\$exeName"
+)
 
-    try {
-        Get-ChildItem -Path \$srcDir -Recurse | ForEach-Object {
-            \$relPath = \$_.FullName.Substring(\$srcDir.Length).TrimStart('\\\\', '/')
-            \$destPath = Join-Path \$appDir \$relPath
-            if (\$_.PSIsContainer) {
-                if (-not (Test-Path \$destPath)) {
-                    New-Item -ItemType Directory -Path \$destPath -Force | Out-Null
-                }
-            } else {
-                \$destParent = Split-Path \$destPath -Parent
-                if (-not (Test-Path \$destParent)) {
-                    New-Item -ItemType Directory -Path \$destParent -Force | Out-Null
-                }
-                Copy-Item -Path \$_.FullName -Destination \$destPath -Force -ErrorAction SilentlyContinue
-            }
-        }
-        if (Test-Path (Join-Path \$appDir "singular.exe") -or (Test-Path (Join-Path \$appDir \$exeName))) {
-            \$copySuccess = \$true
-            break
-        }
-    } catch {}
-
-    Start-Sleep -Milliseconds 600
-}
-
-# 4. Rollback safety: if copy failed, restore backup
-if (-not (Test-Path (Join-Path \$appDir "singular.exe")) -and -not (Test-Path (Join-Path \$appDir \$exeName))) {
-    if (Test-Path "\$targetExePath.old") {
-        Move-Item -Path "\$targetExePath.old" -Destination \$targetExePath -Force -ErrorAction SilentlyContinue
-    }
-} else {
-    Remove-Item -Path (Join-Path \$appDir "\$exeName.old") -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path (Join-Path \$appDir "singular.exe.old") -Force -ErrorAction SilentlyContinue
-}
-
-# Remove updater script from destination if copied over
-\$copiedScript = Join-Path \$appDir "singular_self_update.ps1"
-if (Test-Path \$copiedScript) {
-    Remove-Item -Path \$copiedScript -Force -ErrorAction SilentlyContinue
-}
-
-# 5. Resolve and launch the new executable
-\$launchTarget = Join-Path \$appDir "singular.exe"
-if (-not (Test-Path \$launchTarget)) {
-    \$launchTarget = Join-Path \$appDir \$exeName
-}
-
-if (Test-Path \$launchTarget) {
-    Start-Process -FilePath \$launchTarget -WorkingDirectory \$appDir
-}
-
-# 6. Clean up temporary staging directory
-Start-Sleep -Seconds 1
-Remove-Item -Path \$srcDir -Recurse -Force -ErrorAction SilentlyContinue
+:: 5. Clean up staging directory
+timeout /t 2 /nobreak >nul
+rmdir /s /q "$stagingDir" >nul 2>&1
+exit /b 0
 ''';
 
     final scriptFile = File(scriptPath);
@@ -420,17 +367,8 @@ Remove-Item -Path \$srcDir -Recurse -Force -ErrorAction SilentlyContinue
     if (Platform.isWindows) {
       try {
         await Process.start(
-          'powershell.exe',
-          [
-            '-NoProfile',
-            '-NonInteractive',
-            '-WindowStyle',
-            'Hidden',
-            '-ExecutionPolicy',
-            'Bypass',
-            '-File',
-            scriptPath,
-          ],
+          'cmd.exe',
+          ['/c', scriptPath],
           mode: ProcessStartMode.detached,
         );
         return;
@@ -438,8 +376,8 @@ Remove-Item -Path \$srcDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     await Process.start(
-      'cmd.exe',
-      ['/c', scriptPath],
+      'sh',
+      [scriptPath],
       mode: ProcessStartMode.detached,
     );
   }
