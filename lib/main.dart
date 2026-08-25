@@ -19,8 +19,26 @@ import 'shared/widgets/close_confirm_dialog.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
-void main() async {
+void main(List<String> args) async {
+  final dartStartEpochMs = DateTime.now().millisecondsSinceEpoch;
   final appStartStopwatch = Stopwatch()..start();
+
+  int? nativeStartEpochMs;
+  for (final arg in args) {
+    if (arg.startsWith('--native-start-epoch-ms=')) {
+      nativeStartEpochMs = int.tryParse(arg.substring('--native-start-epoch-ms='.length));
+    }
+  }
+
+  if (nativeStartEpochMs != null) {
+    final nativePreDartMs = dartStartEpochMs - nativeStartEpochMs;
+    if (nativePreDartMs >= 0) {
+      AppLogger.info(
+        '[Native Startup] C++ 原生引擎与 Dart 运行时底层加载耗时: ${nativePreDartMs}ms',
+      );
+    }
+  }
+
   AppLogger.info('[App Startup] 应用程序初始化启动...');
 
   runZonedGuarded(() async {
@@ -84,7 +102,10 @@ void main() async {
                 initial: initialSettings,
               )),
         ],
-        child: SingboxApp(appStartStopwatch: appStartStopwatch),
+        child: SingboxApp(
+          appStartStopwatch: appStartStopwatch,
+          nativeStartEpochMs: nativeStartEpochMs,
+        ),
       ),
     );
   }, (error, stackTrace) {
@@ -123,7 +144,8 @@ Future<void> _runBackgroundStartupTasks(StorageService storageService) async {
 
 class SingboxApp extends ConsumerStatefulWidget {
   final Stopwatch? appStartStopwatch;
-  const SingboxApp({super.key, this.appStartStopwatch});
+  final int? nativeStartEpochMs;
+  const SingboxApp({super.key, this.appStartStopwatch, this.nativeStartEpochMs});
 
   @override
   ConsumerState<SingboxApp> createState() => _SingboxAppState();
@@ -143,9 +165,21 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
       if (!mounted) return;
       if (widget.appStartStopwatch != null && widget.appStartStopwatch!.isRunning) {
         widget.appStartStopwatch!.stop();
+        final dartRenderMs = widget.appStartStopwatch!.elapsedMilliseconds;
         AppLogger.info(
-          '[App Startup] 应用首帧渲染完成，总冷启动耗时: ${widget.appStartStopwatch!.elapsedMilliseconds}ms',
+          '[App Startup] Dart 业务层首帧渲染完成 (耗时: ${dartRenderMs}ms)',
         );
+
+        if (widget.nativeStartEpochMs != null) {
+          final totalPhysicalMs = DateTime.now().millisecondsSinceEpoch - widget.nativeStartEpochMs!;
+          AppLogger.info(
+            '[App Startup] 从双击 EXE 到首帧呈现实时物理总耗时: ${totalPhysicalMs}ms',
+          );
+        } else {
+          AppLogger.info(
+            '[App Startup] 应用首帧渲染完成，总冷启动耗时: ${dartRenderMs}ms',
+          );
+        }
       }
       unawaited(_runBackgroundStartupTasks(ref.read(storageServiceProvider)));
       unawaited(_initTray());
