@@ -204,6 +204,23 @@ void TunProcessBridge::HandleMethodCall(
     BOOL success = ShellExecuteExW(&sei);
 
     if (success && sei.hProcess != NULL) {
+      // Verify process did not immediately terminate (e.g. missing wintun.dll or bad config)
+      DWORD waitRes = WaitForSingleObject(sei.hProcess, 250);
+      if (waitRes == WAIT_OBJECT_0) {
+        DWORD exitCode = 0;
+        GetExitCodeProcess(sei.hProcess, &exitCode);
+        CloseHandle(sei.hProcess);
+        flutter::EncodableMap response;
+        response[flutter::EncodableValue("success")] = flutter::EncodableValue(false);
+        response[flutter::EncodableValue("cancelled")] = flutter::EncodableValue(false);
+        response[flutter::EncodableValue("errorCode")] = flutter::EncodableValue((int64_t)exitCode);
+        response[flutter::EncodableValue("error")] = flutter::EncodableValue("CORE_CRASHED_ON_LAUNCH");
+        response[flutter::EncodableValue("message")] = flutter::EncodableValue(
+            "sing-box TUN 启动后立即异常退出 (退出代码: " + std::to_string(exitCode) + ")，请检查是否缺少 wintun.dll 驱动或配置错误。");
+        result->Success(flutter::EncodableValue(response));
+        return;
+      }
+
       g_elevatedProcessHandle = sei.hProcess;
       g_elevatedPid = GetProcessId(sei.hProcess);
 

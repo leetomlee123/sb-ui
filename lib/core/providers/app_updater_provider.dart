@@ -62,7 +62,7 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
   final Ref _ref;
   final AppUpdaterService _updaterService = AppUpdaterService();
 
-  AppUpdaterNotifier(this._ref) : super(AppUpdaterState(currentVersion: '1.2.13')) {
+  AppUpdaterNotifier(this._ref) : super(AppUpdaterState(currentVersion: '1.2.14')) {
     _initCurrentVersion();
   }
 
@@ -85,7 +85,7 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
         return normalizeSemver(info.version);
       }
     } catch (_) {}
-    return '1.2.13';
+    return '1.2.14';
   }
 
   void _syncProxy() {

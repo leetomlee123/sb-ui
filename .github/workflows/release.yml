@@ -28,7 +28,7 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Download bundled sing-box binary (Windows amd64)
+      - name: Download bundled sing-box & Wintun binary (Windows amd64)
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path core-bin
@@ -39,6 +39,12 @@ jobs:
           Invoke-WebRequest -Uri $url -OutFile "singbox.zip"
           Expand-Archive -Path "singbox.zip" -DestinationPath "singbox_extracted"
           Copy-Item -Path "singbox_extracted/sing-box-$version-windows-amd64/sing-box.exe" -Destination "core-bin/sing-box.exe"
+
+          Write-Host "Fetching official Wintun driver (0.14.1)..."
+          $wintunUrl = "https://www.wintun.net/builds/wintun-0.14.1.zip"
+          Invoke-WebRequest -Uri $wintunUrl -OutFile "wintun.zip"
+          Expand-Archive -Path "wintun.zip" -DestinationPath "wintun_extracted"
+          Copy-Item -Path "wintun_extracted/wintun/bin/amd64/wintun.dll" -Destination "core-bin/wintun.dll"
 
       - name: Install dependencies & verify
         run: |
@@ -55,9 +61,11 @@ jobs:
           $tag = "${{ github.ref_name || github.event.inputs.tag_name || 'latest' }}"
           $bundleDir = "build/windows/x64/runner/Release"
           
-          # Copy sing-box core into bundle
+          # Copy sing-box core and Wintun driver into bundle
           New-Item -ItemType Directory -Force -Path "$bundleDir/data/core"
           Copy-Item -Path "core-bin/sing-box.exe" -Destination "$bundleDir/data/core/sing-box.exe"
+          Copy-Item -Path "core-bin/wintun.dll" -Destination "$bundleDir/data/core/wintun.dll"
+          Copy-Item -Path "core-bin/wintun.dll" -Destination "$bundleDir/wintun.dll"
 
           # Copy offline rule sets into bundle config
           New-Item -ItemType Directory -Force -Path "$bundleDir/config"

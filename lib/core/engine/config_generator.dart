@@ -178,10 +178,14 @@ class ConfigGenerator {
         'type': 'tun',
         'tag': 'tun-in',
         'interface_name': 'singbox-tun',
-        'address': ['172.19.0.1/30'],
+        'address': [
+          '172.19.0.1/30',
+          'fdfe:dcba:9876::1/126',
+        ],
         'auto_route': true,
         'strict_route': false,
-        'stack': settings.tunStack,
+        'stack': settings.tunStack.isNotEmpty ? settings.tunStack : 'mixed',
+        'sniff': true,
       });
     }
 

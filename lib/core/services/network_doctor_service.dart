@@ -88,7 +88,56 @@ class NetworkDoctorService {
       ));
     }
 
-    // 2. Port Binding & Conflict Check
+    // 2. Windows Wintun Driver Check (for TUN mode)
+    if (Platform.isWindows) {
+      try {
+        final exeDir = File(Platform.resolvedExecutable).parent.path;
+        final configDir = (await StorageService.getAppConfigDir()).path;
+        final wintunCandidates = [
+          '$exeDir/data/core/wintun.dll',
+          '$exeDir/wintun.dll',
+          '$configDir/wintun.dll',
+          r'C:\Windows\System32\wintun.dll',
+        ];
+        bool wintunFound = false;
+        String foundPath = '';
+        for (final p in wintunCandidates) {
+          if (await File(p).exists()) {
+            wintunFound = true;
+            foundPath = p;
+            break;
+          }
+        }
+
+        if (wintunFound) {
+          results.add(DiagnosticItem(
+            key: 'wintun_driver',
+            title: 'Wintun 虚拟网卡驱动',
+            description: '检查 TUN 模式必需的 Windows Wintun 驱动动态库',
+            status: DiagnosticStatus.pass,
+            detail: '已就绪 ($foundPath)',
+          ));
+        } else {
+          results.add(DiagnosticItem(
+            key: 'wintun_driver',
+            title: 'Wintun 虚拟网卡驱动',
+            description: '未检测到 wintun.dll，开启 TUN 虚拟网卡将无法建立适配器',
+            status: settings.tunModeEnabled ? DiagnosticStatus.fail : DiagnosticStatus.warn,
+            detail: '缺失 wintun.dll，请将驱动放入应用目录或重新下载完整包',
+          ));
+        }
+      } catch (e) {
+        results.add(DiagnosticItem(
+          key: 'wintun_driver',
+          title: 'Wintun 虚拟网卡驱动',
+          description: '检测驱动异常',
+          status: DiagnosticStatus.warn,
+          detail: '$e',
+        ));
+      }
+    }
+
+    // 3. Port Binding & Conflict Check
     final mixedPort = settings.mixedPort;
     final clashPort = settings.clashApiPort;
     bool mixedPortOk = true;
