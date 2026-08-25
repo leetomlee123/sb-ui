@@ -62,7 +62,31 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
   final Ref _ref;
   final AppUpdaterService _updaterService = AppUpdaterService();
 
-  AppUpdaterNotifier(this._ref) : super(AppUpdaterState());
+  AppUpdaterNotifier(this._ref) : super(AppUpdaterState(currentVersion: '1.2.12')) {
+    _initCurrentVersion();
+  }
+
+  Future<void> _initCurrentVersion() async {
+    final ver = await _resolveCurrentVersion();
+    state = state.copyWith(currentVersion: ver);
+  }
+
+  Future<String> _resolveCurrentVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (info.version.isNotEmpty && info.version.contains('.')) {
+        return normalizeSemver(info.version);
+      }
+      final desktopVer = await _updaterService.getCurrentVersion();
+      if (desktopVer != null && desktopVer.isNotEmpty && desktopVer.contains('.')) {
+        return normalizeSemver(desktopVer);
+      }
+      if (info.version.isNotEmpty && info.version != '0.0.0') {
+        return normalizeSemver(info.version);
+      }
+    } catch (_) {}
+    return '1.2.12';
+  }
 
   void _syncProxy() {
     final isCoreRunning = _ref.read(coreProvider).isRunning;
@@ -79,19 +103,8 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
       errorMessage: null,
     );
 
-    // 1. Resolve the running app version from native desktop_updater plugin or PackageInfo
-    String currentVer;
-    try {
-      final desktopVer = await _updaterService.getCurrentVersion();
-      if (desktopVer != null && desktopVer.isNotEmpty) {
-        currentVer = desktopVer;
-      } else {
-        final info = await PackageInfo.fromPlatform();
-        currentVer = info.version;
-      }
-    } catch (_) {
-      currentVer = '0.0.0';
-    }
+    // 1. Resolve the running app version
+    final currentVer = await _resolveCurrentVersion();
 
     // 2. Fetch the latest release from GitHub.
     final latest = await _updaterService.checkLatestRelease();

@@ -22,6 +22,14 @@ add_executable(${BINARY_NAME} WIN32
 apply_standard_settings(${BINARY_NAME})
 
 # Add preprocessor definitions for the build version.
+if(DEFINED FLUTTER_BUILD_NAME AND NOT "${FLUTTER_BUILD_NAME}" STREQUAL "")
+  target_compile_definitions(${BINARY_NAME} PRIVATE "APP_VERSION_STRING=\"${FLUTTER_BUILD_NAME}\"")
+elseif(DEFINED FLUTTER_VERSION AND NOT "${FLUTTER_VERSION}" STREQUAL "")
+  target_compile_definitions(${BINARY_NAME} PRIVATE "APP_VERSION_STRING=\"${FLUTTER_VERSION}\"")
+else()
+  target_compile_definitions(${BINARY_NAME} PRIVATE "APP_VERSION_STRING=\"1.2.12\"")
+endif()
+
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION=\"${FLUTTER_VERSION}\"")
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_MAJOR=${FLUTTER_VERSION_MAJOR}")
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_MINOR=${FLUTTER_VERSION_MINOR}")

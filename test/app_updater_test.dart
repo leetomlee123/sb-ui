@@ -12,12 +12,17 @@ void main() {
       expect(isNewerVersion('1.2.0', '1.1.9'), isTrue);
       expect(isNewerVersion('2.0.0', '1.9.9'), isTrue);
       expect(isNewerVersion('v1.1.8', '1.1.7'), isTrue);
+      expect(isNewerVersion('1.2.11', '1.2.10+30'), isTrue);
+      expect(isNewerVersion('1.2.11', '30'), isTrue);
+      expect(isNewerVersion('v1.2.11', 'v30'), isTrue);
     });
 
     test('rejects equal or older versions', () {
       expect(isNewerVersion('1.1.7', '1.1.7'), isFalse);
       expect(isNewerVersion('1.1.6', '1.1.7'), isFalse);
       expect(isNewerVersion('v1.1.7', '1.1.7'), isFalse);
+      expect(isNewerVersion('1.2.11', '1.2.11+31'), isFalse);
+      expect(isNewerVersion('1.2.11', '1.2.11'), isFalse);
     });
 
     test('handles differing segment counts', () {
@@ -31,6 +36,13 @@ void main() {
     test('ignores pre-release suffixes on numeric segments', () {
       expect(isNewerVersion('1.2.0-alpha', '1.1.9'), isTrue);
       expect(isNewerVersion('1.1.7-rc1', '1.1.7'), isFalse);
+    });
+
+    test('normalizeSemver cleans build metadata and v prefixes', () {
+      expect(normalizeSemver('v1.2.10+30'), '1.2.10');
+      expect(normalizeSemver('1.2.11+31'), '1.2.11');
+      expect(normalizeSemver('v1.2.11'), '1.2.11');
+      expect(normalizeSemver('30'), '30');
     });
   });
 

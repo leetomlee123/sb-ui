@@ -11,6 +11,7 @@ import '../../core/providers/geo_updater_provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/services/network_doctor_service.dart';
 import '../../core/utils/byte_formatter.dart';
+import '../../core/utils/version_utils.dart';
 import '../../shared/widgets/double_bezel_card.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -675,7 +676,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(
-                            '${tr.appCurrentVersion}v${appUpdaterState.currentVersion ?? "..."}',
+                            '${tr.appCurrentVersion}v${normalizeSemver(appUpdaterState.currentVersion ?? "1.2.12")}',
                             style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Color(0xFF94A3B8)),
                             overflow: TextOverflow.ellipsis,
                           ),
