@@ -47,7 +47,7 @@ jobs:
 
       - name: Build Flutter Windows Release
         run: |
-          flutter build windows --release
+          flutter build windows --release --split-debug-info=build/symbols --tree-shake-icons
 
       - name: Package Windows Binary (.zip)
         shell: pwsh
