@@ -6,6 +6,8 @@
 #include <string>
 #include <sstream>
 
+NativeStartupTimings g_native_startup_timings;
+
 namespace {
 
 static HANDLE g_elevatedProcessHandle = NULL;
@@ -269,6 +271,23 @@ void TunProcessBridge::HandleMethodCall(
     response[flutter::EncodableValue("running")] = flutter::EncodableValue(running);
     response[flutter::EncodableValue("pid")] = flutter::EncodableValue((int64_t)g_elevatedPid);
     response[flutter::EncodableValue("exitCode")] = flutter::EncodableValue((int64_t)exitCode);
+    result->Success(flutter::EncodableValue(response));
+    return;
+  }
+
+  if (method == "getNativeStartupTimings") {
+    flutter::EncodableMap response;
+    response[flutter::EncodableValue("nativeStartEpochMs")] = flutter::EncodableValue(g_native_startup_timings.native_start_epoch_ms);
+    response[flutter::EncodableValue("comInitMs")] = flutter::EncodableValue(g_native_startup_timings.com_init_ms);
+    response[flutter::EncodableValue("windowCreateMs")] = flutter::EncodableValue(g_native_startup_timings.window_create_ms);
+    response[flutter::EncodableValue("engineInitMs")] = flutter::EncodableValue(g_native_startup_timings.engine_init_ms);
+    response[flutter::EncodableValue("pluginsTotalMs")] = flutter::EncodableValue(g_native_startup_timings.plugins_total_ms);
+    response[flutter::EncodableValue("desktopUpdaterMs")] = flutter::EncodableValue(g_native_startup_timings.desktop_updater_ms);
+    response[flutter::EncodableValue("screenRetrieverMs")] = flutter::EncodableValue(g_native_startup_timings.screen_retriever_ms);
+    response[flutter::EncodableValue("trayManagerMs")] = flutter::EncodableValue(g_native_startup_timings.tray_manager_ms);
+    response[flutter::EncodableValue("windowManagerMs")] = flutter::EncodableValue(g_native_startup_timings.window_manager_ms);
+    response[flutter::EncodableValue("tunBridgeMs")] = flutter::EncodableValue(g_native_startup_timings.tun_bridge_ms);
+    response[flutter::EncodableValue("childContentMs")] = flutter::EncodableValue(g_native_startup_timings.child_content_ms);
     result->Success(flutter::EncodableValue(response));
     return;
   }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -31,11 +32,13 @@ void main(List<String> args) async {
     }
   }
 
+  int? nativePreDartMs;
   if (nativeStartEpochMs != null) {
-    final nativePreDartMs = dartStartEpochMs - nativeStartEpochMs;
-    if (nativePreDartMs >= 0) {
+    final diff = dartStartEpochMs - nativeStartEpochMs;
+    if (diff >= 0) {
+      nativePreDartMs = diff;
       AppLogger.info(
-        '[Native Startup] C++ 原生引擎与 Dart 运行时底层加载耗时: ${nativePreDartMs}ms',
+        '[Native Startup] C++ 原生引擎与 Dart 运行时底层加载耗时: ${diff}ms',
       );
     }
   }
@@ -45,6 +48,39 @@ void main(List<String> args) async {
   runZonedGuarded(() async {
     final initStopwatch = Stopwatch()..start();
     WidgetsFlutterBinding.ensureInitialized();
+
+    // Query and output fine-grained native embedder stage breakdown on Windows
+    if (Platform.isWindows) {
+      unawaited(() async {
+        try {
+          const channel = MethodChannel('com.example.sb_ui/tun_process');
+          final timings = await channel.invokeMapMethod<String, dynamic>('getNativeStartupTimings');
+          if (timings != null) {
+            final comInit = timings['comInitMs'] ?? 0;
+            final winCreate = timings['windowCreateMs'] ?? 0;
+            final engineInit = timings['engineInitMs'] ?? 0;
+            final pluginsTotal = timings['pluginsTotalMs'] ?? 0;
+            final p1 = timings['desktopUpdaterMs'] ?? 0;
+            final p2 = timings['screenRetrieverMs'] ?? 0;
+            final p3 = timings['trayManagerMs'] ?? 0;
+            final p4 = timings['windowManagerMs'] ?? 0;
+            final p5 = timings['tunBridgeMs'] ?? 0;
+            final childContent = timings['childContentMs'] ?? 0;
+            final accounted = (comInit as int) + (winCreate as int) + (engineInit as int) + (pluginsTotal as int) + (childContent as int);
+            final dispatch = (nativePreDartMs != null && nativePreDartMs > accounted)
+                ? (nativePreDartMs - accounted)
+                : 0;
+
+            AppLogger.info('[Native Startup] ├── 1. 基础环境与 COM 初始化: ${comInit}ms');
+            AppLogger.info('[Native Startup] ├── 2. Win32 宿主窗口建立 (CreateWindowEx): ${winCreate}ms');
+            AppLogger.info('[Native Startup] ├── 3. FlutterEngine / Dart AOT 快照载入 (VM & GPU): ${engineInit}ms');
+            AppLogger.info('[Native Startup] ├── 4. Native 插件注册 (总计: ${pluginsTotal}ms):');
+            AppLogger.info('[Native Startup] │   ├── desktop_updater: ${p1}ms | screen_retriever: ${p2}ms | tray: ${p3}ms | window: ${p4}ms | tun: ${p5}ms');
+            AppLogger.info('[Native Startup] └── 5. 视图绑定与消息循环调度至 Dart main(): ${dispatch}ms');
+          }
+        } catch (_) {}
+      }());
+    }
 
     // 1. Flutter framework error handler (prevent UI termination)
     FlutterError.onError = (FlutterErrorDetails details) {

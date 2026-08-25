@@ -1,6 +1,12 @@
 #include "flutter_window.h"
 
+#include <chrono>
 #include <optional>
+
+#include <desktop_updater/desktop_updater_plugin_c_api.h>
+#include <screen_retriever_windows/screen_retriever_windows_plugin_c_api.h>
+#include <tray_manager/tray_manager_plugin.h>
+#include <window_manager/window_manager_plugin.h>
 
 #include "flutter/generated_plugin_registrant.h"
 #include "tun_process_bridge.h"
@@ -11,32 +17,73 @@ FlutterWindow::FlutterWindow(const flutter::DartProject& project)
 FlutterWindow::~FlutterWindow() {}
 
 bool FlutterWindow::OnCreate() {
+  const auto t_win_start = std::chrono::high_resolution_clock::now();
   if (!Win32Window::OnCreate()) {
     return false;
   }
+  const auto t_win_end = std::chrono::high_resolution_clock::now();
+  g_native_startup_timings.window_create_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(t_win_end - t_win_start).count();
 
   RECT frame = GetClientArea();
 
-  // The size here must match the window dimensions to avoid unnecessary surface
-  // creation / destruction in the startup path.
+  const auto t_engine_start = std::chrono::high_resolution_clock::now();
   flutter_controller_ = std::make_unique<flutter::FlutterViewController>(
       frame.right - frame.left, frame.bottom - frame.top, project_);
-  // Ensure that basic setup of the controller was successful.
   if (!flutter_controller_->engine() || !flutter_controller_->view()) {
     return false;
   }
-  RegisterPlugins(flutter_controller_->engine());
+  const auto t_engine_end = std::chrono::high_resolution_clock::now();
+  g_native_startup_timings.engine_init_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(t_engine_end - t_engine_start).count();
+
+  const auto t_plugins_start = std::chrono::high_resolution_clock::now();
+  auto registry = flutter_controller_->engine();
+
+  const auto p0 = std::chrono::high_resolution_clock::now();
+  DesktopUpdaterPluginCApiRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("DesktopUpdaterPluginCApi"));
+  const auto p1 = std::chrono::high_resolution_clock::now();
+  g_native_startup_timings.desktop_updater_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(p1 - p0).count();
+
+  ScreenRetrieverWindowsPluginCApiRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("ScreenRetrieverWindowsPluginCApi"));
+  const auto p2 = std::chrono::high_resolution_clock::now();
+  g_native_startup_timings.screen_retriever_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(p2 - p1).count();
+
+  TrayManagerPluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("TrayManagerPlugin"));
+  const auto p3 = std::chrono::high_resolution_clock::now();
+  g_native_startup_timings.tray_manager_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(p3 - p2).count();
+
+  WindowManagerPluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("WindowManagerPlugin"));
+  const auto p4 = std::chrono::high_resolution_clock::now();
+  g_native_startup_timings.window_manager_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(p4 - p3).count();
+
   TunProcessBridge::RegisterWithMessenger(flutter_controller_->engine()->messenger());
+  const auto p5 = std::chrono::high_resolution_clock::now();
+  g_native_startup_timings.tun_bridge_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(p5 - p4).count();
+
+  g_native_startup_timings.plugins_total_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(p5 - t_plugins_start).count();
+
+  const auto t_child_start = std::chrono::high_resolution_clock::now();
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
   });
 
-  // Flutter can complete the first frame before the "show window" callback is
-  // registered. The following call ensures a frame is pending to ensure the
-  // window is shown. It is a no-op if the first frame hasn't completed yet.
   flutter_controller_->ForceRedraw();
+  const auto t_child_end = std::chrono::high_resolution_clock::now();
+  g_native_startup_timings.child_content_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(t_child_end - t_child_start).count();
 
   return true;
 }
