@@ -173,36 +173,66 @@ class NetworkDoctorService {
       ));
     }
 
-    // 3. Geo Database Integrity Check
+    // 4. GeoIP / GeoSite / SRS Rule-set Integrity Check
     try {
       final appDir = await StorageService.getAppConfigDir();
-      final geoip = File('${appDir.path}/geoip.db');
-      final geosite = File('${appDir.path}/geosite.db');
-      final geoipOk = await geoip.exists() && (await geoip.length()) > 1024;
-      final geositeOk = await geosite.exists() && (await geosite.length()) > 1024;
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
 
-      if (geoipOk && geositeOk) {
+      Future<File?> findRuleFile(String filename) async {
+        final candidates = [
+          '${appDir.path}/$filename',
+          '$exeDir/config/$filename',
+          '$exeDir/$filename',
+          'assets/rules/$filename',
+        ];
+        for (final path in candidates) {
+          final f = File(path);
+          if (await f.exists() && (await f.length()) > 500) {
+            return f;
+          }
+        }
+        return null;
+      }
+
+      final geoipSrs = await findRuleFile('geoip-cn.srs');
+      final geositeSrs = await findRuleFile('geosite-cn.srs');
+      final geoipDb = await findRuleFile('geoip.db');
+      final geositeDb = await findRuleFile('geosite.db');
+
+      if (geoipSrs != null && geositeSrs != null) {
+        final ipKb = (await geoipSrs.length()) ~/ 1024;
+        final siteKb = (await geositeSrs.length()) ~/ 1024;
+        results.add(DiagnosticItem(
+          key: 'geo_assets',
+          title: 'GeoIP / GeoSite 路由规则集',
+          description: '检查 sing-box 原生 SRS 二进制规则集 (geoip-cn.srs / geosite-cn.srs)',
+          status: DiagnosticStatus.pass,
+          detail: '规则集就绪 (SRS 二进制: geoip-cn ${ipKb}KB, geosite-cn ${siteKb}KB)',
+        ));
+      } else if (geoipDb != null && geositeDb != null) {
+        final ipKb = (await geoipDb.length()) ~/ 1024;
+        final siteKb = (await geositeDb.length()) ~/ 1024;
         results.add(DiagnosticItem(
           key: 'geo_assets',
           title: 'GeoIP / GeoSite 路由规则库',
-          description: '检查国家 IP 与域名分流特征数据库文件完整性',
+          description: '检查传统 Geo 数据库文件完整性',
           status: DiagnosticStatus.pass,
-          detail: '规则库完整 (GeoIP: ${(await geoip.length()) ~/ 1024}KB, GeoSite: ${(await geosite.length()) ~/ 1024}KB)',
+          detail: '规则库就绪 (传统 DB: GeoIP ${ipKb}KB, GeoSite ${siteKb}KB)',
         ));
       } else {
         results.add(DiagnosticItem(
           key: 'geo_assets',
-          title: 'GeoIP / GeoSite 路由规则库',
-          description: '规则库文件缺失或损坏，可能影响精准分流',
+          title: 'GeoIP / GeoSite 路由规则集',
+          description: '规则集文件缺失，可能影响中国大陆直连与 DNS 加速',
           status: DiagnosticStatus.warn,
-          detail: '可在设置页面一键下载或更新官方 Geo 数据库',
+          detail: '可在设置页面一键下载或更新官方 SRS 规则集',
         ));
       }
     } catch (e) {
       results.add(DiagnosticItem(
         key: 'geo_assets',
-        title: 'GeoIP / GeoSite 路由规则库',
-        description: '规则库检查异常',
+        title: 'GeoIP / GeoSite 路由规则集',
+        description: '规则集检查异常',
         status: DiagnosticStatus.warn,
         detail: '$e',
       ));
