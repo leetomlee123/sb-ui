@@ -1,10 +1,8 @@
 import 'dart:io';
-import 'dart:math';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:desktop_updater/desktop_updater.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../utils/proxy_dio_helper.dart';
@@ -247,6 +245,22 @@ class AppUpdaterService {
     final archive = ZipDecoder().decodeBytes(bytes);
     await _extractArchive(archive, stagingDir.path);
 
+    // If zip contains a single root folder (e.g. singular-windows-x64-v1.2.15/), flatten it
+    try {
+      final entries = await stagingDir.list(followLinks: false).toList();
+      if (entries.length == 1 && entries.first is Directory) {
+        final subDir = entries.first as Directory;
+        final subDirName = p.basename(subDir.path);
+        if (subDirName != 'data' && subDirName != 'config') {
+          await for (final entity in subDir.list(followLinks: false)) {
+            final dest = p.join(stagingDir.path, p.basename(entity.path));
+            await entity.rename(dest);
+          }
+          await subDir.delete(recursive: true);
+        }
+      }
+    } catch (_) {}
+
     // Strip paths that must not overwrite the user's live installation.
     await _deleteIfExists(Directory(p.join(stagingDir.path, 'config')));
     await _deleteIfExists(File(p.join(stagingDir.path, 'sing-box.exe')));
@@ -300,43 +314,134 @@ class AppUpdaterService {
     } catch (_) {}
   }
 
-  /// Performs atomic in-place desktop update handoff using the native desktop_updater plugin.
-  Future<void> installNativeUpdate({
+  /// Writes and launches the bulletproof background self-update worker.
+  /// Decouples completely from the main application process and survives app exit.
+  Future<void> prepareAndLaunchUpdate({
     required String stagingPath,
-    required String version,
-    String packageId = 'sb_ui',
-    String channel = 'stable',
-    String? artifactSha256,
+    required String appDir,
+    required String exeName,
+    int? targetPid,
   }) async {
-    const channelName = MethodChannel('desktop_updater');
-    final transactionId = _generateUuidV4();
-    final dummyProvenanceSha256 = artifactSha256 ?? ('0' * 64);
-    final expectedSha256 = artifactSha256 ?? ('0' * 64);
+    final currentPid = targetPid ?? pid;
 
-    await channelName.invokeMethod<void>('installUpdate', {
-      'stagingPath': stagingPath,
-      'expectedPackageId': packageId,
-      'updateVersion': version,
-      'updateBuildNumber': null,
-      'platform': 'windows-x64',
-      'channel': channel,
-      'expectedArtifactSha256': expectedSha256,
-      'stageProvenanceSha256': dummyProvenanceSha256,
-      'transactionId': transactionId,
-    });
+    if (Platform.isWindows) {
+      final batPath = p.join(Directory.systemTemp.path, 'singular_updater.bat');
+      final vbsPath = p.join(Directory.systemTemp.path, 'singular_launch.vbs');
+
+      final batContent = '''
+@echo off
+chcp 65001 >nul
+setlocal enabledelayedexpansion
+
+set OLD_PID=$currentPid
+set STAGING_DIR=$stagingPath
+set TARGET_DIR=$appDir
+set EXE_NAME=$exeName
+
+:: 1. Wait for parent process to exit
+for /l %%i in (1, 1, 30) do (
+    tasklist /fi "PID eq !OLD_PID!" 2>nul | findstr /i "!OLD_PID!" >nul
+    if errorlevel 1 goto :SWAP
+    timeout /t 1 /nobreak >nul
+)
+
+:: Force kill if still lingering
+taskkill /f /pid !OLD_PID! >nul 2>&1
+timeout /t 1 /nobreak >nul
+
+:SWAP
+:: 2. Safety pause to ensure all file handles and DLLs are fully unlocked
+timeout /t 1 /nobreak >nul
+
+:: 3. Backup old executables
+if exist "!TARGET_DIR!\\!EXE_NAME!" (
+    move /y "!TARGET_DIR!\\!EXE_NAME!" "!TARGET_DIR!\\!EXE_NAME!.old" >nul 2>&1
+)
+if exist "!TARGET_DIR!\\singular.exe" (
+    move /y "!TARGET_DIR!\\singular.exe" "!TARGET_DIR!\\singular.exe.old" >nul 2>&1
+)
+
+:: 4. Robust recursive copy from staging to app directory
+robocopy "!STAGING_DIR!" "!TARGET_DIR!" /E /IS /IT /R:5 /W:1 /NP /NFL /NDL /NJH /NJS >nul 2>&1
+if errorlevel 8 (
+    xcopy "!STAGING_DIR!\\*" "!TARGET_DIR!\\" /E /Y /I /Q >nul 2>&1
+)
+
+:: 5. Launch the updated application
+cd /d "!TARGET_DIR!"
+if exist "!TARGET_DIR!\\singular.exe" (
+    start "" "!TARGET_DIR!\\singular.exe"
+) else if exist "!TARGET_DIR!\\!EXE_NAME!" (
+    start "" "!TARGET_DIR!\\!EXE_NAME!"
+)
+
+:: 6. Clean staging directory
+timeout /t 2 /nobreak >nul
+rmdir /s /q "!STAGING_DIR!" >nul 2>&1
+exit 0
+''';
+
+      final vbsContent = '''
+Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "cmd.exe /c """ & WScript.Arguments(0) & """", 0, False
+''';
+
+      final batFile = File(batPath);
+      await batFile.writeAsString(batContent, flush: true);
+
+      final vbsFile = File(vbsPath);
+      await vbsFile.writeAsString(vbsContent, flush: true);
+
+      // Launch hidden background detached worker via Windows Script Host (wscript.exe)
+      await Process.start(
+        'wscript.exe',
+        [vbsPath, batPath],
+        mode: ProcessStartMode.detached,
+      );
+      return;
+    }
+
+    // Linux / macOS fallback script
+    final shPath = p.join(Directory.systemTemp.path, 'singular_updater.sh');
+    final shContent = '''
+#!/bin/bash
+PID=$currentPid
+STAGING="$stagingPath"
+APPDIR="$appDir"
+EXE="$exeName"
+
+for i in {1..30}; do
+    if ! kill -0 \$PID 2>/dev/null; then
+        break
+    fi
+    sleep 1
+done
+
+cp -rf "\$STAGING"/* "\$APPDIR"/
+cd "\$APPDIR"
+nohup ./"\$EXE" >/dev/null 2>&1 &
+rm -rf "\$STAGING"
+''';
+    final shFile = File(shPath);
+    await shFile.writeAsString(shContent, flush: true);
+    await Process.run('chmod', ['+x', shPath]);
+    await Process.start('sh', [shPath], mode: ProcessStartMode.detached);
   }
 
-  static String _generateUuidV4() {
-    final random = Random();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant
-    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}';
-  }
-
-  /// Startup cleanup: remove leftover staging dirs.
+  /// Startup cleanup: remove leftover staging dirs, scripts and rollback binaries.
   static Future<void> cleanupOnStartup() async {
+    try {
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      final oldBinary = File(p.join(exeDir, '${p.basename(Platform.resolvedExecutable)}.old'));
+      if (await oldBinary.exists()) {
+        await oldBinary.delete();
+      }
+      final oldSingular = File(p.join(exeDir, 'singular.exe.old'));
+      if (await oldSingular.exists()) {
+        await oldSingular.delete();
+      }
+    } catch (_) {}
+
     try {
       final tmp = Directory.systemTemp;
       await for (final entity in tmp.list(followLinks: false)) {
@@ -345,6 +450,13 @@ class AppUpdaterService {
           if (base.startsWith('singular_update')) {
             try {
               await entity.delete(recursive: true);
+            } catch (_) {}
+          }
+        } else if (entity is File) {
+          final base = p.basename(entity.path);
+          if (base.startsWith('singular_updater') || base.startsWith('singular_launch') || base.startsWith('singular_self_update')) {
+            try {
+              await entity.delete();
             } catch (_) {}
           }
         }

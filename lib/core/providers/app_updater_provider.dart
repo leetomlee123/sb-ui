@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path/path.dart' as p;
 import '../services/app_updater_service.dart';
 import '../services/core_updater_service.dart';
 import '../utils/version_utils.dart';
@@ -21,7 +22,7 @@ class AppUpdaterState {
   final String statusMessage;
   final String? errorMessage;
 
-  AppUpdaterState({
+  const AppUpdaterState({
     this.status = UpdateStatus.idle,
     this.latestRelease,
     this.currentVersion,
@@ -58,28 +59,27 @@ class AppUpdaterState {
 }
 
 class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
+  final AppUpdaterService _updaterService;
   final Ref _ref;
-  final AppUpdaterService _updaterService = AppUpdaterService();
 
-  AppUpdaterNotifier(this._ref) : super(AppUpdaterState(currentVersion: '1.2.14')) {
-    _initCurrentVersion();
+  AppUpdaterNotifier(this._ref, {AppUpdaterService? updaterService})
+      : _updaterService = updaterService ?? AppUpdaterService(),
+        super(const AppUpdaterState()) {
+    init();
   }
 
-  Future<void> _initCurrentVersion() async {
-    final ver = await _resolveCurrentVersion();
+  Future<void> init() async {
+    final ver = await getCurrentVersion();
     state = state.copyWith(currentVersion: ver);
   }
 
-  Future<String> _resolveCurrentVersion() async {
+  Future<String> getCurrentVersion() async {
     try {
-      final info = await PackageInfo.fromPlatform();
-      if (info.version.isNotEmpty && info.version.contains('.')) {
-        return normalizeSemver(info.version);
-      }
       final desktopVer = await _updaterService.getCurrentVersion();
       if (desktopVer != null && desktopVer.isNotEmpty && desktopVer.contains('.')) {
         return normalizeSemver(desktopVer);
       }
+      final info = await PackageInfo.fromPlatform();
       if (info.version.isNotEmpty && info.version != '0.0.0') {
         return normalizeSemver(info.version);
       }
@@ -93,55 +93,57 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
     _updaterService.setProxyPort(isCoreRunning ? mixedPort : null);
   }
 
-  /// Checks GitHub Releases of the app itself against the running version.
-  Future<void> checkForUpdates() async {
-    _syncProxy();
-    state = state.copyWith(
-      status: UpdateStatus.checking,
-      statusMessage: 'Checking for latest release...',
-      errorMessage: null,
-    );
-
-    // 1. Resolve the running app version
-    final currentVer = await _resolveCurrentVersion();
-
-    // 2. Fetch the latest release from GitHub.
-    final latest = await _updaterService.checkLatestRelease();
-    if (latest == null) {
-      state = state.copyWith(
-        status: UpdateStatus.error,
-        currentVersion: currentVer,
-        errorMessage: 'Failed to connect to GitHub releases.',
-      );
+  Future<void> checkForUpdates({bool manual = false}) async {
+    if (state.status == UpdateStatus.checking ||
+        state.status == UpdateStatus.downloading ||
+        state.status == UpdateStatus.installing) {
       return;
     }
 
-    final hasNewVersion = isNewerVersion(latest.version, currentVer);
+    _syncProxy();
 
     state = state.copyWith(
-      status: hasNewVersion ? UpdateStatus.available : UpdateStatus.upToDate,
-      latestRelease: latest,
-      currentVersion: currentVer,
-      statusMessage: hasNewVersion
-          ? 'New version ${latest.tagName} is available'
-          : 'App is up to date ($currentVer)',
+      status: UpdateStatus.checking,
+      errorMessage: null,
     );
-  }
 
-  /// Downloads, verifies and stages the new bundle, then hands over to a
-  /// detached batch script that swaps files after this process exits.
-  Future<bool> applyUpdate() async {
-    _syncProxy();
-    final release = state.latestRelease;
-    if (release == null) return false;
+    try {
+      final currentVer = await getCurrentVersion();
+      final latest = await _updaterService.checkLatestRelease();
 
-    if (!Platform.isWindows) {
+      if (latest == null) {
+        state = state.copyWith(
+          status: UpdateStatus.idle,
+          latestRelease: null,
+          currentVersion: currentVer,
+          statusMessage: manual ? 'Currently on the latest version' : null,
+        );
+        return;
+      }
+
+      final hasUpdate = isNewerVersion(latest.version, currentVer);
+
+      state = state.copyWith(
+        status: hasUpdate ? UpdateStatus.available : UpdateStatus.idle,
+        latestRelease: latest,
+        currentVersion: currentVer,
+        statusMessage: hasUpdate
+            ? 'New version ${latest.tagName} is available'
+            : (manual ? 'Currently on the latest version' : null),
+      );
+    } catch (e) {
       state = state.copyWith(
         status: UpdateStatus.error,
-        errorMessage: 'In-app update is not supported on this platform yet.',
+        errorMessage: 'Check failed: $e',
       );
-      return false;
     }
+  }
+
+  Future<bool> applyUpdate() async {
+    final release = state.latestRelease;
+    if (release == null || release.downloadUrl.isEmpty) return false;
+
+    _syncProxy();
 
     state = state.copyWith(
       status: UpdateStatus.downloading,
@@ -168,10 +170,15 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
         statusMessage: 'Preparing to restart...',
       );
 
-      // Hand over to desktop_updater native plugin for atomic installation & restart
-      await _updaterService.installNativeUpdate(
+      final exePath = (await _updaterService.getExecutablePath()) ?? Platform.resolvedExecutable;
+      final appDir = File(exePath).parent.path;
+      final exeName = p.basename(exePath);
+
+      // Launch background self-updater detached from this process
+      await _updaterService.prepareAndLaunchUpdate(
         stagingPath: stagingDir,
-        version: release.version,
+        appDir: appDir,
+        exeName: exeName,
       );
 
       // Stop sing-box core cleanly to release TUN handles and port bindings
