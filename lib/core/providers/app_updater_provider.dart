@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as p;
 import 'package:package_info_plus/package_info_plus.dart';
 import '../services/app_updater_service.dart';
 import '../services/core_updater_service.dart';
@@ -169,16 +168,11 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
         statusMessage: 'Preparing to restart...',
       );
 
-      final exePath = (await _updaterService.getExecutablePath()) ?? Platform.resolvedExecutable;
-      final scriptPath = await _updaterService.writeSwapScript(
-        stagingDir: stagingDir,
-        appDir: File(exePath).parent.path,
-        exeName: p.basename(exePath),
+      // Hand over to desktop_updater native plugin for atomic installation & restart
+      await _updaterService.installNativeUpdate(
+        stagingPath: stagingDir,
+        version: release.version,
       );
-
-      // Hand control to the script; it waits for this process to exit,
-      // swaps the files, and relaunches the app.
-      await _updaterService.launchDetached(scriptPath);
 
       // Stop sing-box core cleanly to release TUN handles and port bindings
       try {

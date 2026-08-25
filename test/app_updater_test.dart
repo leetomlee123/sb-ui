@@ -46,38 +46,10 @@ void main() {
     });
   });
 
-  group('AppUpdaterService.writeSwapScript', () {
-    late Directory stagingDir;
-
-    setUp(() async {
-      stagingDir = await Directory.systemTemp.createTemp('singular_update_test');
-    });
-
-    tearDown(() async {
-      try {
-        await stagingDir.delete(recursive: true);
-      } catch (_) {}
-    });
-
-    test('writes script with quoted paths, poll loop, rollback safety', () async {
+  group('AppUpdaterService', () {
+    test('instantiates and provides DesktopUpdater facade', () {
       final service = AppUpdaterService();
-      final scriptPath = await service.writeSwapScript(
-        stagingDir: stagingDir.path,
-        appDir: r'C:\Apps\singular app',
-        exeName: 'singular.exe',
-      );
-
-      final script = await File(scriptPath).readAsString();
-
-      expect(scriptPath, endsWith('singular_self_update.bat'));
-      expect(script, contains(r'C:\Apps\singular app'));
-      expect(script, contains(stagingDir.path));
-      expect(script, contains('tasklist'));
-      expect(script, contains('taskkill'));
-      expect(script, contains('.old'));
-      expect(script, contains('robocopy'));
-      expect(script, contains('start ""'));
-      expect(script, contains('rmdir /s /q'));
+      expect(service.desktopUpdater, isNotNull);
     });
   });
 

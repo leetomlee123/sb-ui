@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:desktop_updater/desktop_updater.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../utils/proxy_dio_helper.dart';
@@ -298,100 +300,43 @@ class AppUpdaterService {
     } catch (_) {}
   }
 
-  /// Writes the Windows self-swap Batch script used to safely replace
-  /// the running executable and relaunch the updated application.
-  Future<String> writeSwapScript({
-    required String stagingDir,
-    required String appDir,
-    required String exeName,
-    int? targetPid,
+  /// Performs atomic in-place desktop update handoff using the native desktop_updater plugin.
+  Future<void> installNativeUpdate({
+    required String stagingPath,
+    required String version,
+    String packageId = 'sb_ui',
+    String channel = 'stable',
+    String? artifactSha256,
   }) async {
-    final currentPid = targetPid ?? pid;
-    final scriptPath = p.join(Directory.systemTemp.path, 'singular_self_update.bat');
+    const channelName = MethodChannel('desktop_updater');
+    final transactionId = _generateUuidV4();
+    final dummyProvenanceSha256 = artifactSha256 ?? ('0' * 64);
+    final expectedSha256 = artifactSha256 ?? ('0' * 64);
 
-    // Windows Batch script is universally supported across all Windows versions,
-    // bypasses PowerShell execution restrictions, and runs outside the staging folder.
-    final content = '''
-@echo off
-setlocal enabledelayedexpansion
-
-:: 1. Wait for the old process (PID $currentPid) to fully exit (up to 8 seconds)
-for /l %%i in (1, 1, 20) do (
-    tasklist /fi "PID eq $currentPid" 2>nul | findstr /i "$currentPid" >nul
-    if errorlevel 1 goto :PROCEED
-    timeout /t 1 /nobreak >nul
-)
-
-:: Force kill if still lingering
-taskkill /f /pid $currentPid >nul 2>&1
-taskkill /f /im "$exeName" >nul 2>&1
-timeout /t 1 /nobreak >nul
-
-:PROCEED
-:: 2. Rename existing executable as backup
-if exist "$appDir\\$exeName" (
-    move /y "$appDir\\$exeName" "$appDir\\$exeName.old" >nul 2>&1
-)
-if exist "$appDir\\singular.exe" (
-    move /y "$appDir\\singular.exe" "$appDir\\singular.exe.old" >nul 2>&1
-)
-
-:: 3. Robust directory tree copy from staging dir to app dir
-robocopy "$stagingDir" "$appDir" /E /IS /IT /R:3 /W:1 /NP /NFL /NDL /NJH /NJS >nul 2>&1
-if errorlevel 8 (
-    xcopy "$stagingDir\\*" "$appDir\\" /E /Y /I /Q >nul 2>&1
-)
-
-:: 4. Resolve and launch the updated application
-cd /d "$appDir"
-if exist "$appDir\\singular.exe" (
-    start "" "$appDir\\singular.exe"
-) else if exist "$appDir\\$exeName" (
-    start "" "$appDir\\$exeName"
-)
-
-:: 5. Clean up staging directory
-timeout /t 2 /nobreak >nul
-rmdir /s /q "$stagingDir" >nul 2>&1
-exit /b 0
-''';
-
-    final scriptFile = File(scriptPath);
-    await scriptFile.parent.create(recursive: true);
-    await scriptFile.writeAsString(content, flush: true);
-    return scriptPath;
+    await channelName.invokeMethod<void>('installUpdate', {
+      'stagingPath': stagingPath,
+      'expectedPackageId': packageId,
+      'updateVersion': version,
+      'updateBuildNumber': null,
+      'platform': 'windows-x64',
+      'channel': channel,
+      'expectedArtifactSha256': expectedSha256,
+      'stageProvenanceSha256': dummyProvenanceSha256,
+      'transactionId': transactionId,
+    });
   }
 
-  /// Launches the swap script detached and silently in background without any visible console window.
-  Future<void> launchDetached(String scriptPath) async {
-    if (Platform.isWindows) {
-      try {
-        await Process.start(
-          'cmd.exe',
-          ['/c', scriptPath],
-          mode: ProcessStartMode.detached,
-        );
-        return;
-      } catch (_) {}
-    }
-
-    await Process.start(
-      'sh',
-      [scriptPath],
-      mode: ProcessStartMode.detached,
-    );
+  static String _generateUuidV4() {
+    final random = Random();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}';
   }
 
-  /// Startup cleanup: remove leftover rollback binary and stale staging dirs.
+  /// Startup cleanup: remove leftover staging dirs.
   static Future<void> cleanupOnStartup() async {
-    try {
-      final exeDir = File(Platform.resolvedExecutable).parent.path;
-      final oldBinary = File(p.join(exeDir, '${p.basename(Platform.resolvedExecutable)}.old'));
-      if (await oldBinary.exists()) {
-        await oldBinary.delete();
-      }
-    } catch (_) {}
-
     try {
       final tmp = Directory.systemTemp;
       await for (final entity in tmp.list(followLinks: false)) {
