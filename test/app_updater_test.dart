@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'package:desktop_updater/desktop_updater.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sb_ui/core/services/app_updater_service.dart';
+import 'package:sb_ui/core/services/json_file_update_recovery_store.dart';
 import 'package:sb_ui/core/utils/version_utils.dart';
 
 void main() {
@@ -64,6 +66,55 @@ void main() {
       expect(script, contains('Copy-Item'));
       expect(script, contains('Start-Process'));
       expect(script, contains('Remove-Item'));
+    });
+  });
+
+  group('JsonFileUpdateRecoveryStore', () {
+    late Directory tempDir;
+    late File recoveryFile;
+
+    setUp(() async {
+      tempDir = await Directory.systemTemp.createTemp('recovery_store_test');
+      recoveryFile = File('${tempDir.path}/pending-install-stable.json');
+    });
+
+    tearDown(() async {
+      try {
+        await tempDir.delete(recursive: true);
+      } catch (_) {}
+    });
+
+    test('writes, reads, and clears pending install marker', () async {
+      final store = JsonFileUpdateRecoveryStore(recoveryFile);
+      expect(await store.readPendingInstall(channel: 'stable'), isNull);
+
+      final marker = UpdateInstallRecoveryMarker.pendingV3(
+        createdAt: DateTime.now().toUtc(),
+        packageVersion: '3.1.6',
+        platform: 'windows',
+        channel: 'stable',
+        appVersion: '1.2.9',
+        updateVersion: '1.3.0',
+        updateBuildNumber: 30,
+        expectedPackageId: 'sb_ui',
+        stagingPath: tempDir.path,
+        stageProvenanceSha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        diagnosticsText: 'test diagnostics',
+        transactionId: '00000000-0000-4000-8000-000000000001',
+      );
+
+      await store.writePendingInstall(marker);
+      final read = await store.readPendingInstall(channel: 'stable');
+      expect(read, isNotNull);
+      expect(read!.updateVersion, '1.3.0');
+      expect(read.expectedPackageId, 'sb_ui');
+      expect(read.transactionId, '00000000-0000-4000-8000-000000000001');
+
+      // Channel mismatch should return null
+      expect(await store.readPendingInstall(channel: 'beta'), isNull);
+
+      await store.clearPendingInstall(channel: 'stable');
+      expect(await store.readPendingInstall(channel: 'stable'), isNull);
     });
   });
 }

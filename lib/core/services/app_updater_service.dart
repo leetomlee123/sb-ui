@@ -1,21 +1,21 @@
 import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:desktop_updater/desktop_updater.dart';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import '../utils/proxy_dio_helper.dart';
 import 'core_updater_service.dart';
+import 'json_file_update_recovery_store.dart';
 
-/// Checks GitHub Releases of this app itself and prepares a self-update.
-///
-/// Release assets follow the CI naming convention:
-///   sb-ui-windows-x64-v{tag}.zip
-///   SHA256SUMS.txt
+/// Checks releases of this app itself and performs desktop updates via desktop_updater plugin.
 class AppUpdaterService {
   static const repoApiUrl =
       'https://api.github.com/repos/leetomlee123/singular/releases/latest';
 
   final Dio _dio;
+  final DesktopUpdater _desktopUpdater = DesktopUpdater();
 
   AppUpdaterService({Dio? dio})
       : _dio = dio ??
@@ -29,6 +29,66 @@ class AppUpdaterService {
                 },
               ),
             );
+
+  /// Desktop updater facade from desktop_updater package
+  DesktopUpdater get desktopUpdater => _desktopUpdater;
+
+  /// Returns current desktop app version from native desktop_updater plugin
+  Future<String?> getCurrentVersion() async {
+    try {
+      return await _desktopUpdater.getCurrentVersion();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Returns current executable path from native desktop_updater plugin
+  Future<String?> getExecutablePath() async {
+    try {
+      return await _desktopUpdater.getExecutablePath();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Restarts the application via native desktop_updater helper
+  Future<void> restartApp() async {
+    try {
+      await _desktopUpdater.restartApp();
+    } catch (_) {}
+  }
+
+  /// Creates a configured DesktopUpdaterController with local recovery store
+  static Future<DesktopUpdaterController> createDesktopUpdaterController({
+    required Uri appArchiveUrl,
+    Map<String, String>? trustedReleasePublicKeys,
+    String? expectedPackageId,
+    String channel = 'stable',
+  }) async {
+    final appSupportDirectory = await getApplicationSupportDirectory();
+    final separator = Platform.pathSeparator;
+    final recoveryStore = JsonFileUpdateRecoveryStore(
+      File(
+        '${appSupportDirectory.path}${separator}desktop_updater'
+        '${separator}pending-install-$channel.json',
+      ),
+    );
+
+    String packageId = expectedPackageId ?? 'sb_ui';
+    if (expectedPackageId == null) {
+      if (Platform.isMacOS) packageId = 'com.singular.desktop';
+      if (Platform.isWindows) packageId = 'sb_ui';
+      if (Platform.isLinux) packageId = 'com.singular.desktop';
+    }
+
+    return DesktopUpdaterController(
+      appArchiveUrl: appArchiveUrl,
+      expectedPackageId: packageId,
+      trustedReleasePublicKeys: trustedReleasePublicKeys ?? {},
+      recoveryStore: recoveryStore,
+      channel: channel,
+    );
+  }
 
   /// Configures local proxy port for downloading and API calls when core is running.
   void setProxyPort(int? port) {

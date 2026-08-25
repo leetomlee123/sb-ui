@@ -79,11 +79,16 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
       errorMessage: null,
     );
 
-    // 1. Resolve the running app version from the executable metadata.
+    // 1. Resolve the running app version from native desktop_updater plugin or PackageInfo
     String currentVer;
     try {
-      final info = await PackageInfo.fromPlatform();
-      currentVer = info.version;
+      final desktopVer = await _updaterService.getCurrentVersion();
+      if (desktopVer != null && desktopVer.isNotEmpty) {
+        currentVer = desktopVer;
+      } else {
+        final info = await PackageInfo.fromPlatform();
+        currentVer = info.version;
+      }
     } catch (_) {
       currentVer = '0.0.0';
     }
@@ -151,7 +156,7 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
         statusMessage: 'Preparing to restart...',
       );
 
-      final exePath = Platform.resolvedExecutable;
+      final exePath = (await _updaterService.getExecutablePath()) ?? Platform.resolvedExecutable;
       final scriptPath = await _updaterService.writeSwapScript(
         stagingDir: stagingDir,
         appDir: File(exePath).parent.path,
@@ -166,6 +171,7 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
       if (hook != null) {
         await hook();
       } else {
+        await _updaterService.restartApp();
         exit(0);
       }
       return true;
