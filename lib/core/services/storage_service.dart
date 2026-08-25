@@ -162,6 +162,26 @@ class StorageService {
           await geositeTarget.writeAsBytes(data.buffer.asUint8List());
         } catch (_) {}
       }
+
+      if (Platform.isWindows) {
+        final configWintun = File('${configDir.path}/wintun.dll');
+        if (!await configWintun.exists()) {
+          final exeDir = File(Platform.resolvedExecutable).parent.path;
+          final candidates = [
+            File('$exeDir/data/core/wintun.dll'),
+            File('$exeDir/wintun.dll'),
+            File('data/core/wintun.dll'),
+          ];
+          for (final f in candidates) {
+            if (await f.exists()) {
+              try {
+                await f.copy(configWintun.path);
+                break;
+              } catch (_) {}
+            }
+          }
+        }
+      }
     } catch (_) {}
   }
 }
