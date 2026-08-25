@@ -9,6 +9,7 @@ import '../../core/providers/core_provider.dart';
 import '../../core/providers/core_updater_provider.dart';
 import '../../core/providers/geo_updater_provider.dart';
 import '../../core/providers/settings_provider.dart';
+import '../../core/services/network_doctor_service.dart';
 import '../../core/utils/byte_formatter.dart';
 import '../../shared/widgets/double_bezel_card.dart';
 
@@ -78,24 +79,52 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
-  void _saveSettings() {
+  Future<void> _saveSettings() async {
     final settingsNotifier = ref.read(settingsProvider.notifier);
     final current = ref.read(settingsProvider);
     final tr = ref.read(translationsProvider);
+    final coreIsRunning = ref.read(coreProvider).isRunning;
+
+    final newMixedPort = int.tryParse(_mixedPortCtrl.text) ?? current.mixedPort;
+    final newClashPort = int.tryParse(_clashPortCtrl.text) ?? current.clashApiPort;
+    final newClashSecret = _clashSecretCtrl.text.trim();
+    final newCustomPath = _binaryPathCtrl.text.trim();
+    final newRemoteDns = _remoteDnsCtrl.text.trim();
+    final newDirectDns = _directDnsCtrl.text.trim();
+
+    final hasCoreConfigChanged = newMixedPort != current.mixedPort ||
+        newClashPort != current.clashApiPort ||
+        newClashSecret != current.clashApiSecret ||
+        newCustomPath != current.customSingboxPath ||
+        newRemoteDns != current.remoteDns ||
+        newDirectDns != current.directDns;
 
     final updated = current.copyWith(
-      mixedPort: int.tryParse(_mixedPortCtrl.text) ?? current.mixedPort,
-      clashApiPort: int.tryParse(_clashPortCtrl.text) ?? current.clashApiPort,
-      clashApiSecret: _clashSecretCtrl.text.trim(),
-      customSingboxPath: _binaryPathCtrl.text.trim(),
-      remoteDns: _remoteDnsCtrl.text.trim(),
-      directDns: _directDnsCtrl.text.trim(),
+      mixedPort: newMixedPort,
+      clashApiPort: newClashPort,
+      clashApiSecret: newClashSecret,
+      customSingboxPath: newCustomPath,
+      remoteDns: newRemoteDns,
+      directDns: newDirectDns,
     );
 
-    settingsNotifier.updateSettings(updated);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(tr.savedSuccess)),
-    );
+    await settingsNotifier.updateSettings(updated);
+
+    if (coreIsRunning && hasCoreConfigChanged) {
+      await ref.read(coreProvider.notifier).restartCore();
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            coreIsRunning && hasCoreConfigChanged
+                ? (tr.isZh ? '设置已保存，核心服务已重新加载生效' : 'Settings saved and core service reloaded')
+                : tr.savedSuccess,
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -182,6 +211,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   value: settings.allowLan,
                   onChanged: (val) async {
                     await ref.read(settingsProvider.notifier).toggleAllowLan(val);
+                    if (coreIsRunning) {
+                      await ref.read(coreProvider.notifier).restartCore();
+                    }
                   },
                 ),
               ],
@@ -347,6 +379,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
           // Geo Assets & Routing Datasets (v2rayNG style)
           _buildGeoAssetsSection(context, geoState, tr),
+
+          const SizedBox(height: 24),
+
+          // Network & Core Diagnostic Doctor
+          _buildDoctorSection(context, settings, coreIsRunning, tr),
 
           const SizedBox(height: 24),
 
@@ -1194,6 +1231,216 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildDoctorSection(
+    BuildContext context,
+    AppSettings settings,
+    bool isRunning,
+    Translations tr,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(tr.isZh ? '网络与核心健康诊断' : 'DIAGNOSTIC & HEALTH DOCTOR'),
+        DoubleBezelCard(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.health_and_safety_rounded, size: 18, color: Color(0xFF10B981)),
+                        const SizedBox(width: 8),
+                        Text(
+                          tr.isZh ? '一键网络与核心诊断' : 'One-Click Network Doctor',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      tr.isZh
+                          ? '对 sing-box 可执行文件、端口冲突、Geo 规则库完整性、系统 DNS 及 Clash 控制信道执行全面体检'
+                          : 'Check core binary, port conflicts, Geo assets, system DNS and Clash API channel',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: () => _showDoctorDialog(context, settings, isRunning, tr),
+                icon: const Icon(Icons.play_arrow_rounded, size: 16),
+                label: Text(tr.isZh ? '立即体检' : 'Run Diagnostics', style: const TextStyle(fontSize: 12)),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showDoctorDialog(
+    BuildContext context,
+    AppSettings settings,
+    bool isRunning,
+    Translations tr,
+  ) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        List<DiagnosticItem>? results;
+        bool isDiagnosing = true;
+
+        return StatefulBuilder(
+          builder: (ctx, setState) {
+            if (isDiagnosing && results == null) {
+              NetworkDoctorService.runDiagnostics(
+                settings: settings,
+                isCoreRunning: isRunning,
+              ).then((items) {
+                if (ctx.mounted) {
+                  setState(() {
+                    results = items;
+                    isDiagnosing = false;
+                  });
+                }
+              });
+            }
+
+            return AlertDialog(
+              titlePadding: const EdgeInsets.fromLTRB(20, 16, 16, 8),
+              title: Row(
+                children: [
+                  const Icon(Icons.medical_services_rounded, size: 20, color: Color(0xFF10B981)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      tr.isZh ? '网络与核心环境诊断报告' : 'Diagnostic Health Report',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    tooltip: tr.refresh,
+                    onPressed: isDiagnosing
+                        ? null
+                        : () {
+                            setState(() {
+                              isDiagnosing = true;
+                              results = null;
+                            });
+                          },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    onPressed: () => Navigator.of(dialogCtx).pop(),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 500,
+                child: isDiagnosing
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 36),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text('正在检测系统环境、端口占用与核心连接...', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                          ],
+                        ),
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: results!.map((item) {
+                          IconData statusIcon;
+                          Color statusColor;
+                          switch (item.status) {
+                            case DiagnosticStatus.pass:
+                              statusIcon = Icons.check_circle_rounded;
+                              statusColor = const Color(0xFF10B981);
+                              break;
+                            case DiagnosticStatus.warn:
+                              statusIcon = Icons.warning_rounded;
+                              statusColor = const Color(0xFFF59E0B);
+                              break;
+                            case DiagnosticStatus.fail:
+                              statusIcon = Icons.cancel_rounded;
+                              statusColor = const Color(0xFFF43F5E);
+                              break;
+                            case DiagnosticStatus.checking:
+                              statusIcon = Icons.hourglass_top_rounded;
+                              statusColor = const Color(0xFF38BDF8);
+                              break;
+                          }
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: statusColor.withValues(alpha: 0.25)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(statusIcon, size: 18, color: statusColor),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.title,
+                                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: statusColor),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        item.description,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        item.detail,
+                                        style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: Color(0xFF94A3B8)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogCtx).pop(),
+                  child: Text(tr.confirm),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

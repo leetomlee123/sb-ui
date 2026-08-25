@@ -1,7 +1,16 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sb_ui/core/engine/profile_parser.dart';
 import 'package:sb_ui/core/engine/config_generator.dart';
 import 'package:sb_ui/core/models/app_settings.dart';
+import 'package:sb_ui/core/models/proxy_node.dart';
+import 'package:sb_ui/core/providers/proxies_provider.dart';
+import 'package:sb_ui/core/providers/storage_provider.dart';
+import 'package:sb_ui/core/services/storage_service.dart';
+import 'package:sb_ui/core/utils/proxy_flag_helper.dart';
+import 'package:sb_ui/features/shell/main_shell_view.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   test('ProfileParser and ConfigGenerator test', () {
@@ -270,5 +279,57 @@ rules:
     final outbounds = config['outbounds'] as List;
     final autoGroup = outbounds.firstWhere((o) => o['tag'] == 'auto');
     expect(autoGroup['outbounds'], equals(['hy2-fast']), reason: 'Auto group must strictly contain hy2-fast and exclude direct outbounds');
+  });
+
+  testWidgets('Bottom status ribbon renders listening port and tags', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final storage = await StorageService.init();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          storageServiceProvider.overrideWithValue(storage),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            bottomNavigationBar: BottomStatusRibbon(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify Inbound mixed-in PORT tag is rendered in bottom ribbon
+    expect(find.text('mixed-in: 7890'), findsOneWidget);
+    // Verify default Rule mode tag is rendered in Chinese by default
+    expect(find.text('规则分流'), findsOneWidget);
+    // Verify Restart button is rendered in bottom ribbon
+    expect(find.text('重启'), findsOneWidget);
+  });
+
+  test('ProxyFlagHelper and ProxySortMode logic test', () {
+    // 1. Verify country flag parsing
+    expect(ProxyFlagHelper.getFlag('🇭🇰 HK 香港 01'), '🇭🇰');
+    expect(ProxyFlagHelper.getFlag('🇯🇵 Tokyo 日本 02'), '🇯🇵');
+    expect(ProxyFlagHelper.getFlag('🇺🇸 US 美国 洛杉矶'), '🇺🇸');
+    expect(ProxyFlagHelper.getFlag('🇸🇬 Singapore 新加坡 01'), '🇸🇬');
+    expect(ProxyFlagHelper.getFlag('Auto 自动优选'), '⚡');
+    expect(ProxyFlagHelper.getFlag('Unknown Node'), '🌐');
+
+    // 2. Verify sorting and filtering
+    final nodeA = ProxyNode(name: 'Beta', type: OutboundType.vless, delay: 150);
+    final nodeB = ProxyNode(name: 'Alpha', type: OutboundType.hysteria2, delay: 35);
+    final nodeC = ProxyNode(name: 'Gamma', type: OutboundType.shadowsocks, delay: -1);
+
+    final state = ProxiesState(
+      nodes: {'Beta': nodeA, 'Alpha': nodeB, 'Gamma': nodeC},
+      sortMode: ProxySortMode.delayAsc,
+      hideUnavailable: true,
+    );
+
+    final sorted = state.filteredNodes;
+    expect(sorted.length, 2); // Gamma (-1) filtered out
+    expect(sorted.first.name, 'Alpha'); // 35ms before 150ms
+    expect(sorted.last.name, 'Beta');
   });
 }

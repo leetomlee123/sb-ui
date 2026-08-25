@@ -335,6 +335,19 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
     }
   }
 
+  /// Refreshes all remote subscription profiles in background (e.g. at startup or interval)
+  Future<void> refreshAllRemoteProfiles({bool force = false}) async {
+    final remoteProfiles = state.profiles.where((p) => p.type == ProfileType.remote && p.url != null).toList();
+    final now = DateTime.now();
+    for (final p in remoteProfiles) {
+      if (force || now.difference(p.updatedAt).inHours >= 12) {
+        try {
+          await refreshProfile(p.id);
+        } catch (_) {}
+      }
+    }
+  }
+
   Future<void> deleteProfile(String id) async {
     final updatedProfiles = state.profiles.where((p) => p.id != id).toList();
     String? newActiveId = state.activeProfileId;

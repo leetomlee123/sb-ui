@@ -35,7 +35,7 @@ final class JsonFileUpdateRecoveryStore implements UpdateRecoveryStore {
   @override
   Future<void> writePendingInstall(UpdateInstallRecoveryMarker marker) async {
     await file.parent.create(recursive: true);
-    final suffix = '${pid}-${DateTime.now().microsecondsSinceEpoch}';
+    final suffix = '$pid-${DateTime.now().microsecondsSinceEpoch}';
     final pending = File('${file.path}.pending-$suffix');
     final backup = File('${file.path}.backup-$suffix');
     await pending.writeAsString(

@@ -31,6 +31,18 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_BUILD=${FLUTT
 # Disable Windows macros that collide with C++ standard library functions.
 target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 
+# High-performance compiler and linker optimizations for Release and Profile builds
+if(MSVC)
+  target_compile_options(${BINARY_NAME} PRIVATE
+    "$<$<CONFIG:Release>:/O2;/Oi;/Ot;/GL;/Gw>"
+    "$<$<CONFIG:Profile>:/O2;/Oi;/Ot;/GL;/Gw>"
+  )
+  set_target_properties(${BINARY_NAME} PROPERTIES
+    LINK_FLAGS_RELEASE "/LTCG /OPT:REF /OPT:ICF"
+    LINK_FLAGS_PROFILE "/LTCG /OPT:REF /OPT:ICF"
+  )
+endif()
+
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)

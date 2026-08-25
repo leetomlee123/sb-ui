@@ -7,12 +7,20 @@ import 'core_provider.dart';
 import 'profiles_provider.dart';
 import 'settings_provider.dart';
 
+enum ProxySortMode {
+  defaultOrder,
+  delayAsc,
+  nameAsc,
+}
+
 class ProxiesState {
   final Map<String, ProxyGroup> groups;
   final Map<String, ProxyNode> nodes;
   final bool isLoading;
   final String? selectedGroup;
   final String searchQuery;
+  final ProxySortMode sortMode;
+  final bool hideUnavailable;
 
   ProxiesState({
     this.groups = const {},
@@ -20,12 +28,15 @@ class ProxiesState {
     this.isLoading = false,
     this.selectedGroup,
     this.searchQuery = '',
+    this.sortMode = ProxySortMode.defaultOrder,
+    this.hideUnavailable = false,
   });
 
   List<ProxyNode> get filteredNodes {
+    List<ProxyNode> list = [];
     if (selectedGroup != null && groups.containsKey(selectedGroup)) {
       final group = groups[selectedGroup]!;
-      return group.all
+      list = group.all
           .map((name) {
             if (nodes.containsKey(name)) return nodes[name]!;
             if (groups.containsKey(name)) {
@@ -36,13 +47,29 @@ class ProxiesState {
           })
           .where((n) => n.name.toLowerCase().contains(searchQuery.toLowerCase()))
           .toList();
-    }
-    if (nodes.isNotEmpty) {
-      return nodes.values
+    } else if (nodes.isNotEmpty) {
+      list = nodes.values
           .where((n) => n.name.toLowerCase().contains(searchQuery.toLowerCase()))
           .toList();
     }
-    return [];
+
+    if (hideUnavailable) {
+      list = list.where((n) => (n.delay ?? 0) > 0).toList();
+    }
+
+    if (sortMode == ProxySortMode.delayAsc) {
+      list.sort((a, b) {
+        final dA = a.delay ?? 0;
+        final dB = b.delay ?? 0;
+        final delayA = dA <= 0 ? 999999 : dA;
+        final delayB = dB <= 0 ? 999999 : dB;
+        return delayA.compareTo(delayB);
+      });
+    } else if (sortMode == ProxySortMode.nameAsc) {
+      list.sort((a, b) => a.name.compareTo(b.name));
+    }
+
+    return list;
   }
 
   List<String> get sortedGroupNames {
@@ -67,6 +94,8 @@ class ProxiesState {
     bool? isLoading,
     String? selectedGroup,
     String? searchQuery,
+    ProxySortMode? sortMode,
+    bool? hideUnavailable,
   }) {
     return ProxiesState(
       groups: groups ?? this.groups,
@@ -74,6 +103,8 @@ class ProxiesState {
       isLoading: isLoading ?? this.isLoading,
       selectedGroup: selectedGroup ?? this.selectedGroup,
       searchQuery: searchQuery ?? this.searchQuery,
+      sortMode: sortMode ?? this.sortMode,
+      hideUnavailable: hideUnavailable ?? this.hideUnavailable,
     );
   }
 }
@@ -251,6 +282,14 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
 
   void setSearchQuery(String query) {
     state = state.copyWith(searchQuery: query);
+  }
+
+  void setSortMode(ProxySortMode mode) {
+    state = state.copyWith(sortMode: mode);
+  }
+
+  void toggleHideUnavailable(bool hide) {
+    state = state.copyWith(hideUnavailable: hide);
   }
 
   Future<bool> selectNode(String groupName, String nodeName) async {

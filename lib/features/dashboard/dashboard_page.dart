@@ -112,31 +112,74 @@ class DashboardPage extends ConsumerWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  isRunning ? tr.connected : tr.disconnected,
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 1.2,
-                                    color: isRunning ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
-                                  ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      isRunning ? tr.connected : tr.disconnected,
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 1.2,
+                                        color: isRunning ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    if (isRunning)
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF10B981),
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFF10B981).withValues(alpha: 0.8),
+                                              blurRadius: 6,
+                                              spreadRadius: 1,
+                                            )
+                                          ],
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                                const SizedBox(width: 8),
                                 if (isRunning)
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF10B981),
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: const Color(0xFF10B981).withValues(alpha: 0.8),
-                                          blurRadius: 6,
-                                          spreadRadius: 1,
-                                        )
-                                      ],
+                                  Tooltip(
+                                    message: tr.restartCore,
+                                    child: InkWell(
+                                      onTap: () async {
+                                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(tr.restartingCore),
+                                            duration: const Duration(seconds: 1),
+                                            behavior: SnackBarBehavior.floating,
+                                            width: 280,
+                                          ),
+                                        );
+                                        await ref.read(coreProvider.notifier).restartCore();
+                                      },
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF6366F1).withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.3)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.restart_alt_rounded, size: 13, color: Color(0xFF818CF8)),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              tr.restartCore,
+                                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                               ],

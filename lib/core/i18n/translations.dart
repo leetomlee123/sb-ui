@@ -44,6 +44,8 @@ class Translations {
   String get starting => isZh ? '启动中' : 'Starting';
   String get stopped => isZh ? '已停止' : 'Stopped';
   String get error => isZh ? '异常' : 'Error';
+  String get restartCore => isZh ? '重启核心' : 'Restart Core';
+  String get restartingCore => isZh ? '正在重启核心服务...' : 'Restarting core service...';
 
   // Dashboard Page
   String get connected => isZh ? '已连接' : 'CONNECTED';
@@ -80,6 +82,12 @@ class Translations {
   String get noNodesFound => isZh ? '未找到符合条件的节点' : 'No proxy nodes found';
   String get pinging => isZh ? '测速中...' : 'pinging...';
   String get timeout => isZh ? '超时' : 'Timeout';
+  String get sortDefault => isZh ? '默认排序' : 'Default Order';
+  String get sortDelayAsc => isZh ? '延迟优先' : 'Lowest Latency';
+  String get sortNameAsc => isZh ? '名称排序' : 'Name (A-Z)';
+  String get hideUnavailableNodes => isZh ? '隐藏不可用' : 'Hide Timeout';
+  String get quickSelectNode => isZh ? '快捷切换出口节点' : 'Quick Switch Outbound Node';
+  String get nodeSwitchedTo => isZh ? '已切换出口节点: ' : 'Active node switched to: ';
 
   // Profiles Page
   String get subAndProfiles => isZh ? '配置与订阅管理' : 'SUBSCRIPTIONS & PROFILES';
@@ -183,6 +191,9 @@ class Translations {
   String get clashPortLabel => isZh ? 'Clash API 控制器端口' : 'Clash API External Controller Port';
   String get clashSecretLabel => isZh ? 'Clash API 认证密钥 (可选)' : 'Clash API Authorization Secret (Optional)';
   String get clashSecretHint => isZh ? '留空则无需认证 Token' : 'Leave empty for no authentication token';
+  String get editPortTitle => isZh ? '修改入站监听端口' : 'Edit Inbound Port';
+  String get editPortDesc => isZh ? '修改入站代理端口（HTTP / SOCKS5 混合代理）。修改后将自动重启内核服务以使新端口生效。' : 'Modify inbound proxy port (HTTP / SOCKS5). Core service will automatically restart to apply changes.';
+  String get portUpdatedAndRestarted => isZh ? '端口已更新，核心已重启生效' : 'Port updated and core service restarted';
 
   String get remoteDnsLabel => isZh ? '远程防污染 DNS (DoH / HTTPS / DoT)' : 'Remote DNS (DoH / DoT / HTTPS / UDP)';
   String get directDnsLabel => isZh ? '国内直连 DNS 解析器' : 'Direct / Domestic DNS';

@@ -50,12 +50,23 @@ class CoreNotifier extends StateNotifier<CoreState> {
   ClashApiClient? _apiClient;
 
   CoreNotifier(this._ref) : super(CoreState(status: CoreStatus.stopped)) {
-    _statusSub = _processManager.statusStream.listen((status) {
+    _statusSub = _processManager.statusStream.listen((status) async {
+      final prevStatus = state.status;
       state = state.copyWith(status: status);
       if (status == CoreStatus.running) {
         _startUptimeTimer();
       } else {
         _stopUptimeTimer();
+        // Supervisor: If core was running and unexpectedly crashed/stopped, clean up system proxy
+        if (prevStatus == CoreStatus.running && status != CoreStatus.running) {
+          final settings = _ref.read(settingsProvider);
+          if (settings.systemProxyEnabled) {
+            try {
+              final cleared = await SystemProxyManager.clearProxy();
+              if (cleared) await _markSystemProxyDirty(false);
+            } catch (_) {}
+          }
+        }
       }
     });
   }

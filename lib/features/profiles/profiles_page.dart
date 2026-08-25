@@ -16,7 +16,61 @@ class ProfilesPage extends ConsumerStatefulWidget {
   ConsumerState<ProfilesPage> createState() => _ProfilesPageState();
 }
 
-class _ProfilesPageState extends ConsumerState<ProfilesPage> {
+class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBindingObserver {
+  String? _detectedClipboardContent;
+  bool _dismissedClipboard = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkClipboard();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkClipboard();
+    }
+  }
+
+  void _checkClipboard() async {
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = data?.text?.trim() ?? '';
+      if (text.isNotEmpty && !_dismissedClipboard) {
+        final isUrl = text.startsWith('http://') || text.startsWith('https://');
+        final isNodeUri = text.startsWith('vmess://') ||
+            text.startsWith('vless://') ||
+            text.startsWith('hy2://') ||
+            text.startsWith('hysteria2://') ||
+            text.startsWith('ss://') ||
+            text.startsWith('trojan://') ||
+            text.startsWith('tuic://') ||
+            text.startsWith('wireguard://') ||
+            text.startsWith('clash://');
+        final isJsonOrYaml = text.startsWith('{') || text.startsWith('proxies:') || text.startsWith('outbounds:');
+
+        if (isUrl || isNodeUri || isJsonOrYaml) {
+          final existing = ref.read(profilesProvider).profiles.any((p) => p.url == text || p.rawConfig.trim() == text);
+          if (!existing && mounted && _detectedClipboardContent != text) {
+            setState(() {
+              _detectedClipboardContent = text;
+            });
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   void _showManualNodeDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -80,7 +134,65 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
             ],
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+
+          // Clipboard Detected One-Click Import Banner
+          if (_detectedClipboardContent != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF6366F1).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.content_paste_go_rounded, size: 18, color: Color(0xFF818CF8)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tr.isZh ? '检测到剪贴板中的订阅/节点链接' : 'Detected configuration in clipboard',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _detectedClipboardContent!,
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _dismissedClipboard = true;
+                        _detectedClipboardContent = null;
+                      });
+                    },
+                    child: Text(tr.cancel, style: const TextStyle(fontSize: 11)),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      final content = _detectedClipboardContent!;
+                      setState(() {
+                        _dismissedClipboard = true;
+                        _detectedClipboardContent = null;
+                      });
+                      _showAddProfileDialog(context, tr, initialContent: content);
+                    },
+                    icon: const Icon(Icons.file_download_rounded, size: 14),
+                    label: Text(tr.isZh ? '一键导入' : 'Import Now', style: const TextStyle(fontSize: 11)),
+                  ),
+                ],
+              ),
+            ),
 
           // Profiles List
           Expanded(
@@ -398,11 +510,24 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> {
     );
   }
 
-  void _showAddProfileDialog(BuildContext context, Translations tr) {
+  void _showAddProfileDialog(BuildContext context, Translations tr, {String? initialContent}) {
     final nameCtrl = TextEditingController();
     final urlCtrl = TextEditingController();
     final rawCtrl = TextEditingController();
     int tabIndex = 0;
+
+    if (initialContent != null && initialContent.isNotEmpty) {
+      final isUrl = initialContent.startsWith('http://') || initialContent.startsWith('https://');
+      if (isUrl) {
+        tabIndex = 0;
+        urlCtrl.text = initialContent;
+        nameCtrl.text = tr.isZh ? '我的订阅' : 'My Subscription';
+      } else {
+        tabIndex = 1;
+        rawCtrl.text = initialContent;
+        nameCtrl.text = tr.isZh ? '导入的配置' : 'Imported Config';
+      }
+    }
 
     showDialog(
       context: context,

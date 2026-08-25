@@ -4,6 +4,7 @@ import '../../core/i18n/translations.dart';
 import '../../core/models/proxy_node.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/providers/proxies_provider.dart';
+import '../../core/utils/proxy_flag_helper.dart';
 import '../../shared/widgets/double_bezel_card.dart';
 
 class ProxiesPage extends ConsumerStatefulWidget {
@@ -150,9 +151,95 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
 
               const SizedBox(width: 16),
 
+              // Filter Unavailable Toggle
+              FilterChip(
+                label: Text(tr.hideUnavailableNodes, style: const TextStyle(fontSize: 11)),
+                selected: proxiesState.hideUnavailable,
+                onSelected: (val) {
+                  ref.read(proxiesProvider.notifier).toggleHideUnavailable(val);
+                },
+                avatar: Icon(
+                  proxiesState.hideUnavailable ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                  size: 13,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Sort Mode Menu
+              PopupMenuButton<ProxySortMode>(
+                tooltip: '排序方式',
+                initialValue: proxiesState.sortMode,
+                onSelected: (mode) {
+                  ref.read(proxiesProvider.notifier).setSortMode(mode);
+                },
+                itemBuilder: (ctx) => [
+                  PopupMenuItem(
+                    value: ProxySortMode.defaultOrder,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.sort_rounded, size: 16),
+                        const SizedBox(width: 8),
+                        Text(tr.sortDefault),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: ProxySortMode.delayAsc,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.speed_rounded, size: 16, color: Color(0xFF10B981)),
+                        const SizedBox(width: 8),
+                        Text(tr.sortDelayAsc),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: ProxySortMode.nameAsc,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.sort_by_alpha_rounded, size: 16, color: Color(0xFF38BDF8)),
+                        const SizedBox(width: 8),
+                        Text(tr.sortNameAsc),
+                      ],
+                    ),
+                  ),
+                ],
+                child: Container(
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        proxiesState.sortMode == ProxySortMode.delayAsc
+                            ? Icons.speed_rounded
+                            : (proxiesState.sortMode == ProxySortMode.nameAsc ? Icons.sort_by_alpha_rounded : Icons.sort_rounded),
+                        size: 16,
+                        color: proxiesState.sortMode != ProxySortMode.defaultOrder ? const Color(0xFF818CF8) : null,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        proxiesState.sortMode == ProxySortMode.delayAsc
+                            ? tr.sortDelayAsc
+                            : (proxiesState.sortMode == ProxySortMode.nameAsc ? tr.sortNameAsc : tr.sortDefault),
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                      ),
+                      const Icon(Icons.arrow_drop_down_rounded, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 10),
+
               // Search Filter Field
               SizedBox(
-                width: 180,
+                width: 160,
                 height: 38,
                 child: TextField(
                   decoration: InputDecoration(
@@ -291,6 +378,14 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
                                   const Padding(
                                     padding: EdgeInsets.only(right: 6),
                                     child: Icon(Icons.bolt_rounded, size: 16, color: Color(0xFFF59E0B)),
+                                  )
+                                else
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: Text(
+                                      ProxyFlagHelper.getFlag(node.name),
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
                                   ),
                                 Expanded(
                                   child: Column(

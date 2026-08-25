@@ -6,6 +6,7 @@ import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 import 'app/theme.dart';
 import 'core/i18n/translations.dart';
+import 'core/models/app_settings.dart';
 import 'core/providers/app_updater_provider.dart';
 import 'core/providers/core_provider.dart';
 import 'core/providers/settings_provider.dart';
@@ -66,30 +67,21 @@ void main(List<String> args) async {
       '[App Startup] 核心基础存储与窗口系统初始化完成 (耗时: ${initStopwatch.elapsedMilliseconds}ms)',
     );
 
-    // 3. Kick off window display instantly on desktop
+    // 3. Kick off window configuration on desktop (native C++ already shows window at GPU first frame)
     if (isDesktop) {
       final windowStopwatch = Stopwatch()..start();
-      const windowOptions = WindowOptions(
-        size: Size(1020, 680),
-        minimumSize: Size(820, 560),
-        center: true,
-        backgroundColor: Colors.transparent,
-        skipTaskbar: false,
-        titleBarStyle: TitleBarStyle.hidden,
-        title: 'Singular',
-      );
-
-      unawaited(windowManager.waitUntilReadyToShow(windowOptions, () async {
-        await windowManager.setPreventClose(true);
-        if (!initialSettings.startMinimized) {
-          await windowManager.show();
-          await windowManager.focus();
-        }
+      unawaited(() async {
+        try {
+          await windowManager.setPreventClose(true);
+          if (initialSettings.startMinimized) {
+            await windowManager.hide();
+          }
+        } catch (_) {}
         windowStopwatch.stop();
         AppLogger.info(
-          '[App Startup] 桌面窗口渲染就绪展示 (耗时: ${windowStopwatch.elapsedMilliseconds}ms)',
+          '[App Startup] 桌面窗口配置就绪 (耗时: ${windowStopwatch.elapsedMilliseconds}ms)',
         );
-      }));
+      }());
     }
 
     // 4. Mount App immediately (zero background I/O or pre-frame overhead)
@@ -197,7 +189,6 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
   Future<void> _initTray() async {
     try {
       if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-        final tr = ref.read(translationsProvider);
         final iconPath = Platform.isWindows
             ? 'assets/icons/app_icon.ico'
             : 'assets/icons/app_icon.png';
@@ -206,6 +197,19 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
           await trayManager.setIcon(iconPath);
           await trayManager.setToolTip('Singular');
         } catch (_) {}
+
+        await _updateTrayMenu();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _updateTrayMenu() async {
+    try {
+      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        final tr = ref.read(translationsProvider);
+        final settings = ref.read(settingsProvider);
+        final isRunning = ref.read(coreProvider).isRunning;
+        final routingMode = settings.routingMode;
 
         final menu = Menu(
           items: [
@@ -216,7 +220,25 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
             MenuItem.separator(),
             MenuItem(
               key: 'toggle_core',
-              label: tr.trayToggle,
+              label: isRunning ? (tr.isZh ? '断开连接 (停止核心)' : 'Disconnect') : (tr.isZh ? '启动连接' : 'Connect'),
+            ),
+            MenuItem(
+              key: 'restart_core',
+              label: tr.restartCore,
+              disabled: !isRunning,
+            ),
+            MenuItem.separator(),
+            MenuItem(
+              key: 'mode_rule',
+              label: '${routingMode == RoutingMode.rule ? "✓ " : "   "}${tr.modeRule}',
+            ),
+            MenuItem(
+              key: 'mode_global',
+              label: '${routingMode == RoutingMode.global ? "✓ " : "   "}${tr.modeGlobal}',
+            ),
+            MenuItem(
+              key: 'mode_direct',
+              label: '${routingMode == RoutingMode.direct ? "✓ " : "   "}${tr.modeDirect}',
             ),
             MenuItem.separator(),
             MenuItem(
@@ -266,6 +288,21 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
         break;
       case 'toggle_core':
         ref.read(coreProvider.notifier).toggleCore();
+        break;
+      case 'restart_core':
+        ref.read(coreProvider.notifier).restartCore();
+        break;
+      case 'mode_rule':
+        await ref.read(settingsProvider.notifier).setRoutingMode(RoutingMode.rule);
+        _updateTrayMenu();
+        break;
+      case 'mode_global':
+        await ref.read(settingsProvider.notifier).setRoutingMode(RoutingMode.global);
+        _updateTrayMenu();
+        break;
+      case 'mode_direct':
+        await ref.read(settingsProvider.notifier).setRoutingMode(RoutingMode.direct);
+        _updateTrayMenu();
         break;
       case 'exit_app':
         await _exitApplication();
