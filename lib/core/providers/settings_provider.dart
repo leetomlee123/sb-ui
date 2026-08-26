@@ -37,6 +37,10 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     await updateSettings(state.copyWith(tunModeEnabled: enabled));
   }
 
+  Future<void> updateTunStack(String stack) async {
+    await updateSettings(state.copyWith(tunStack: stack));
+  }
+
   Future<void> setRoutingMode(RoutingMode mode) async {
     await updateSettings(state.copyWith(routingMode: mode));
   }

@@ -10,6 +10,7 @@ import '../../core/providers/core_updater_provider.dart';
 import '../../core/providers/geo_updater_provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/services/network_doctor_service.dart';
+import '../../core/services/storage_service.dart';
 import '../../core/utils/byte_formatter.dart';
 import '../../core/utils/version_utils.dart';
 import '../../shared/widgets/double_bezel_card.dart';
@@ -77,6 +78,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           _detectedVersion = 'Binary not found';
         });
       }
+    }
+  }
+
+  Future<void> _openConfigFolder() async {
+    final dir = await StorageService.getAppConfigDir();
+    if (Platform.isWindows) {
+      await Process.run('explorer.exe', [dir.path.replaceAll('/', r'\')]);
+    } else if (Platform.isMacOS) {
+      await Process.run('open', [dir.path]);
+    } else if (Platform.isLinux) {
+      await Process.run('xdg-open', [dir.path]);
     }
   }
 
@@ -205,6 +217,35 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     }
                   },
                 ),
+                if (settings.tunModeEnabled) ...[
+                  Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
+                  ListTile(
+                    title: Text(tr.isZh ? 'TUN 网络栈 (Stack)' : 'TUN Network Stack', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    subtitle: Text(
+                      tr.isZh
+                          ? 'system (推荐：系统原生栈，低CPU，适配UDP/Hy2) / mixed / gvisor'
+                          : 'system (recommended: native stack, low CPU) / mixed / gvisor',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    trailing: DropdownButton<String>(
+                      value: settings.tunStack.isNotEmpty ? settings.tunStack : 'system',
+                      underline: const SizedBox.shrink(),
+                      items: const [
+                        DropdownMenuItem(value: 'system', child: Text('system (系统原生/低CPU)')),
+                        DropdownMenuItem(value: 'mixed', child: Text('mixed (混合栈)')),
+                        DropdownMenuItem(value: 'gvisor', child: Text('gvisor (用户态栈)')),
+                      ],
+                      onChanged: (val) async {
+                        if (val != null) {
+                          await ref.read(settingsProvider.notifier).updateTunStack(val);
+                          if (coreIsRunning) {
+                            ref.read(coreProvider.notifier).restartCore();
+                          }
+                        }
+                      },
+                    ),
+                  ),
+                ],
                 Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
                 SwitchListTile(
                   title: Text(tr.optLanTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
@@ -372,6 +413,38 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   const SizedBox(height: 16),
                   _buildUpdateStatusBanner(context, updaterState, tr),
                 ],
+
+                const SizedBox(height: 14),
+                Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            tr.isZh ? '配置与内核日志' : 'Config & Core Logs',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            tr.isZh
+                                ? '存放 config.json 与 sing-box.log 日志文件'
+                                : 'Houses config.json and sing-box.log files',
+                            style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _openConfigFolder,
+                      icon: const Icon(Icons.folder_open_rounded, size: 16),
+                      label: Text(tr.isZh ? '打开目录' : 'Open Folder', style: const TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),

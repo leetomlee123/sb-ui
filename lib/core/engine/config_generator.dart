@@ -176,6 +176,21 @@ class ConfigGenerator {
 
     // TUN Inbound (if enabled)
     if (settings.tunModeEnabled) {
+      final ipv4Regex = RegExp(r'^(\d{1,3}\.){3}\d{1,3}$');
+      final List<String> routeExcludeAddresses = [];
+      for (final ob in finalOutbounds) {
+        final type = (ob['type'] ?? '').toString().toLowerCase();
+        if (_proxyTypes.contains(type)) {
+          final server = (ob['server'] ?? '').toString().trim();
+          if (ipv4Regex.hasMatch(server)) {
+            final cidr = '$server/32';
+            if (!routeExcludeAddresses.contains(cidr)) {
+              routeExcludeAddresses.add(cidr);
+            }
+          }
+        }
+      }
+
       inbounds.add({
         'type': 'tun',
         'tag': 'tun-in',
@@ -186,7 +201,8 @@ class ConfigGenerator {
         ],
         'auto_route': true,
         'strict_route': false,
-        'stack': settings.tunStack.isNotEmpty ? settings.tunStack : 'mixed',
+        if (routeExcludeAddresses.isNotEmpty) 'route_exclude_address': routeExcludeAddresses,
+        'stack': settings.tunStack.isNotEmpty ? settings.tunStack : 'system',
       });
     }
 
@@ -200,31 +216,6 @@ class ConfigGenerator {
         'action': 'hijack-dns',
       },
     ];
-
-    // Auto-bypass proxy server IP addresses from TUN to prevent routing loops / deadlocks
-    final ipv4Regex = RegExp(r'^(\d{1,3}\.){3}\d{1,3}$');
-    for (final ob in finalOutbounds) {
-      final type = (ob['type'] ?? '').toString().toLowerCase();
-      if (_proxyTypes.contains(type)) {
-        final server = (ob['server'] ?? '').toString().trim();
-        if (ipv4Regex.hasMatch(server)) {
-          final iface = ob['bind_interface']?.toString();
-          String directOutboundTag = 'direct';
-          if (iface != null && iface.isNotEmpty) {
-            for (final d in finalOutbounds) {
-              if (d['type'] == 'direct' && d['bind_interface'] == iface) {
-                directOutboundTag = (d['tag'] ?? 'direct').toString();
-                break;
-              }
-            }
-          }
-          routeRules.add({
-            'ip_cidr': ['$server/32'],
-            'outbound': directOutboundTag,
-          });
-        }
-      }
-    }
 
     // Inject custom profile rules (e.g. Clash PROCESS-NAME, DOMAIN-SUFFIX, IP-CIDR) with highest priority
     if (customRules.isNotEmpty) {
@@ -388,10 +379,15 @@ class ConfigGenerator {
         ? p.join(configDir, 'geosite-cn.srs').replaceAll(r'\', '/')
         : 'geosite-cn.srs';
 
+    final String? logPath = (configDir != null && configDir.isNotEmpty)
+        ? p.join(configDir, 'sing-box.log').replaceAll(r'\', '/')
+        : null;
+
     final config = {
       'log': {
         'level': settings.logLevel,
         'timestamp': true,
+        'output': ?logPath,
       },
       'dns': {
         'servers': dnsServers,

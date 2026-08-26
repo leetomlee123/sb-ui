@@ -258,9 +258,10 @@ rules:
 
     final routeRules = config['route']['rules'] as List;
 
-    // Verify auto-bypass rule for proxy server IP
-    final proxyBypassRule = routeRules.firstWhere((r) => r['ip_cidr'] != null && (r['ip_cidr'] as List).contains('158.180.92.85/32'));
-    expect(proxyBypassRule['outbound'], '热点直连');
+    // Verify auto-bypass exception route for proxy server IP in TUN route_exclude_address
+    expect(tunInbound['route_exclude_address'], contains('158.180.92.85/32'));
+    final proxyBypassInRouteRules = routeRules.where((r) => r['ip_cidr'] != null && (r['ip_cidr'] as List).contains('158.180.92.85/32'));
+    expect(proxyBypassInRouteRules, isEmpty, reason: 'Proxy server IP must be excluded at OS route level via route_exclude_address, not forced via route.rules');
 
     final processRule = routeRules.firstWhere((r) => r['process_name'] != null);
     expect(processRule['process_name'], contains('uSmartView.exe'));

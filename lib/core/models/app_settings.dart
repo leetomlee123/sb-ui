@@ -47,7 +47,7 @@ class AppSettings {
     this.clashApiSecret = '',
     this.systemProxyEnabled = true,
     this.tunModeEnabled = false,
-    this.tunStack = 'mixed',
+    this.tunStack = 'system',
     this.logLevel = 'info',
     this.routingMode = RoutingMode.rule,
     this.autoStart = false,
@@ -100,7 +100,7 @@ class AppSettings {
       clashApiSecret: json['clashApiSecret'] as String? ?? '',
       systemProxyEnabled: json['systemProxyEnabled'] as bool? ?? false,
       tunModeEnabled: json['tunModeEnabled'] as bool? ?? false,
-      tunStack: json['tunStack'] as String? ?? 'mixed',
+      tunStack: json['tunStack'] as String? ?? 'system',
       logLevel: json['logLevel'] as String? ?? 'info',
       routingMode: RoutingMode.values.firstWhere(
         (e) => e.name == json['routingMode'],
