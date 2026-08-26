@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/i18n/translations.dart';
@@ -23,21 +24,31 @@ class _LogsPageState extends ConsumerState<LogsPage> {
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(() {
-      if (!_scrollController.hasClients) return;
-      final pos = _scrollController.position;
-      final isAtBottom = pos.pixels >= pos.maxScrollExtent - 40;
-      if (isAtBottom && _showScrollToBottom) {
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    // Considered at bottom if within 30 pixels of maxScrollExtent
+    final isAtBottom = pos.pixels >= pos.maxScrollExtent - 30;
+
+    if (isAtBottom) {
+      if (!_autoScroll || _showScrollToBottom) {
         setState(() {
-          _showScrollToBottom = false;
           _autoScroll = true;
+          _showScrollToBottom = false;
         });
-      } else if (!isAtBottom && !_showScrollToBottom) {
+      }
+    } else {
+      // User scrolled up! Immediately pause auto-scroll so user can read/browse freely
+      if (_autoScroll || !_showScrollToBottom) {
         setState(() {
+          _autoScroll = false;
           _showScrollToBottom = true;
         });
       }
-    });
+    }
   }
 
   @override
@@ -220,14 +231,30 @@ class _LogsPageState extends ConsumerState<LogsPage> {
                             style: const TextStyle(color: Color(0xFF64748B), fontFamily: 'monospace'),
                           ),
                         )
-                      : SelectionArea(
-                          child: ListView.builder(
-                            controller: _scrollController,
-                            itemCount: logs.length,
-                            itemBuilder: (context, index) {
-                              final entry = logs[index];
-                              return _buildLogLine(entry, index + 1);
-                            },
+                      : NotificationListener<ScrollNotification>(
+                          onNotification: (notification) {
+                            if (notification is UserScrollNotification) {
+                              if (notification.direction == ScrollDirection.forward) {
+                                // User actively initiated scrolling upwards
+                                if (_autoScroll) {
+                                  setState(() {
+                                    _autoScroll = false;
+                                    _showScrollToBottom = true;
+                                  });
+                                }
+                              }
+                            }
+                            return false;
+                          },
+                          child: SelectionArea(
+                            child: ListView.builder(
+                              controller: _scrollController,
+                              itemCount: logs.length,
+                              itemBuilder: (context, index) {
+                                final entry = logs[index];
+                                return _buildLogLine(entry, index + 1);
+                              },
+                            ),
                           ),
                         ),
                 ),
