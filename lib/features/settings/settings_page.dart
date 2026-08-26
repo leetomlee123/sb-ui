@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,6 +31,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   late TextEditingController _remoteDnsCtrl;
   late TextEditingController _directDnsCtrl;
   String? _detectedVersion;
+  Timer? _debounceSaveTimer;
 
   @override
   void initState() {
@@ -46,6 +48,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   @override
   void dispose() {
+    _debounceSaveTimer?.cancel();
     _mixedPortCtrl.dispose();
     _clashPortCtrl.dispose();
     _clashSecretCtrl.dispose();
@@ -92,7 +95,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
-  Future<void> _saveSettings() async {
+  void _onFieldChanged() {
+    _debounceSaveTimer?.cancel();
+    _debounceSaveTimer = Timer(const Duration(milliseconds: 600), () {
+      _saveSettings(isAuto: true);
+    });
+  }
+
+  Future<void> _saveSettings({bool isAuto = false}) async {
     final settingsNotifier = ref.read(settingsProvider.notifier);
     final current = ref.read(settingsProvider);
     final tr = ref.read(translationsProvider);
@@ -112,6 +122,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         newRemoteDns != current.remoteDns ||
         newDirectDns != current.directDns;
 
+    if (!hasCoreConfigChanged) return;
+
     final updated = current.copyWith(
       mixedPort: newMixedPort,
       clashApiPort: newClashPort,
@@ -127,7 +139,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       await ref.read(coreProvider.notifier).restartCore();
     }
 
-    if (mounted) {
+    if (!isAuto && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -180,10 +192,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ),
                 ],
               ),
-              ElevatedButton.icon(
-                onPressed: _saveSettings,
-                icon: const Icon(Icons.save_rounded, size: 16),
-                label: Text(tr.saveChanges),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.check_circle_rounded, size: 14, color: Color(0xFF10B981)),
+                    const SizedBox(width: 6),
+                    Text(
+                      tr.isZh ? '已开启自动保存' : 'Auto Saved',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF10B981)),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -280,6 +306,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           labelText: tr.mixedPortLabel,
                           hintText: '7890',
                         ),
+                        onChanged: (_) => _onFieldChanged(),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -291,6 +318,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           labelText: tr.clashPortLabel,
                           hintText: '9090',
                         ),
+                        onChanged: (_) => _onFieldChanged(),
                       ),
                     ),
                   ],
@@ -302,6 +330,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     labelText: tr.clashSecretLabel,
                     hintText: tr.clashSecretHint,
                   ),
+                  onChanged: (_) => _onFieldChanged(),
                 ),
               ],
             ),
@@ -321,6 +350,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     labelText: tr.remoteDnsLabel,
                     hintText: 'https://1.1.1.1/dns-query',
                   ),
+                  onChanged: (_) => _onFieldChanged(),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -329,6 +359,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     labelText: tr.directDnsLabel,
                     hintText: '223.5.5.5',
                   ),
+                  onChanged: (_) => _onFieldChanged(),
                 ),
               ],
             ),
@@ -352,7 +383,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           labelText: tr.customBinaryLabel,
                           hintText: tr.customBinaryHint,
                         ),
-                        onChanged: (_) => _checkBinaryVersion(),
+                        onChanged: (_) {
+                          _checkBinaryVersion();
+                          _onFieldChanged();
+                        },
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -749,7 +783,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(
-                            '${tr.appCurrentVersion}v${normalizeSemver(appUpdaterState.currentVersion ?? "1.2.21")}',
+                            '${tr.appCurrentVersion}v${normalizeSemver(appUpdaterState.currentVersion ?? "1.2.22")}',
                             style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Color(0xFF94A3B8)),
                             overflow: TextOverflow.ellipsis,
                           ),
