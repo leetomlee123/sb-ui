@@ -340,12 +340,19 @@ class ConfigGenerator {
       ]);
     }
 
+    // local-dns detour:
+    //   - TUN mode   → no detour (TUN handles all routing)
+    //   - dual-NIC   → detour:'direct' ONLY when direct outbound has bind_interface
+    //                  (sing-box FATAL: "detour to an empty direct outbound makes no sense")
+    //   - single-NIC → no detour (sing-box routes via its own table)
+    final bool directHasInterface =
+        !settings.tunModeEnabled && proxyInterface != null;
     final List<Map<String, dynamic>> dnsServers = [
       buildDnsServer('remote-dns', settings.remoteDns, detour: primaryProxyTag),
       buildDnsServer(
         'local-dns',
         settings.directDns,
-        detour: settings.tunModeEnabled ? null : 'direct',
+        detour: directHasInterface ? 'direct' : null,
       ),
     ];
 

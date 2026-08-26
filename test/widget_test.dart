@@ -319,17 +319,37 @@ rules:
 
     final localDns = dnsServers.firstWhere((s) => s['tag'] == 'local-dns');
     expect(localDns['type'], 'udp');
+    // In TUN mode: no detour (avoids routing loops)
+    // sing-box FATAL: "detour to an empty direct outbound makes no sense"
+    // even with bind_interface nodes, TUN mode must NOT set detour on local-dns
     expect(
       localDns.containsKey('detour'),
       isFalse,
-      reason: 'In TUN mode, local-dns should not have detour to avoid routing loops',
+      reason: 'In TUN mode, local-dns must have no detour to avoid routing loops',
     );
     expect(
       config['route'].containsKey('default_interface'),
       isFalse,
-      reason:
-          'In TUN mode, default_interface should not be set to avoid conflicts',
+      reason: 'In TUN mode, default_interface must not be set',
     );
+
+    // Verify non-TUN + dual-NIC: local-dns gets detour:'direct' ONLY because direct has bind_interface
+    final nonTunConfig = ConfigGenerator.generate(
+      settings: const AppSettings(tunModeEnabled: false),
+      parsedOutbounds: parseResult.outbounds,
+      customRules: parseResult.customRules,
+      customDns: parseResult.customDns,
+    );
+    final nonTunDnsServers = (nonTunConfig['dns'] as Map)['servers'] as List;
+    final nonTunLocalDns =
+        nonTunDnsServers.firstWhere((s) => s['tag'] == 'local-dns');
+    // hy2-fast has interface-name: Wi-Fi 2, so direct outbound gets bind_interface → detour:'direct' is safe
+    expect(
+      nonTunLocalDns['detour'],
+      'direct',
+      reason: 'Non-TUN with bind_interface node: local-dns should detour via direct (which has bind_interface)',
+    );
+    expect(nonTunConfig['route']['default_interface'], 'Wi-Fi 2');
 
     // Verify auto urltest group only contains proxy nodes, not direct outbounds
     final outbounds = config['outbounds'] as List;
