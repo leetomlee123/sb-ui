@@ -122,7 +122,20 @@ class ConfigGenerator {
     }
 
     // 5. Built-in system outbounds
-    finalOutbounds.add({'type': 'direct', 'tag': 'direct'});
+    String? proxyInterface;
+    for (final node in rawNodes) {
+      final iface = node['bind_interface']?.toString();
+      if (iface != null && iface.isNotEmpty) {
+        proxyInterface = iface;
+        break;
+      }
+    }
+
+    finalOutbounds.add({
+      'type': 'direct',
+      'tag': 'direct',
+      'bind_interface': ?proxyInterface,
+    });
     finalOutbounds.add({'type': 'block', 'tag': 'block'});
 
     // 6. Append all individual proxy nodes

@@ -134,7 +134,7 @@ class AppUpdaterNotifier extends StateNotifier<AppUpdaterState> {
         return normalizeSemver(info.version);
       }
     } catch (_) {}
-    return '1.2.19';
+    return '1.2.20';
   }
 
   void _syncProxy() {
