@@ -27,7 +27,7 @@ if(DEFINED FLUTTER_BUILD_NAME AND NOT "${FLUTTER_BUILD_NAME}" STREQUAL "")
 elseif(DEFINED FLUTTER_VERSION AND NOT "${FLUTTER_VERSION}" STREQUAL "")
   target_compile_definitions(${BINARY_NAME} PRIVATE "APP_VERSION_STRING=\"${FLUTTER_VERSION}\"")
 else()
-  target_compile_definitions(${BINARY_NAME} PRIVATE "APP_VERSION_STRING=\"1.2.20\"")
+  target_compile_definitions(${BINARY_NAME} PRIVATE "APP_VERSION_STRING=\"1.2.21\"")
 endif()
 
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION=\"${FLUTTER_VERSION}\"")

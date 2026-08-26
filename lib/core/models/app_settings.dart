@@ -100,7 +100,7 @@ class AppSettings {
       clashApiSecret: json['clashApiSecret'] as String? ?? '',
       systemProxyEnabled: json['systemProxyEnabled'] as bool? ?? false,
       tunModeEnabled: json['tunModeEnabled'] as bool? ?? false,
-      tunStack: json['tunStack'] as String? ?? 'system',
+      tunStack: (json['tunStack'] == 'mixed' || json['tunStack'] == null) ? 'system' : json['tunStack'] as String,
       logLevel: json['logLevel'] as String? ?? 'info',
       routingMode: RoutingMode.values.firstWhere(
         (e) => e.name == json['routingMode'],

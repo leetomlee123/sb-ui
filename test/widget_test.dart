@@ -280,6 +280,11 @@ rules:
     expect(companyDns['type'], 'udp');
     expect(companyDns['detour'], '内网直连');
 
+    final localDns = dnsServers.firstWhere((s) => s['tag'] == 'local-dns');
+    expect(localDns['type'], 'udp');
+    expect(localDns['detour'], 'direct');
+    expect(config['route']['default_interface'], 'Wi-Fi 2');
+
     // Verify auto urltest group only contains proxy nodes, not direct outbounds
     final outbounds = config['outbounds'] as List;
     final autoGroup = outbounds.firstWhere((o) => o['tag'] == 'auto');

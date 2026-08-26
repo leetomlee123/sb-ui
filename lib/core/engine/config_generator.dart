@@ -204,18 +204,21 @@ class ConfigGenerator {
         }
       }
 
+      final tunStack = (settings.tunStack == 'mixed' || settings.tunStack.isEmpty)
+          ? 'system'
+          : settings.tunStack;
+
       inbounds.add({
         'type': 'tun',
         'tag': 'tun-in',
         'interface_name': 'singbox-tun',
         'address': [
           '172.19.0.1/30',
-          'fdfe:dcba:9876::1/126',
         ],
         'auto_route': true,
         'strict_route': false,
         if (routeExcludeAddresses.isNotEmpty) 'route_exclude_address': routeExcludeAddresses,
-        'stack': settings.tunStack.isNotEmpty ? settings.tunStack : 'system',
+        'stack': tunStack,
       });
     }
 
@@ -306,7 +309,7 @@ class ConfigGenerator {
 
     final List<Map<String, dynamic>> dnsServers = [
       buildDnsServer('remote-dns', settings.remoteDns, detour: primaryProxyTag),
-      buildDnsServer('local-dns', settings.directDns),
+      buildDnsServer('local-dns', settings.directDns, detour: 'direct'),
     ];
 
     final List<Map<String, dynamic>> dnsRules = [];
@@ -428,6 +431,7 @@ class ConfigGenerator {
           }
         ],
         'final': primaryProxyTag,
+        'default_interface': ?proxyInterface,
         'auto_detect_interface': true,
       },
       'experimental': {
@@ -444,7 +448,7 @@ class ConfigGenerator {
   /// Builds a sing-box 1.12+ compliant DNS server object (type + server).
   static Map<String, dynamic> buildDnsServer(String tag, String address, {String? detour}) {
     final trimmed = address.trim();
-    final effectiveDetour = (detour != null && detour.isNotEmpty && detour != 'direct') ? detour : null;
+    final effectiveDetour = (detour != null && detour.isNotEmpty) ? detour : null;
 
     if (trimmed.isEmpty || trimmed == 'local') {
       return {
