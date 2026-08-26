@@ -67,7 +67,10 @@ proxy-groups:
     expect(generated['inbounds'], isNotEmpty);
     expect(generated['outbounds'], isNotEmpty);
     expect(generated['route'], isNotNull);
-    expect(generated['experimental']['clash_api']['external_controller'], '127.0.0.1:9090');
+    expect(
+      generated['experimental']['clash_api']['external_controller'],
+      '127.0.0.1:9090',
+    );
 
     final outboundsList = generated['outbounds'] as List;
     final allTags = outboundsList.map((o) => o['tag'].toString()).toSet();
@@ -80,19 +83,22 @@ proxy-groups:
     // Verify Proxy group dependencies ALL exist in allTags
     final proxyGroup = outboundsList.firstWhere((o) => o['tag'] == 'Proxy');
     for (final dest in proxyGroup['outbounds'] as List) {
-      expect(allTags.contains(dest) || ['direct', 'block'].contains(dest), isTrue,
-          reason: 'Dependency $dest must exist in outbounds');
+      expect(
+        allTags.contains(dest) || ['direct', 'block'].contains(dest),
+        isTrue,
+        reason: 'Dependency $dest must exist in outbounds',
+      );
     }
 
     // Verify preferred selectedProxyNode is set as default in Proxy group
-    const customNodeSettings = AppSettings(
-      selectedProxyNode: 'HK-Node-01',
-    );
+    const customNodeSettings = AppSettings(selectedProxyNode: 'HK-Node-01');
     final customGenerated = ConfigGenerator.generate(
       settings: customNodeSettings,
       parsedOutbounds: result.outbounds,
     );
-    final customProxyGroup = (customGenerated['outbounds'] as List).firstWhere((o) => o['tag'] == 'Proxy');
+    final customProxyGroup = (customGenerated['outbounds'] as List).firstWhere(
+      (o) => o['tag'] == 'Proxy',
+    );
     expect(customProxyGroup['default'], 'HK-Node-01');
   });
 
@@ -143,10 +149,7 @@ proxy-groups:
       'password': 'hy2password',
       'up_mbps': 100,
       'down_mbps': 500,
-      'obfs': {
-        'type': 'salamander',
-        'password': 'obfspassword',
-      },
+      'obfs': {'type': 'salamander', 'password': 'obfspassword'},
     };
 
     final generated = ConfigGenerator.generate(
@@ -167,15 +170,24 @@ proxy-groups:
 
   test('ProfileParser in-memory LRU caching', () {
     ProfileParser.clearCache();
-    const testContent = 'proxies:\n  - name: test-ss\n    type: ss\n    server: 1.1.1.1\n    port: 8388\n    cipher: aes-128-gcm\n    password: pwd';
-    
+    const testContent =
+        'proxies:\n  - name: test-ss\n    type: ss\n    server: 1.1.1.1\n    port: 8388\n    cipher: aes-128-gcm\n    password: pwd';
+
     final result1 = ProfileParser.parse(testContent);
     final result2 = ProfileParser.parse(testContent);
-    expect(identical(result1, result2), isTrue, reason: 'Repeated parse should return identical cached instance');
+    expect(
+      identical(result1, result2),
+      isTrue,
+      reason: 'Repeated parse should return identical cached instance',
+    );
 
     ProfileParser.clearCache();
     final result3 = ProfileParser.parse(testContent);
-    expect(identical(result1, result3), isFalse, reason: 'clearCache should flush the cached instance');
+    expect(
+      identical(result1, result3),
+      isFalse,
+      reason: 'clearCache should flush the cached instance',
+    );
     expect(result3.count, result1.count);
   });
 
@@ -228,7 +240,10 @@ rules:
 
     final parseResult = ProfileParser.parse(yamlContent);
     expect(parseResult.outbounds.length, 4); // hy2-fast, 内网直连, 热点直连, auto group
-    expect(parseResult.customRules.length, 4); // 4 conditional rules (MATCH is skipped as fallback)
+    expect(
+      parseResult.customRules.length,
+      4,
+    ); // 4 conditional rules (MATCH is skipped as fallback)
     expect(parseResult.customDns, isNotNull);
 
     // Verify outbounds
@@ -236,7 +251,9 @@ rules:
     expect(hy2['type'], 'hysteria2');
     expect(hy2['bind_interface'], 'Wi-Fi 2');
 
-    final intranet = parseResult.outbounds.firstWhere((o) => o['tag'] == '内网直连');
+    final intranet = parseResult.outbounds.firstWhere(
+      (o) => o['tag'] == '内网直连',
+    );
     expect(intranet['type'], 'direct');
     expect(intranet['bind_interface'], 'Wi-Fi');
 
@@ -260,50 +277,81 @@ rules:
 
     // Verify auto-bypass exception route for proxy server IP in TUN route_exclude_address
     expect(tunInbound['route_exclude_address'], contains('158.180.92.85/32'));
-    final proxyBypassInRouteRules = routeRules.where((r) => r['ip_cidr'] != null && (r['ip_cidr'] as List).contains('158.180.92.85/32'));
-    expect(proxyBypassInRouteRules, isEmpty, reason: 'Proxy server IP must be excluded at OS route level via route_exclude_address, not forced via route.rules');
+    final proxyBypassInRouteRules = routeRules.where(
+      (r) =>
+          r['ip_cidr'] != null &&
+          (r['ip_cidr'] as List).contains('158.180.92.85/32'),
+    );
+    expect(
+      proxyBypassInRouteRules,
+      isEmpty,
+      reason: 'Proxy server IP must be excluded at OS route level via route_exclude_address, not forced via route.rules',
+    );
 
     final processRule = routeRules.firstWhere((r) => r['process_name'] != null);
     expect(processRule['process_name'], contains('uSmartView.exe'));
     expect(processRule['outbound'], '内网直连');
 
-    final domainRule = routeRules.firstWhere((r) => r['domain_suffix'] != null && (r['domain_suffix'] as List).contains('cpic.com.cn'));
+    final domainRule = routeRules.firstWhere(
+      (r) =>
+          r['domain_suffix'] != null &&
+          (r['domain_suffix'] as List).contains('cpic.com.cn'),
+    );
     expect(domainRule['outbound'], '内网直连');
 
     // Verify NO unconditional rule in routeRules
-    final unconditionalRules = routeRules.where((r) => r['outbound'] != null && (r as Map).keys.length == 1).toList();
-    expect(unconditionalRules.length, 1, reason: 'Only the single final catch-all at the bottom of route.rules is allowed');
+    final unconditionalRules = routeRules
+        .where((r) => r['outbound'] != null && (r as Map).keys.length == 1)
+        .toList();
+    expect(
+      unconditionalRules.length,
+      1,
+      reason: 'Only the single final catch-all at the bottom of route.rules is allowed',
+    );
 
     final dns = config['dns'] as Map<String, dynamic>;
     final dnsServers = dns['servers'] as List;
-    final companyDns = dnsServers.firstWhere((s) => s['server'] == '202.96.209.133');
+    final companyDns = dnsServers.firstWhere(
+      (s) => s['server'] == '202.96.209.133',
+    );
     expect(companyDns['type'], 'udp');
     expect(companyDns['detour'], '内网直连');
 
     final localDns = dnsServers.firstWhere((s) => s['tag'] == 'local-dns');
     expect(localDns['type'], 'udp');
-    expect(localDns['detour'], 'direct');
-    expect(config['route']['default_interface'], 'Wi-Fi 2');
+    expect(
+      localDns.containsKey('detour'),
+      isFalse,
+      reason: 'In TUN mode, local-dns should not have detour to avoid routing loops',
+    );
+    expect(
+      config['route'].containsKey('default_interface'),
+      isFalse,
+      reason:
+          'In TUN mode, default_interface should not be set to avoid conflicts',
+    );
 
     // Verify auto urltest group only contains proxy nodes, not direct outbounds
     final outbounds = config['outbounds'] as List;
     final autoGroup = outbounds.firstWhere((o) => o['tag'] == 'auto');
-    expect(autoGroup['outbounds'], equals(['hy2-fast']), reason: 'Auto group must strictly contain hy2-fast and exclude direct outbounds');
+    expect(
+      autoGroup['outbounds'],
+      equals(['hy2-fast']),
+      reason: 'Auto group must strictly contain hy2-fast and exclude direct outbounds',
+    );
   });
 
-  testWidgets('Bottom status ribbon renders listening port and tags', (tester) async {
+  testWidgets('Bottom status ribbon renders listening port and tags', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
     final storage = await StorageService.init();
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          storageServiceProvider.overrideWithValue(storage),
-        ],
+        overrides: [storageServiceProvider.overrideWithValue(storage)],
         child: const MaterialApp(
-          home: Scaffold(
-            bottomNavigationBar: BottomStatusRibbon(),
-          ),
+          home: Scaffold(bottomNavigationBar: BottomStatusRibbon()),
         ),
       ),
     );
@@ -328,8 +376,16 @@ rules:
 
     // 2. Verify sorting and filtering
     final nodeA = ProxyNode(name: 'Beta', type: OutboundType.vless, delay: 150);
-    final nodeB = ProxyNode(name: 'Alpha', type: OutboundType.hysteria2, delay: 35);
-    final nodeC = ProxyNode(name: 'Gamma', type: OutboundType.shadowsocks, delay: -1);
+    final nodeB = ProxyNode(
+      name: 'Alpha',
+      type: OutboundType.hysteria2,
+      delay: 35,
+    );
+    final nodeC = ProxyNode(
+      name: 'Gamma',
+      type: OutboundType.shadowsocks,
+      delay: -1,
+    );
 
     final state = ProxiesState(
       nodes: {'Beta': nodeA, 'Alpha': nodeB, 'Gamma': nodeC},
