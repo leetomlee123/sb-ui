@@ -1,5 +1,7 @@
 import 'dart:convert';
+
 import 'package:path/path.dart' as p;
+
 import '../models/app_settings.dart';
 
 class ConfigGenerator {
@@ -40,7 +42,10 @@ class ConfigGenerator {
 
     // List of real remote proxy node tags (excludes local direct/block outbounds)
     final List<String> proxyNodeTags = rawNodes
-        .where((e) => _proxyTypes.contains((e['type'] ?? '').toString().toLowerCase()))
+        .where(
+          (e) =>
+              _proxyTypes.contains((e['type'] ?? '').toString().toLowerCase()),
+        )
         .map((e) => (e['tag'] ?? '').toString())
         .where((tag) => tag.isNotEmpty)
         .toList();
@@ -51,7 +56,9 @@ class ConfigGenerator {
         .where((tag) => tag.isNotEmpty)
         .toList();
 
-    final List<String> eligibleNodeTags = proxyNodeTags.isNotEmpty ? proxyNodeTags : allNodeTags;
+    final List<String> eligibleNodeTags = proxyNodeTags.isNotEmpty
+        ? proxyNodeTags
+        : allNodeTags;
 
     final List<Map<String, dynamic>> finalOutbounds = [];
 
@@ -59,24 +66,54 @@ class ConfigGenerator {
     Map<String, dynamic>? existingProxyGroup;
     Map<String, dynamic>? existingAutoGroup;
 
-    const proxyGroupKeywords = ['proxy', 'proxies', '节点选择', '节点', 'select', 'default', 'main', '国外流量', '漏网之鱼'];
-    const autoGroupKeywords = ['auto', 'urltest', 'url-test', 'auto-select', '自动选择', '自动优选', '自动', 'fallback', 'fastest'];
+    const proxyGroupKeywords = [
+      'proxy',
+      'proxies',
+      '节点选择',
+      '节点',
+      'select',
+      'default',
+      'main',
+      '国外流量',
+      '漏网之鱼',
+    ];
+    const autoGroupKeywords = [
+      'auto',
+      'urltest',
+      'url-test',
+      'auto-select',
+      '自动选择',
+      '自动优选',
+      '自动',
+      'fallback',
+      'fastest',
+    ];
 
     for (final g in rawGroups) {
       final tag = (g['tag'] ?? '').toString();
       final tagLower = tag.toLowerCase();
       final type = (g['type'] ?? '').toString().toLowerCase();
 
-      if (existingProxyGroup == null && (proxyGroupKeywords.any((k) => tagLower.contains(k) || tag.contains(k)) || type == 'selector')) {
+      if (existingProxyGroup == null &&
+          (proxyGroupKeywords.any(
+                (k) => tagLower.contains(k) || tag.contains(k),
+              ) ||
+              type == 'selector')) {
         existingProxyGroup = g;
       }
-      if (existingAutoGroup == null && (autoGroupKeywords.any((k) => tagLower.contains(k) || tag.contains(k)) || type == 'urltest')) {
+      if (existingAutoGroup == null &&
+          (autoGroupKeywords.any(
+                (k) => tagLower.contains(k) || tag.contains(k),
+              ) ||
+              type == 'urltest')) {
         existingAutoGroup = g;
       }
     }
 
     // 2. Add or enhance "Auto" URL-Test if proxy nodes exist
-    String autoGroupTag = existingAutoGroup != null ? (existingAutoGroup['tag'] ?? 'Auto').toString() : 'Auto';
+    String autoGroupTag = existingAutoGroup != null
+        ? (existingAutoGroup['tag'] ?? 'Auto').toString()
+        : 'Auto';
     if (existingAutoGroup == null && eligibleNodeTags.isNotEmpty) {
       finalOutbounds.add({
         'type': 'urltest',
@@ -94,18 +131,25 @@ class ConfigGenerator {
     }
 
     // 3. Add or enhance primary selector group (e.g. "节点选择" or "Proxy")
-    String primaryProxyTag = existingProxyGroup != null ? (existingProxyGroup['tag'] ?? 'Proxy').toString() : 'Proxy';
+    String primaryProxyTag = existingProxyGroup != null
+        ? (existingProxyGroup['tag'] ?? 'Proxy').toString()
+        : 'Proxy';
     final preferredNode = settings.selectedProxyNode;
 
     if (existingProxyGroup == null) {
       final List<String> proxyDestinations = [
-        if (existingAutoGroup != null || eligibleNodeTags.isNotEmpty) autoGroupTag,
+        if (existingAutoGroup != null || eligibleNodeTags.isNotEmpty)
+          autoGroupTag,
         ...allNodeTags,
         'direct',
       ];
-      final defaultTarget = (preferredNode.isNotEmpty && proxyDestinations.contains(preferredNode))
+      final defaultTarget =
+          (preferredNode.isNotEmpty &&
+              proxyDestinations.contains(preferredNode))
           ? preferredNode
-          : (existingAutoGroup != null ? autoGroupTag : (eligibleNodeTags.isNotEmpty ? autoGroupTag : 'direct'));
+          : (existingAutoGroup != null
+                ? autoGroupTag
+                : (eligibleNodeTags.isNotEmpty ? autoGroupTag : 'direct'));
 
       finalOutbounds.add({
         'type': 'selector',
@@ -131,10 +175,12 @@ class ConfigGenerator {
       }
     }
 
+    // In TUN mode, direct outbound should NOT bind to interface to avoid routing loops
     finalOutbounds.add({
       'type': 'direct',
       'tag': 'direct',
-      'bind_interface': ?proxyInterface,
+      if (!settings.tunModeEnabled && proxyInterface != null)
+        'bind_interface': proxyInterface,
     });
     finalOutbounds.add({'type': 'block', 'tag': 'block'});
 
@@ -146,7 +192,9 @@ class ConfigGenerator {
     final Set<String> allExistingTags = {
       'direct',
       'block',
-      ...finalOutbounds.map((o) => (o['tag'] ?? '').toString()).where((t) => t.isNotEmpty),
+      ...finalOutbounds
+          .map((o) => (o['tag'] ?? '').toString())
+          .where((t) => t.isNotEmpty),
     };
 
     for (final ob in finalOutbounds) {
@@ -165,13 +213,16 @@ class ConfigGenerator {
 
         // If list became empty, fallback to available node tags or direct
         if (sanitized.isEmpty) {
-          sanitized = eligibleNodeTags.isNotEmpty ? List<String>.from(eligibleNodeTags) : ['direct'];
+          sanitized = eligibleNodeTags.isNotEmpty
+              ? List<String>.from(eligibleNodeTags)
+              : ['direct'];
         }
 
         ob['outbounds'] = sanitized;
 
         // Ensure default field is also valid if specified
-        if (ob['default'] != null && !allExistingTags.contains(ob['default'].toString())) {
+        if (ob['default'] != null &&
+            !allExistingTags.contains(ob['default'].toString())) {
           ob.remove('default');
         }
       }
@@ -204,7 +255,8 @@ class ConfigGenerator {
         }
       }
 
-      final tunStack = (settings.tunStack == 'mixed' || settings.tunStack.isEmpty)
+      final tunStack =
+          (settings.tunStack == 'mixed' || settings.tunStack.isEmpty)
           ? 'system'
           : settings.tunStack;
 
@@ -212,25 +264,19 @@ class ConfigGenerator {
         'type': 'tun',
         'tag': 'tun-in',
         'interface_name': 'singbox-tun',
-        'address': [
-          '172.19.0.1/30',
-        ],
+        'address': ['172.19.0.1/30'],
         'auto_route': true,
         'strict_route': false,
-        if (routeExcludeAddresses.isNotEmpty) 'route_exclude_address': routeExcludeAddresses,
+        if (routeExcludeAddresses.isNotEmpty)
+          'route_exclude_address': routeExcludeAddresses,
         'stack': tunStack,
       });
     }
 
     // 9. Route rules based on routingMode
     final List<Map<String, dynamic>> routeRules = [
-      {
-        'action': 'sniff',
-      },
-      {
-        'protocol': 'dns',
-        'action': 'hijack-dns',
-      },
+      {'action': 'sniff'},
+      {'protocol': 'dns', 'action': 'hijack-dns'},
     ];
 
     // Inject custom profile rules (e.g. Clash PROCESS-NAME, DOMAIN-SUFFIX, IP-CIDR) with highest priority
@@ -239,7 +285,9 @@ class ConfigGenerator {
       for (final rule in customRules) {
         final target = rule['outbound']?.toString();
         final hasCondition = rule.keys.any((k) => k != 'outbound');
-        if (target == null || !allExistingTags.contains(target) || !hasCondition) {
+        if (target == null ||
+            !allExistingTags.contains(target) ||
+            !hasCondition) {
           continue;
         }
 
@@ -273,43 +321,32 @@ class ConfigGenerator {
       routeRules.addAll(mergedCustomRules);
     }
 
-    routeRules.add({
-      'ip_is_private': true,
-      'outbound': 'direct',
-    });
+    routeRules.add({'ip_is_private': true, 'outbound': 'direct'});
 
     if (settings.routingMode == RoutingMode.global) {
-      routeRules.add({
-        'outbound': primaryProxyTag,
-      });
+      routeRules.add({'outbound': primaryProxyTag});
     } else if (settings.routingMode == RoutingMode.direct) {
-      routeRules.add({
-        'outbound': 'direct',
-      });
+      routeRules.add({'outbound': 'direct'});
     } else {
       // Rule mode: bypass CN sites/IPs, route rest to primaryProxyTag
       routeRules.addAll([
-        {
-          'clash_mode': 'Direct',
-          'outbound': 'direct',
-        },
-        {
-          'clash_mode': 'Global',
-          'outbound': primaryProxyTag,
-        },
+        {'clash_mode': 'Direct', 'outbound': 'direct'},
+        {'clash_mode': 'Global', 'outbound': primaryProxyTag},
         {
           'rule_set': ['geoip-cn', 'geosite-cn'],
           'outbound': 'direct',
         },
-        {
-          'outbound': primaryProxyTag,
-        }
+        {'outbound': primaryProxyTag},
       ]);
     }
 
     final List<Map<String, dynamic>> dnsServers = [
       buildDnsServer('remote-dns', settings.remoteDns, detour: primaryProxyTag),
-      buildDnsServer('local-dns', settings.directDns, detour: 'direct'),
+      buildDnsServer(
+        'local-dns',
+        settings.directDns,
+        detour: settings.tunModeEnabled ? null : 'direct',
+      ),
     ];
 
     final List<Map<String, dynamic>> dnsRules = [];
@@ -374,18 +411,9 @@ class ConfigGenerator {
         ],
         'server': 'local-dns',
       },
-      {
-        'rule_set': 'geosite-cn',
-        'server': 'local-dns',
-      },
-      {
-        'clash_mode': 'Direct',
-        'server': 'local-dns',
-      },
-      {
-        'clash_mode': 'Global',
-        'server': 'remote-dns',
-      }
+      {'rule_set': 'geosite-cn', 'server': 'local-dns'},
+      {'clash_mode': 'Direct', 'server': 'local-dns'},
+      {'clash_mode': 'Global', 'server': 'remote-dns'},
     ]);
 
     final String geoipPath = (configDir != null && configDir.isNotEmpty)
@@ -428,33 +456,41 @@ class ConfigGenerator {
             'tag': 'geosite-cn',
             'format': 'binary',
             'path': geositePath,
-          }
+          },
         ],
         'final': primaryProxyTag,
-        'default_interface': ?proxyInterface,
+        if (!settings.tunModeEnabled && proxyInterface != null)
+          'default_interface': proxyInterface,
         'auto_detect_interface': true,
       },
       'experimental': {
         'clash_api': {
           'external_controller': '127.0.0.1:${settings.clashApiPort}',
-          if (settings.clashApiSecret.isNotEmpty) 'secret': settings.clashApiSecret,
-        }
-      }
+          if (settings.clashApiSecret.isNotEmpty)
+            'secret': settings.clashApiSecret,
+        },
+      },
     };
 
     return config;
   }
 
   /// Builds a sing-box 1.12+ compliant DNS server object (type + server).
-  static Map<String, dynamic> buildDnsServer(String tag, String address, {String? detour}) {
+  static Map<String, dynamic> buildDnsServer(
+    String tag,
+    String address, {
+    String? detour,
+  }) {
     final trimmed = address.trim();
-    final effectiveDetour = (detour != null && detour.isNotEmpty) ? detour : null;
+    final effectiveDetour = (detour != null && detour.isNotEmpty)
+        ? detour
+        : null;
 
     if (trimmed.isEmpty || trimmed == 'local') {
       return {
         'tag': tag,
         'type': 'local',
-        'detour': ?effectiveDetour,
+        if (effectiveDetour != null) 'detour': effectiveDetour,
       };
     }
 
@@ -471,7 +507,7 @@ class ConfigGenerator {
           'server': host,
           if (port != 443) 'server_port': port,
           'path': path,
-          'detour': ?effectiveDetour,
+          if (effectiveDetour != null) 'detour': effectiveDetour,
         };
       }
     }
@@ -487,7 +523,7 @@ class ConfigGenerator {
           'type': 'tls',
           'server': host,
           if (port != 853) 'server_port': port,
-          'detour': ?effectiveDetour,
+          if (effectiveDetour != null) 'detour': effectiveDetour,
         };
       }
     }
@@ -505,7 +541,7 @@ class ConfigGenerator {
           'server': host,
           'server_port': port,
           if (isH3 && uri.path.isNotEmpty) 'path': uri.path,
-          'detour': ?effectiveDetour,
+          if (effectiveDetour != null) 'detour': effectiveDetour,
         };
       }
     }
@@ -521,7 +557,7 @@ class ConfigGenerator {
         'type': 'tcp',
         'server': host,
         if (port != null && port != 53) 'server_port': port,
-        'detour': ?effectiveDetour,
+        if (effectiveDetour != null) 'detour': effectiveDetour,
       };
     }
 
@@ -541,7 +577,7 @@ class ConfigGenerator {
       'type': 'udp',
       'server': host,
       if (port != null && port != 53) 'server_port': port,
-      'detour': ?effectiveDetour,
+      if (effectiveDetour != null) 'detour': effectiveDetour,
     };
   }
 
