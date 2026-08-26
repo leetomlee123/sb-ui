@@ -5,6 +5,7 @@ import 'package:desktop_updater/desktop_updater.dart';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import '../utils/app_logger.dart';
 import '../utils/proxy_dio_helper.dart';
 import 'core_updater_service.dart';
 import 'json_file_update_recovery_store.dart';
@@ -112,17 +113,28 @@ class AppUpdaterService {
     ];
 
     Map<String, dynamic>? data;
+    String? lastError;
     for (final url in apiUrls) {
       try {
+        AppLogger.info('[AppUpdater] 尝试请求 GitHub 版本源: $url');
         final response = await _dio.get<Map<String, dynamic>>(url);
         if (response.data != null && response.data!['tag_name'] != null) {
           data = response.data;
+          AppLogger.info('[AppUpdater] 成功获取版本信息，最新版本标签: ${data!['tag_name']}');
           break;
         }
-      } catch (_) {}
+      } catch (e) {
+        lastError = e.toString();
+        AppLogger.warn('[AppUpdater] 请求更新源接口失败 ($url): $e');
+      }
     }
 
-    if (data == null) return null;
+    if (data == null) {
+      if (lastError != null) {
+        AppLogger.error('[AppUpdater] 所有 GitHub Release 接口均访问失败: $lastError');
+      }
+      return null;
+    }
 
     try {
       final tagName = (data['tag_name'] ?? '').toString();
@@ -133,9 +145,9 @@ class AppUpdaterService {
       final assets = data['assets'] as List<dynamic>? ?? [];
       String? assetKeyword;
       if (Platform.isWindows) {
-        assetKeyword = 'windows-x64';
+        assetKeyword = 'windows';
       } else if (Platform.isLinux) {
-        assetKeyword = 'linux-x64';
+        assetKeyword = 'linux';
       } else if (Platform.isMacOS) {
         assetKeyword = 'macos';
       }
@@ -164,7 +176,10 @@ class AppUpdaterService {
         }
       }
 
-      if (matchingAsset == null) return null;
+      if (matchingAsset == null) {
+        AppLogger.warn('[AppUpdater] 未在 Release ($tagName) 资产中匹配到 $assetKeyword 平台的 .zip 安装包');
+        return null;
+      }
 
       return RemoteReleaseInfo(
         tagName: tagName,

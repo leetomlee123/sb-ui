@@ -689,7 +689,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     onPressed: appUpdaterState.isBusy
                         ? null
                         : () {
-                            ref.read(appUpdaterProvider.notifier).checkForUpdates();
+                            ref.read(appUpdaterProvider.notifier).checkForUpdates(manual: true);
                           },
                     icon: appUpdaterState.status == UpdateStatus.checking
                         ? const SizedBox(
@@ -760,7 +760,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (state.status == UpdateStatus.available) {
       bannerBg = const Color(0xFF6366F1).withValues(alpha: 0.12);
       bannerBorder = const Color(0xFF6366F1).withValues(alpha: 0.35);
-      final release = state.latestRelease!;
+      final release = state.latestRelease;
+      final tagText = release?.tagName ?? state.statusMessage;
 
       content = Row(
         children: [
@@ -771,7 +772,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              release.tagName,
+              tagText,
               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.white),
             ),
           ),
@@ -784,10 +785,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   tr.appNewBadge,
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
                 ),
-                Text(
-                  '${(release.assetSize / (1024 * 1024)).toStringAsFixed(1)} MB • ${release.assetName}',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-                ),
+                if (release != null && release.assetSize > 0)
+                  Text(
+                    '${(release.assetSize / (1024 * 1024)).toStringAsFixed(1)} MB • ${release.assetName}',
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                  )
+                else
+                  Text(
+                    state.statusMessage,
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                  ),
               ],
             ),
           ),
@@ -873,7 +880,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const Icon(Icons.error_outline_rounded, size: 16, color: Color(0xFFF43F5E)),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
+            child: SelectableText(
               state.errorMessage ?? state.statusMessage,
               style: const TextStyle(fontSize: 12, color: Color(0xFFF43F5E)),
             ),
