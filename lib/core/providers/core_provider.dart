@@ -118,14 +118,15 @@ class CoreNotifier extends StateNotifier<CoreState> {
     try {
       final genWatch = Stopwatch()..start();
       final parseResult = ProfileParser.parse(activeProfile.rawConfig);
+      final configDir = await StorageService.getAppConfigDir();
       final configJson = ConfigGenerator.generate(
         settings: settings,
         parsedOutbounds: parseResult.outbounds,
         customRules: parseResult.customRules,
         customDns: parseResult.customDns,
+        configDir: configDir.path,
       );
 
-      final configDir = await StorageService.getAppConfigDir();
       final configFile = File('${configDir.path}/config.json');
       await configFile.writeAsString(
         const JsonEncoder.withIndent('  ').convert(configJson),

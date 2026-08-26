@@ -263,9 +263,15 @@ class SingboxProcessManager {
           _updateStatus(CoreStatus.stopped);
           return false;
         } else {
+          final isAccessDenied = res.errorCode == 5 ||
+              res.message.toLowerCase().contains('access is denied') ||
+              res.message.contains('拒绝访问');
+          final userHelp = isAccessDenied
+              ? '【权限不足】创建和配置 TUN 虚拟网卡需要 Windows 管理员权限。请关闭应用后，右键点击快捷方式选择【以管理员身份运行】。'
+              : res.message;
           _outputController.add(LogEntry(
             level: LogLevel.error,
-            message: 'TUN 模式提权启动失败 (耗时: ${uacStopwatch.elapsedMilliseconds}ms): ${res.message}',
+            message: 'TUN 模式提权启动失败 (耗时: ${uacStopwatch.elapsedMilliseconds}ms): $userHelp',
           ));
           _updateStatus(CoreStatus.error);
           return false;

@@ -248,10 +248,13 @@ rules:
       customDns: parseResult.customDns,
     );
 
-    // Verify TUN strict_route is false
+    // Verify TUN strict_route is false and address is modern array
     final inbounds = config['inbounds'] as List;
     final tunInbound = inbounds.firstWhere((i) => i['type'] == 'tun');
     expect(tunInbound['strict_route'], isFalse);
+    expect(tunInbound['address'], contains('172.19.0.1/30'));
+    expect(tunInbound.containsKey('inet4_address'), isFalse);
+    expect(tunInbound.containsKey('sniff'), isFalse);
 
     final routeRules = config['route']['rules'] as List;
 
@@ -272,7 +275,8 @@ rules:
 
     final dns = config['dns'] as Map<String, dynamic>;
     final dnsServers = dns['servers'] as List;
-    final companyDns = dnsServers.firstWhere((s) => s['address'] == '202.96.209.133');
+    final companyDns = dnsServers.firstWhere((s) => s['server'] == '202.96.209.133');
+    expect(companyDns['type'], 'udp');
     expect(companyDns['detour'], '内网直连');
 
     // Verify auto urltest group only contains proxy nodes, not direct outbounds

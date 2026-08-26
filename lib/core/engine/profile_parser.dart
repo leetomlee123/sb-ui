@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:yaml/yaml.dart';
+import 'config_generator.dart';
 
 class ProfileParserResult {
   final List<Map<String, dynamic>> outbounds;
@@ -299,10 +300,9 @@ class ProfileParser {
         final serverTag = 'company-dns-$idx';
         idx++;
 
-        extraServers.add({
-          'tag': serverTag,
-          'address': serverAddr,
-        });
+        extraServers.add(
+          ConfigGenerator.buildDnsServer(serverTag, serverAddr),
+        );
         if (domains.isNotEmpty) {
           extraDnsRules.add({
             'domain_suffix': domains,

@@ -119,6 +119,29 @@ void TunProcessBridge::HandleMethodCall(
     return;
   }
 
+  if (method == "restartAppAsAdmin") {
+    wchar_t exePath[MAX_PATH];
+    GetModuleFileNameW(NULL, exePath, MAX_PATH);
+
+    SHELLEXECUTEINFOW sei = { sizeof(sei) };
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+    sei.hwnd = GetActiveWindow();
+    sei.lpVerb = L"runas";
+    sei.lpFile = exePath;
+    sei.nShow = SW_SHOWNORMAL;
+
+    BOOL success = ShellExecuteExW(&sei);
+    if (success) {
+      exit(0);
+    }
+    DWORD err = GetLastError();
+    flutter::EncodableMap response;
+    response[flutter::EncodableValue("success")] = flutter::EncodableValue(false);
+    response[flutter::EncodableValue("cancelled")] = flutter::EncodableValue(err == ERROR_CANCELLED);
+    result->Success(flutter::EncodableValue(response));
+    return;
+  }
+
   if (method == "startSingBoxAsAdmin") {
     const auto* args = std::get_if<flutter::EncodableMap>(method_call.arguments());
     if (!args) {
@@ -194,7 +217,8 @@ void TunProcessBridge::HandleMethodCall(
     std::wstring params = L"run -c \"" + wConfig + L"\"";
 
     SHELLEXECUTEINFOW sei = { sizeof(sei) };
-    sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS;  // Allow UAC prompt dialog without suppressing UI
+    sei.hwnd = GetActiveWindow();
     sei.lpVerb = L"runas";  // Request Administrator UAC elevation
     sei.lpFile = wBinary.c_str();
     sei.lpParameters = params.c_str();

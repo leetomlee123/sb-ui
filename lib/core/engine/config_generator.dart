@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:path/path.dart' as p;
 import '../models/app_settings.dart';
 
 class ConfigGenerator {
@@ -22,6 +23,7 @@ class ConfigGenerator {
     required List<Map<String, dynamic>> parsedOutbounds,
     List<Map<String, dynamic>> customRules = const [],
     Map<String, dynamic>? customDns,
+    String? configDir,
   }) {
     // 1. Separate individual proxy nodes, local direct outbounds, and group outbounds
     final List<Map<String, dynamic>> rawNodes = [];
@@ -178,12 +180,13 @@ class ConfigGenerator {
         'type': 'tun',
         'tag': 'tun-in',
         'interface_name': 'singbox-tun',
-        'inet4_address': '172.19.0.1/30',
-        'inet6_address': 'fdfe:dcba:9876::1/126',
+        'address': [
+          '172.19.0.1/30',
+          'fdfe:dcba:9876::1/126',
+        ],
         'auto_route': true,
         'strict_route': false,
         'stack': settings.tunStack.isNotEmpty ? settings.tunStack : 'mixed',
-        'sniff': true,
       });
     }
 
@@ -298,8 +301,8 @@ class ConfigGenerator {
     }
 
     final List<Map<String, dynamic>> dnsServers = [
-      _buildDnsServer('remote-dns', settings.remoteDns, detour: primaryProxyTag),
-      _buildDnsServer('local-dns', settings.directDns),
+      buildDnsServer('remote-dns', settings.remoteDns, detour: primaryProxyTag),
+      buildDnsServer('local-dns', settings.directDns),
     ];
 
     final List<Map<String, dynamic>> dnsRules = [];
@@ -326,7 +329,17 @@ class ConfigGenerator {
             if (intranetDetour != null && copy['detour'] == null) {
               copy['detour'] = intranetDetour;
             }
-            dnsServers.add(copy);
+            // Normalize legacy 'address' field to 1.12+ 'type' + 'server'
+            if (copy['server'] == null && copy['address'] != null) {
+              final converted = buildDnsServer(
+                (copy['tag'] ?? 'custom-dns').toString(),
+                copy['address'].toString(),
+                detour: copy['detour']?.toString(),
+              );
+              dnsServers.add(converted);
+            } else {
+              dnsServers.add(copy);
+            }
           }
         }
       }
@@ -368,6 +381,13 @@ class ConfigGenerator {
       }
     ]);
 
+    final String geoipPath = (configDir != null && configDir.isNotEmpty)
+        ? p.join(configDir, 'geoip-cn.srs').replaceAll(r'\', '/')
+        : 'geoip-cn.srs';
+    final String geositePath = (configDir != null && configDir.isNotEmpty)
+        ? p.join(configDir, 'geosite-cn.srs').replaceAll(r'\', '/')
+        : 'geosite-cn.srs';
+
     final config = {
       'log': {
         'level': settings.logLevel,
@@ -389,13 +409,13 @@ class ConfigGenerator {
             'type': 'local',
             'tag': 'geoip-cn',
             'format': 'binary',
-            'path': 'geoip-cn.srs',
+            'path': geoipPath,
           },
           {
             'type': 'local',
             'tag': 'geosite-cn',
             'format': 'binary',
-            'path': 'geosite-cn.srs',
+            'path': geositePath,
           }
         ],
         'final': primaryProxyTag,
@@ -412,12 +432,102 @@ class ConfigGenerator {
     return config;
   }
 
-  static Map<String, dynamic> _buildDnsServer(String tag, String address, {String? detour}) {
+  /// Builds a sing-box 1.12+ compliant DNS server object (type + server).
+  static Map<String, dynamic> buildDnsServer(String tag, String address, {String? detour}) {
     final trimmed = address.trim();
     final effectiveDetour = (detour != null && detour.isNotEmpty && detour != 'direct') ? detour : null;
+
+    if (trimmed.isEmpty || trimmed == 'local') {
+      return {
+        'tag': tag,
+        'type': 'local',
+        'detour': ?effectiveDetour,
+      };
+    }
+
+    // 1. https:// (DoH)
+    if (trimmed.startsWith('https://')) {
+      final uri = Uri.tryParse(trimmed);
+      if (uri != null) {
+        final host = uri.host;
+        final port = uri.hasPort ? uri.port : 443;
+        final path = uri.path.isNotEmpty ? uri.path : '/dns-query';
+        return {
+          'tag': tag,
+          'type': 'https',
+          'server': host,
+          if (port != 443) 'server_port': port,
+          'path': path,
+          'detour': ?effectiveDetour,
+        };
+      }
+    }
+
+    // 2. tls:// (DoT)
+    if (trimmed.startsWith('tls://')) {
+      final uri = Uri.tryParse(trimmed);
+      if (uri != null) {
+        final host = uri.host;
+        final port = uri.hasPort ? uri.port : 853;
+        return {
+          'tag': tag,
+          'type': 'tls',
+          'server': host,
+          if (port != 853) 'server_port': port,
+          'detour': ?effectiveDetour,
+        };
+      }
+    }
+
+    // 3. quic:// or h3://
+    if (trimmed.startsWith('quic://') || trimmed.startsWith('h3://')) {
+      final uri = Uri.tryParse(trimmed);
+      if (uri != null) {
+        final isH3 = trimmed.startsWith('h3://');
+        final host = uri.host;
+        final port = uri.hasPort ? uri.port : (isH3 ? 443 : 853);
+        return {
+          'tag': tag,
+          'type': isH3 ? 'h3' : 'quic',
+          'server': host,
+          'server_port': port,
+          if (isH3 && uri.path.isNotEmpty) 'path': uri.path,
+          'detour': ?effectiveDetour,
+        };
+      }
+    }
+
+    // 4. tcp://
+    if (trimmed.startsWith('tcp://')) {
+      final stripped = trimmed.substring(6);
+      final parts = stripped.split(':');
+      final host = parts[0];
+      final port = parts.length > 1 ? int.tryParse(parts[1]) : 53;
+      return {
+        'tag': tag,
+        'type': 'tcp',
+        'server': host,
+        if (port != null && port != 53) 'server_port': port,
+        'detour': ?effectiveDetour,
+      };
+    }
+
+    // 5. Standard IP or host (UDP)
+    String host = trimmed;
+    int? port;
+    if (trimmed.startsWith('udp://')) {
+      host = trimmed.substring(6);
+    }
+    if (host.contains(':') && !host.contains(']')) {
+      final parts = host.split(':');
+      host = parts[0];
+      port = int.tryParse(parts[1]);
+    }
     return {
       'tag': tag,
-      'address': trimmed,
+      'type': 'udp',
+      'server': host,
+      if (port != null && port != 53) 'server_port': port,
       'detour': ?effectiveDetour,
     };
   }
@@ -425,8 +535,13 @@ class ConfigGenerator {
   static String generateJsonString({
     required AppSettings settings,
     required List<Map<String, dynamic>> parsedOutbounds,
+    String? configDir,
   }) {
-    final map = generate(settings: settings, parsedOutbounds: parsedOutbounds);
+    final map = generate(
+      settings: settings,
+      parsedOutbounds: parsedOutbounds,
+      configDir: configDir,
+    );
     return const JsonEncoder.withIndent('  ').convert(map);
   }
 }

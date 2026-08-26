@@ -163,15 +163,29 @@ class StorageService {
         } catch (_) {}
       }
 
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      final dataCoreDir = Directory('$exeDir/data/core');
+      if (await dataCoreDir.exists()) {
+        try {
+          final coreGeoip = File('${dataCoreDir.path}/geoip-cn.srs');
+          if (!await coreGeoip.exists() && await geoipTarget.exists()) {
+            await geoipTarget.copy(coreGeoip.path);
+          }
+          final coreGeosite = File('${dataCoreDir.path}/geosite-cn.srs');
+          if (!await coreGeosite.exists() && await geositeTarget.exists()) {
+            await geositeTarget.copy(coreGeosite.path);
+          }
+        } catch (_) {}
+      }
+
       if (Platform.isWindows) {
         final configWintun = File('${configDir.path}/wintun.dll');
+        final candidates = [
+          File('$exeDir/data/core/wintun.dll'),
+          File('$exeDir/wintun.dll'),
+          File('data/core/wintun.dll'),
+        ];
         if (!await configWintun.exists()) {
-          final exeDir = File(Platform.resolvedExecutable).parent.path;
-          final candidates = [
-            File('$exeDir/data/core/wintun.dll'),
-            File('$exeDir/wintun.dll'),
-            File('data/core/wintun.dll'),
-          ];
           for (final f in candidates) {
             if (await f.exists()) {
               try {
@@ -179,6 +193,16 @@ class StorageService {
                 break;
               } catch (_) {}
             }
+          }
+        }
+
+        // Also ensure data/core has wintun.dll
+        if (await dataCoreDir.exists()) {
+          final coreWintun = File('${dataCoreDir.path}/wintun.dll');
+          if (!await coreWintun.exists() && await configWintun.exists()) {
+            try {
+              await configWintun.copy(coreWintun.path);
+            } catch (_) {}
           }
         }
       }

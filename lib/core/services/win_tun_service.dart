@@ -107,4 +107,15 @@ class WinTunService {
       return false;
     }
   }
+
+  /// Restarts the Singular application with full Windows Administrator elevation (UAC).
+  static Future<bool> restartAppAsAdmin() async {
+    if (!Platform.isWindows) return false;
+    try {
+      final res = await _channel.invokeMethod<Map<dynamic, dynamic>>('restartAppAsAdmin');
+      return (res?['success'] as bool?) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
 }
