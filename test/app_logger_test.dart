@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sb_ui/core/models/log_entry.dart';
-import 'package:sb_ui/core/utils/app_logger.dart';
+import 'package:singular/core/models/log_entry.dart';
+import 'package:singular/core/utils/app_logger.dart';
 
 void main() {
   setUp(() {

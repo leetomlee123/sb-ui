@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:desktop_updater/desktop_updater.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sb_ui/core/services/app_updater_service.dart';
-import 'package:sb_ui/core/services/json_file_update_recovery_store.dart';
-import 'package:sb_ui/core/utils/version_utils.dart';
+import 'package:singular/core/services/app_updater_service.dart';
+import 'package:singular/core/services/json_file_update_recovery_store.dart';
+import 'package:singular/core/utils/version_utils.dart';
 
 void main() {
   group('isNewerVersion', () {

@@ -81,11 +81,11 @@ class AppUpdaterService {
       ),
     );
 
-    String packageId = expectedPackageId ?? 'sb_ui';
+    String packageId = expectedPackageId ?? 'singular';
     if (expectedPackageId == null) {
-      if (Platform.isMacOS) packageId = 'com.singular.desktop';
-      if (Platform.isWindows) packageId = 'sb_ui';
-      if (Platform.isLinux) packageId = 'com.singular.desktop';
+      if (Platform.isMacOS) packageId = 'singular';
+      if (Platform.isWindows) packageId = 'singular';
+      if (Platform.isLinux) packageId = 'singular';
     }
 
     return DesktopUpdaterController(

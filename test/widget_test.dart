@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sb_ui/core/engine/profile_parser.dart';
-import 'package:sb_ui/core/engine/config_generator.dart';
-import 'package:sb_ui/core/models/app_settings.dart';
-import 'package:sb_ui/core/models/proxy_node.dart';
-import 'package:sb_ui/core/providers/proxies_provider.dart';
-import 'package:sb_ui/core/providers/storage_provider.dart';
-import 'package:sb_ui/core/services/storage_service.dart';
-import 'package:sb_ui/core/utils/proxy_flag_helper.dart';
-import 'package:sb_ui/features/shell/main_shell_view.dart';
+import 'package:singular/core/engine/profile_parser.dart';
+import 'package:singular/core/engine/config_generator.dart';
+import 'package:singular/core/models/app_settings.dart';
+import 'package:singular/core/models/proxy_node.dart';
+import 'package:singular/core/providers/proxies_provider.dart';
+import 'package:singular/core/providers/storage_provider.dart';
+import 'package:singular/core/services/storage_service.dart';
+import 'package:singular/core/utils/proxy_flag_helper.dart';
+import 'package:singular/features/shell/main_shell_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

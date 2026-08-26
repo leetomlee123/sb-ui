@@ -87,7 +87,7 @@ jobs:
           DESKTOP_UPDATER_KEY_BUNDLE_PASSPHRASE: "SingularAppReleaseKey2026Pass"
         run: |
           dart run desktop_updater:release keys import --input release-key.dukey --passphrase-env DESKTOP_UPDATER_KEY_BUNDLE_PASSPHRASE
-          dart run desktop_updater:release publish --platform windows --project-type flutter --initialize-feed
+          dart run desktop_updater:release publish --platform windows --project-type flutter --app-name singular --package-id singular --initialize-feed
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
