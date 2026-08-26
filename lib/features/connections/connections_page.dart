@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 import '../../core/i18n/translations.dart';
 import '../../core/models/connection_info.dart';
 import '../../core/providers/connections_provider.dart';
@@ -291,9 +293,18 @@ class _ConnectionsPageState extends ConsumerState<ConnectionsPage> {
             final destination = conn.metadata.host.isNotEmpty
                 ? conn.metadata.host
                 : '${conn.metadata.destinationIP}:${conn.metadata.destinationPort}';
+            final ruleName = conn.rule.isEmpty ? 'Match' : conn.rule;
+            final fullRule = conn.rulePayload.isNotEmpty
+                ? '$ruleName (${conn.rulePayload})'
+                : ruleName;
+            final processName = (conn.metadata.processPath != null && conn.metadata.processPath!.isNotEmpty)
+                ? p.basename(conn.metadata.processPath!)
+                : null;
 
             return ListTile(
               dense: true,
+              mouseCursor: SystemMouseCursors.click,
+              onTap: () => _showConnectionDetailsDialog(context, conn, tr),
               leading: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
@@ -306,24 +317,97 @@ class _ConnectionsPageState extends ConsumerState<ConnectionsPage> {
                   style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF38BDF8)),
                 ),
               ),
-              title: Text(
-                destination,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: -0.2),
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Row(
+              title: Row(
                 children: [
-                  Text(
-                    '${tr.rulePrefix}${conn.rule.isEmpty ? "Match" : conn.rule}',
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-                  ),
-                  const SizedBox(width: 12),
-                  if (conn.chains.isNotEmpty)
-                    Text(
-                      '${tr.routePrefix}${conn.chains.join(" → ")}',
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF818CF8)),
+                  Expanded(
+                    child: Text(
+                      destination,
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: -0.2),
+                      overflow: TextOverflow.ellipsis,
                     ),
+                  ),
+                  if (processName != null) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                        ),
+                      ),
+                      child: Text(
+                        processName,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Row(
+                  children: [
+                    // Matched Rule: constrained with ellipsis and tooltip for arbitrarily long rules
+                    Flexible(
+                      flex: 3,
+                      child: Tooltip(
+                        message: '${tr.rulePrefix}$fullRule\n${tr.isZh ? "点击查看详情" : "Click for details"}',
+                        waitDuration: const Duration(milliseconds: 250),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.rule_rounded, size: 11, color: Color(0xFF94A3B8)),
+                            const SizedBox(width: 3),
+                            Flexible(
+                              child: Text(
+                                '${tr.rulePrefix}$fullRule',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF94A3B8),
+                                  fontFamily: 'monospace',
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (conn.chains.isNotEmpty) ...[
+                      const SizedBox(width: 10),
+                      // Outbound Chains: constrained with ellipsis and tooltip
+                      Flexible(
+                        flex: 4,
+                        child: Tooltip(
+                          message: '${tr.routePrefix}${conn.chains.join(" → ")}',
+                          waitDuration: const Duration(milliseconds: 250),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.alt_route_rounded, size: 11, color: Color(0xFF818CF8)),
+                              const SizedBox(width: 3),
+                              Flexible(
+                                child: Text(
+                                  conn.chains.join(" → "),
+                                  style: const TextStyle(fontSize: 11, color: Color(0xFF818CF8)),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -342,7 +426,7 @@ class _ConnectionsPageState extends ConsumerState<ConnectionsPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.close_rounded, size: 18),
                     tooltip: tr.killSession,
@@ -356,6 +440,409 @@ class _ConnectionsPageState extends ConsumerState<ConnectionsPage> {
             );
           },
         ),
+      ),
+    );
+  }
+
+  void _showConnectionDetailsDialog(
+    BuildContext context,
+    ActiveConnection conn,
+    Translations tr,
+  ) {
+    final destination = conn.metadata.host.isNotEmpty
+        ? conn.metadata.host
+        : '${conn.metadata.destinationIP}:${conn.metadata.destinationPort}';
+    final ruleName = conn.rule.isEmpty ? 'Match' : conn.rule;
+    final fullRule = conn.rulePayload.isNotEmpty
+        ? '$ruleName (${conn.rulePayload})'
+        : ruleName;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final duration = DateTime.now().difference(conn.start);
+    final durationStr = duration.inMinutes > 0
+        ? '${duration.inMinutes}m ${duration.inSeconds % 60}s'
+        : '${duration.inSeconds}s';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF0E1424) : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+          ),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(24, 20, 20, 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                conn.metadata.network.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF38BDF8),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                tr.isZh ? '连接详情' : 'Connection Details',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close_rounded, size: 20),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 1. Matched Rule Section (Prominently shows full rule with selectable text & copy button)
+                _buildDetailSection(
+                  context,
+                  title: tr.isZh ? '命中规则' : 'Matched Rule',
+                  icon: Icons.rule_rounded,
+                  iconColor: const Color(0xFFF59E0B),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF060910) : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: SelectableText(
+                                fullRule,
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFFF59E0B),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.copy_rounded, size: 16),
+                              tooltip: tr.isZh ? '复制规则' : 'Copy Rule',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () {
+                                Clipboard.setData(ClipboardData(text: fullRule));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(tr.isZh ? '已复制命中规则' : 'Rule copied'),
+                                    duration: const Duration(seconds: 1),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                        if (conn.rulePayload.isNotEmpty && conn.rule.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Text(
+                                '类型: ${conn.rule}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  '匹配值: ${conn.rulePayload}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                                    fontFamily: 'monospace',
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // 2. Outbound Chains
+                if (conn.chains.isNotEmpty) ...[
+                  _buildDetailSection(
+                    context,
+                    title: tr.isZh ? '节点链路' : 'Routing Chains',
+                    icon: Icons.alt_route_rounded,
+                    iconColor: const Color(0xFF818CF8),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        for (int i = 0; i < conn.chains.length; i++) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF818CF8).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF818CF8).withValues(alpha: 0.3)),
+                            ),
+                            child: Text(
+                              conn.chains[i],
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF818CF8),
+                              ),
+                            ),
+                          ),
+                          if (i < conn.chains.length - 1)
+                            const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF818CF8)),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
+                // 3. Network Endpoints
+                _buildDetailSection(
+                  context,
+                  title: tr.isZh ? '网络端点' : 'Network Endpoints',
+                  icon: Icons.lan_rounded,
+                  iconColor: const Color(0xFF38BDF8),
+                  child: Column(
+                    children: [
+                      _buildDetailRow(
+                        context,
+                        label: tr.isZh ? '目标主机' : 'Host',
+                        value: destination,
+                        canCopy: true,
+                      ),
+                      const SizedBox(height: 6),
+                      _buildDetailRow(
+                        context,
+                        label: tr.isZh ? '目标 IP:端口' : 'Dest IP:Port',
+                        value: '${conn.metadata.destinationIP}:${conn.metadata.destinationPort}',
+                        canCopy: true,
+                      ),
+                      const SizedBox(height: 6),
+                      _buildDetailRow(
+                        context,
+                        label: tr.isZh ? '源地址' : 'Source IP:Port',
+                        value: '${conn.metadata.sourceIP}:${conn.metadata.sourcePort}',
+                      ),
+                      if (conn.metadata.processPath != null && conn.metadata.processPath!.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        _buildDetailRow(
+                          context,
+                          label: tr.isZh ? '发起进程' : 'Process',
+                          value: conn.metadata.processPath!,
+                          canCopy: true,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // 4. Traffic & Timing
+                _buildDetailSection(
+                  context,
+                  title: tr.isZh ? '流量与耗时' : 'Traffic & Timing',
+                  icon: Icons.data_usage_rounded,
+                  iconColor: const Color(0xFF10B981),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildStatMiniBox(
+                          label: tr.isZh ? '下载流量' : 'Download',
+                          value: ByteFormatter.formatBytes(conn.download),
+                          color: const Color(0xFF38BDF8),
+                          isDark: isDark,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildStatMiniBox(
+                          label: tr.isZh ? '上传流量' : 'Upload',
+                          value: ByteFormatter.formatBytes(conn.upload),
+                          color: const Color(0xFF818CF8),
+                          isDark: isDark,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildStatMiniBox(
+                          label: tr.isZh ? '持续时间' : 'Duration',
+                          value: durationStr,
+                          color: const Color(0xFF10B981),
+                          isDark: isDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+        actions: [
+          OutlinedButton.icon(
+            icon: const Icon(Icons.close_rounded, size: 16, color: Color(0xFFF43F5E)),
+            label: Text(
+              tr.killSession,
+              style: const TextStyle(color: Color(0xFFF43F5E), fontSize: 12),
+            ),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Color(0xFFF43F5E), width: 1),
+            ),
+            onPressed: () {
+              ref.read(connectionsProvider.notifier).closeConnection(conn.id);
+              Navigator.of(ctx).pop();
+            },
+          ),
+          ElevatedButton(
+            child: Text(tr.isZh ? '关闭' : 'Close'),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailSection(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required Color iconColor,
+    required Widget child,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 14, color: iconColor),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
+
+  Widget _buildDetailRow(
+    BuildContext context, {
+    required String label,
+    required String value,
+    bool canCopy = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 88,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: const TextStyle(fontSize: 12, fontFamily: 'monospace', fontWeight: FontWeight.w500),
+            ),
+          ),
+          if (canCopy)
+            IconButton(
+              icon: const Icon(Icons.copy_rounded, size: 14),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              tooltip: '复制',
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: value));
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatMiniBox({
+    required String label,
+    required String value,
+    required Color color,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isDark ? 0.1 : 0.07),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace', color: color),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
