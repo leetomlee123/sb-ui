@@ -87,7 +87,17 @@ jobs:
           DESKTOP_UPDATER_KEY_BUNDLE_PASSPHRASE: "SingularAppReleaseKey2026Pass"
         run: |
           dart run desktop_updater:release keys import --input release-key.dukey --passphrase-env DESKTOP_UPDATER_KEY_BUNDLE_PASSPHRASE
-          dart run desktop_updater:release publish --platform windows --project-type flutter --app-name singular --package-id singular --initialize-feed
+
+          # Dynamically detect if remote app-archive.json exists to avoid --initialize-feed error on incremental updates
+          $feedUrl = "https://github.com/leetomlee123/singular/releases/latest/download/app-archive.json"
+          $feedStatus = curl.exe -s -o /dev/null -w "%{http_code}" -L $feedUrl
+          if ($feedStatus -eq "200") {
+            Write-Host "Remote feed exists (HTTP 200). Updating feed incrementally..."
+            dart run desktop_updater:release publish --platform windows --project-type flutter --app-name singular --package-id singular
+          } else {
+            Write-Host "Remote feed not found (HTTP $feedStatus). Initializing first feed..."
+            dart run desktop_updater:release publish --platform windows --project-type flutter --app-name singular --package-id singular --initialize-feed
+          }
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
