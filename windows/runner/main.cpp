@@ -36,7 +36,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
   FlutterWindow window(project);
-  Win32Window::Point origin(10, 10);
+  // Center window on primary display initially (1020x680)
+  int screen_width = ::GetSystemMetrics(SM_CXSCREEN);
+  int screen_height = ::GetSystemMetrics(SM_CYSCREEN);
+  int origin_x = (screen_width - 1020) / 2;
+  int origin_y = (screen_height - 680) / 2;
+  if (origin_x < 0) origin_x = 10;
+  if (origin_y < 0) origin_y = 10;
+  Win32Window::Point origin(origin_x, origin_y);
   // Matches WindowOptions in lib/main.dart so the Dart side does not resize
   // the window right after the first frame.
   Win32Window::Size size(1020, 680);

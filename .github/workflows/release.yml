@@ -55,10 +55,11 @@ jobs:
         run: |
           flutter build windows --release --split-debug-info=build/symbols --tree-shake-icons
 
-      - name: Package Windows Binary (.zip)
+      - name: Prepare Windows Release Bundle & Package with desktop_updater
         shell: pwsh
+        env:
+          DESKTOP_UPDATER_KEY_BUNDLE_PASSPHRASE: "SingularAppReleaseKey2026Pass"
         run: |
-          $tag = "${{ github.ref_name || github.event.inputs.tag_name || 'latest' }}"
           $bundleDir = "build/windows/x64/runner/Release"
           
           # Copy sing-box core and Wintun driver into bundle
@@ -71,21 +72,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$bundleDir/config"
           Copy-Item -Path "assets/rules/*" -Destination "$bundleDir/config"
 
-          # Compress to zip
-          $zipName = "singular-windows-x64-$tag.zip"
-          Compress-Archive -Path "$bundleDir/*" -DestinationPath $zipName -Force
-
-          # Generate SHA256 Checksum
-          $hash = (Get-FileHash -Path $zipName -Algorithm SHA256).Hash.ToLower()
-          "$hash  $zipName" | Out-File -FilePath "SHA256SUMS.txt" -Encoding ascii
-
-          Write-Host "Created $zipName (SHA256: $hash)"
-
-      - name: Package with desktop_updater
-        shell: pwsh
-        env:
-          DESKTOP_UPDATER_KEY_BUNDLE_PASSPHRASE: "SingularAppReleaseKey2026Pass"
-        run: |
+          # Import release signing key bundle
           dart run desktop_updater:release keys import --input release-key.dukey --passphrase-env DESKTOP_UPDATER_KEY_BUNDLE_PASSPHRASE
 
           # Attempt incremental update first, fallback to initial feed creation if no feed exists yet
@@ -98,6 +85,14 @@ jobs:
             dart run desktop_updater:release publish --platform windows --project-type flutter --app-name singular --package-id singular --initialize-feed
           }
 
+          # Generate SHA256 Checksum for the signed desktop_updater release package
+          $artifactZip = Get-ChildItem -Path "dist/desktop_updater/releases" -Filter "*.zip" -Recurse | Select-Object -First 1
+          if ($artifactZip) {
+            $hash = (Get-FileHash -Path $artifactZip.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($artifactZip.Name)" | Out-File -FilePath "SHA256SUMS.txt" -Encoding ascii
+            Write-Host "Generated checksum for $($artifactZip.Name): $hash"
+          }
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -107,8 +102,7 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
-            singular-windows-x64-*.zip
-            SHA256SUMS.txt
             dist/desktop_updater/app-archive.json
             dist/desktop_updater/releases/**/release.json
             dist/desktop_updater/releases/**/*.zip
+            SHA256SUMS.txt

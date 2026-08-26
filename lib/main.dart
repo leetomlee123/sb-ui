@@ -113,6 +113,7 @@ void main(List<String> args) async {
             windowButtonVisibility: false,
           );
           await windowManager.setPreventClose(true);
+          await windowManager.center();
           if (initialSettings.startMinimized) {
             await windowManager.hide();
           }
