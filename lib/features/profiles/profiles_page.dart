@@ -1,12 +1,19 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import '../../core/engine/default_config_template.dart';
+import '../../core/engine/profile_parser.dart';
 import '../../core/i18n/translations.dart';
 import '../../core/models/profile.dart';
 import '../../core/providers/core_provider.dart';
 import '../../core/providers/profiles_provider.dart';
 import '../../core/utils/byte_formatter.dart';
+import '../../core/utils/native_file_dialog.dart';
 import '../../shared/widgets/double_bezel_card.dart';
+import 'widgets/config_editor_dialog.dart';
 import 'widgets/manual_node_form_dialog.dart';
 
 class ProfilesPage extends ConsumerStatefulWidget {
@@ -213,10 +220,22 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
                           style: const TextStyle(color: Color(0xFF94A3B8)),
                         ),
                         const SizedBox(height: 20),
-                        ElevatedButton.icon(
-                          onPressed: () => _showAddProfileDialog(context, tr),
-                          icon: const Icon(Icons.add, size: 16),
-                          label: Text(tr.importSubscription),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 10,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: () => _showAddProfileDialog(context, tr, initialTab: 0),
+                              icon: const Icon(Icons.link_rounded, size: 16),
+                              label: Text(tr.importSubscription),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: () => _showAddProfileDialog(context, tr, initialTab: 1),
+                              icon: const Icon(Icons.file_present_rounded, size: 16),
+                              label: Text(tr.importLocalConfig),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -294,7 +313,9 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
                 child: Icon(
                   profile.type == ProfileType.remote
                       ? Icons.cloud_sync_rounded
-                      : Icons.description_outlined,
+                      : (profile.type == ProfileType.local
+                          ? Icons.file_present_rounded
+                          : Icons.description_outlined),
                   color: isActive ? const Color(0xFF818CF8) : const Color(0xFF94A3B8),
                   size: 22,
                 ),
@@ -318,6 +339,33 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
                           ),
                         ),
                         const SizedBox(width: 8),
+                        if (profile.type == ProfileType.local) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.4)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.folder_shared_rounded, size: 10, color: Color(0xFF38BDF8)),
+                                const SizedBox(width: 3),
+                                Text(
+                                  tr.localFileBadge,
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
+                                    color: Color(0xFF38BDF8),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
                         if (isActive)
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -386,10 +434,11 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
               // Action Toolbar
               Row(
                 children: [
-                  if (profile.type == ProfileType.remote)
+                  if (profile.type == ProfileType.remote ||
+                      (profile.type == ProfileType.local && profile.filePath != null))
                     IconButton(
                       icon: const Icon(Icons.refresh_rounded, size: 20),
-                      tooltip: tr.updateSub,
+                      tooltip: profile.type == ProfileType.remote ? tr.updateSub : tr.reloadFromFile,
                       onPressed: onRefresh,
                     ),
                   IconButton(
@@ -510,11 +559,66 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
     );
   }
 
-  void _showAddProfileDialog(BuildContext context, Translations tr, {String? initialContent}) {
+  void _showAddProfileDialog(
+    BuildContext context,
+    Translations tr, {
+    String? initialContent,
+    int initialTab = 0,
+  }) {
     final nameCtrl = TextEditingController();
     final urlCtrl = TextEditingController();
     final rawCtrl = TextEditingController();
-    int tabIndex = 0;
+    final filePathCtrl = TextEditingController();
+
+    int tabIndex = initialTab;
+    bool syncLocalFile = true;
+    bool localFileExists = false;
+    String localFileStats = '';
+    String localFilePreview = '';
+
+    void inspectLocalFile(String path, void Function(void Function()) setDialogState) {
+      final trimmed = path.trim();
+      if (trimmed.isEmpty) {
+        setDialogState(() {
+          localFileExists = false;
+          localFileStats = '';
+          localFilePreview = '';
+        });
+        return;
+      }
+
+      try {
+        final file = File(trimmed);
+        if (file.existsSync()) {
+          final content = file.readAsStringSync();
+          final sizeKb = (content.length / 1024).toStringAsFixed(1);
+          final parseResult = ProfileParser.parse(content);
+          final lines = content.split('\n');
+          final previewLines = lines.take(6).join('\n');
+
+          setDialogState(() {
+            localFileExists = true;
+            localFileStats = '$sizeKb KB | 解析出 ${parseResult.count} 个节点 (${parseResult.format})';
+            localFilePreview = previewLines;
+            if (nameCtrl.text.trim().isEmpty) {
+              nameCtrl.text = p.basename(file.path);
+            }
+          });
+        } else {
+          setDialogState(() {
+            localFileExists = false;
+            localFileStats = tr.fileNotFound;
+            localFilePreview = '';
+          });
+        }
+      } catch (e) {
+        setDialogState(() {
+          localFileExists = false;
+          localFileStats = '读取失败: $e';
+          localFilePreview = '';
+        });
+      }
+    }
 
     if (initialContent != null && initialContent.isNotEmpty) {
       final isUrl = initialContent.startsWith('http://') || initialContent.startsWith('https://');
@@ -523,7 +627,7 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
         urlCtrl.text = initialContent;
         nameCtrl.text = tr.isZh ? '我的订阅' : 'My Subscription';
       } else {
-        tabIndex = 1;
+        tabIndex = 2;
         rawCtrl.text = initialContent;
         nameCtrl.text = tr.isZh ? '导入的配置' : 'Imported Config';
       }
@@ -536,19 +640,37 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
           return AlertDialog(
             title: Text(tr.addProfile, style: const TextStyle(fontWeight: FontWeight.bold)),
             content: SizedBox(
-              width: 520,
+              width: 580,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SegmentedButton<int>(
                     segments: [
-                      ButtonSegment(value: 0, icon: const Icon(Icons.link_rounded, size: 15), label: Text(tr.tabRemoteUrl)),
-                      ButtonSegment(value: 1, icon: const Icon(Icons.description_outlined, size: 15), label: Text(tr.tabRawConfig)),
-                      ButtonSegment(value: 2, icon: const Icon(Icons.tune_rounded, size: 15), label: Text(tr.tabManualForm)),
+                      ButtonSegment(
+                        value: 0,
+                        icon: const Icon(Icons.link_rounded, size: 14),
+                        label: Text(tr.tabRemoteUrl, style: const TextStyle(fontSize: 12)),
+                      ),
+                      ButtonSegment(
+                        value: 1,
+                        icon: const Icon(Icons.file_present_rounded, size: 14),
+                        label: Text(tr.tabLocalConfig, style: const TextStyle(fontSize: 12)),
+                      ),
+                      ButtonSegment(
+                        value: 2,
+                        icon: const Icon(Icons.description_outlined, size: 14),
+                        label: Text(tr.tabRawConfig, style: const TextStyle(fontSize: 12)),
+                      ),
+                      ButtonSegment(
+                        value: 3,
+                        icon: const Icon(Icons.tune_rounded, size: 14),
+                        label: Text(tr.tabManualForm, style: const TextStyle(fontSize: 12)),
+                      ),
                     ],
                     selected: {tabIndex},
                     onSelectionChanged: (set) {
-                      if (set.first == 2) {
+                      if (set.first == 3) {
                         Navigator.pop(ctx);
                         _showManualNodeDialog(context);
                       } else {
@@ -557,29 +679,193 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
                     },
                   ),
                   const SizedBox(height: 20),
+
+                  // Profile Name / Alias
                   TextField(
                     controller: nameCtrl,
-                    decoration: InputDecoration(labelText: tr.profileAlias, hintText: tr.isZh ? '例如：我的订阅服务' : 'e.g. My Provider'),
+                    decoration: InputDecoration(
+                      labelText: tr.profileAlias,
+                      hintText: tabIndex == 1
+                          ? (tr.isZh ? '例如：本地主配置 (config.json)' : 'e.g. Local config.json')
+                          : (tr.isZh ? '例如：我的订阅服务' : 'e.g. My Provider'),
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  if (tabIndex == 0)
+
+                  // Tab 0: Remote URL
+                  if (tabIndex == 0) ...[
                     TextField(
                       controller: urlCtrl,
                       decoration: InputDecoration(
                         labelText: tr.subUrl,
                         hintText: 'https://...',
                       ),
-                    )
-                  else
+                    ),
+                  ],
+
+                  // Tab 1: Local config.json
+                  if (tabIndex == 1) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: filePathCtrl,
+                            decoration: InputDecoration(
+                              labelText: tr.localConfigPath,
+                              hintText: tr.isZh ? '例如：C:\\path\\to\\config.json' : 'e.g. /path/to/config.json',
+                            ),
+                            onChanged: (path) => inspectLocalFile(path, setDialogState),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+                            backgroundColor: const Color(0xFF6366F1),
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: () async {
+                            final pickedPath = await NativeFileDialog.pickConfigFile();
+                            if (pickedPath != null && pickedPath.isNotEmpty) {
+                              filePathCtrl.text = pickedPath;
+                              inspectLocalFile(pickedPath, setDialogState);
+                            }
+                          },
+                          icon: const Icon(Icons.folder_open_rounded, size: 16),
+                          label: Text(tr.browseFile),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Quick load template action
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () async {
+                            try {
+                              final file = await DefaultConfigTemplate.createLocalConfigFile();
+                              filePathCtrl.text = file.path;
+                              inspectLocalFile(file.path, setDialogState);
+                              if (nameCtrl.text.trim().isEmpty) {
+                                nameCtrl.text = tr.isZh ? '本地 config.json' : 'Local config.json';
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('创建模板失败: $e')),
+                                );
+                              }
+                            }
+                          },
+                          icon: const Icon(Icons.add_circle_outline_rounded, size: 15),
+                          label: Text(tr.loadTemplate, style: const TextStyle(fontSize: 12)),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Checkbox(
+                              value: syncLocalFile,
+                              activeColor: const Color(0xFF6366F1),
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                              onChanged: (v) => setDialogState(() => syncLocalFile = v ?? true),
+                            ),
+                            Text(
+                              tr.syncWithLocalFile,
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+
+                    // File inspection summary & preview
+                    if (filePathCtrl.text.trim().isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: localFileExists
+                              ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                              : const Color(0xFFF43F5E).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: localFileExists
+                                ? const Color(0xFF10B981).withValues(alpha: 0.3)
+                                : const Color(0xFFF43F5E).withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  localFileExists ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
+                                  size: 16,
+                                  color: localFileExists ? const Color(0xFF10B981) : const Color(0xFFF43F5E),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    localFileStats,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: localFileExists ? const Color(0xFF10B981) : const Color(0xFFF43F5E),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (localFilePreview.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                '$localFilePreview\n...',
+                                style: const TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 11,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                                maxLines: 4,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+
+                  // Tab 2: Raw Text / URI
+                  if (tabIndex == 2) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () {
+                            try {
+                              final decoded = jsonDecode(rawCtrl.text);
+                              rawCtrl.text = const JsonEncoder.withIndent('  ').convert(decoded);
+                            } catch (_) {}
+                          },
+                          icon: const Icon(Icons.format_indent_increase_rounded, size: 14),
+                          label: Text(tr.formatJson, style: const TextStyle(fontSize: 11)),
+                        ),
+                      ],
+                    ),
                     TextField(
                       controller: rawCtrl,
-                      maxLines: 8,
+                      maxLines: 7,
                       decoration: InputDecoration(
                         labelText: tr.configPayload,
                         hintText: tr.configPayloadHint,
                       ),
                       style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                     ),
+                  ],
                 ],
               ),
             ),
@@ -599,6 +885,34 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
                         );
                       }
                     }
+                  } else if (tabIndex == 1) {
+                    final filePath = filePathCtrl.text.trim();
+                    if (filePath.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(tr.fileNotFound)),
+                      );
+                      return;
+                    }
+                    final file = File(filePath);
+                    if (!file.existsSync()) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(tr.fileNotFound)),
+                      );
+                      return;
+                    }
+                    Navigator.pop(ctx);
+                    if (syncLocalFile) {
+                      await ref.read(profilesProvider.notifier).addProfileFromLocalFile(
+                            name: name.isEmpty ? p.basename(filePath) : name,
+                            filePath: filePath,
+                          );
+                    } else {
+                      final content = await file.readAsString();
+                      await ref.read(profilesProvider.notifier).addProfileFromRawText(
+                            name: name.isEmpty ? p.basename(filePath) : name,
+                            rawContent: content,
+                          );
+                    }
                   } else {
                     final raw = rawCtrl.text.trim();
                     if (raw.isNotEmpty) {
@@ -617,37 +931,10 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
   }
 
   void _showEditProfileDialog(BuildContext context, Profile profile, Translations tr) {
-    final ctrl = TextEditingController(text: profile.rawConfig);
-
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('${tr.editConfig}: ${profile.name}', style: const TextStyle(fontWeight: FontWeight.bold)),
-        content: SizedBox(
-          width: 720,
-          height: 480,
-          child: TextField(
-            controller: ctrl,
-            maxLines: null,
-            expands: true,
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-            decoration: const InputDecoration(
-              contentPadding: EdgeInsets.all(14),
-              hintText: 'Configuration content...',
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr.cancel)),
-          ElevatedButton(
-            onPressed: () async {
-              await ref.read(profilesProvider.notifier).updateProfileContent(profile.id, ctrl.text);
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: Text(tr.saveChanges),
-          ),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (ctx) => ConfigEditorDialog(profile: profile),
     );
   }
 

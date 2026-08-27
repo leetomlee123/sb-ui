@@ -1,14 +1,20 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:singular/core/engine/default_config_template.dart';
 import 'package:singular/core/engine/profile_parser.dart';
 import 'package:singular/core/engine/config_generator.dart';
 import 'package:singular/core/models/app_settings.dart';
+import 'package:singular/core/models/profile.dart';
 import 'package:singular/core/models/proxy_node.dart';
+import 'package:singular/core/providers/profiles_provider.dart';
 import 'package:singular/core/providers/proxies_provider.dart';
 import 'package:singular/core/providers/storage_provider.dart';
 import 'package:singular/core/services/storage_service.dart';
 import 'package:singular/core/utils/proxy_flag_helper.dart';
+import 'package:singular/features/profiles/widgets/config_editor_dialog.dart';
 import 'package:singular/features/shell/main_shell_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -418,4 +424,127 @@ rules:
     expect(sorted.first.name, 'Alpha'); // 35ms before 150ms
     expect(sorted.last.name, 'Beta');
   });
+
+  test('DefaultConfigTemplate creates valid sing-box configuration', () {
+    final map = DefaultConfigTemplate.getStandardConfigMap();
+    expect(map['outbounds'], isNotEmpty);
+    expect(map['inbounds'], isNotEmpty);
+    expect(map['route'], isNotNull);
+
+    final jsonStr = DefaultConfigTemplate.getStandardConfigJson();
+    final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+    expect(decoded['log']['level'], 'info');
+
+    final parseResult = ProfileParser.parse(jsonStr);
+    expect(parseResult.count, greaterThanOrEqualTo(2));
+    expect(parseResult.format, 'sing-box');
+  });
+
+  test('Local config.json file import, sync-save, and disk reload test', () async {
+    SharedPreferences.setMockInitialValues({});
+    final storage = await StorageService.init();
+    final container = ProviderContainer(
+      overrides: [
+        storageServiceProvider.overrideWithValue(storage),
+      ],
+    );
+    final notifier = container.read(profilesProvider.notifier);
+
+    // 1. Create a temporary local config.json file
+    final tempDir = await Directory.systemTemp.createTemp('singular_test_');
+    final configFile = File('${tempDir.path}/config.json');
+    await configFile.writeAsString(DefaultConfigTemplate.getStandardConfigJson());
+
+    // 2. Import from local file
+    final success = await notifier.addProfileFromLocalFile(
+      name: 'My Local Test Profile',
+      filePath: configFile.path,
+    );
+    expect(success, isTrue);
+
+    var state = container.read(profilesProvider);
+    expect(state.profiles.length, 1);
+    final profile = state.profiles.first;
+    expect(profile.name, 'My Local Test Profile');
+    expect(profile.type, ProfileType.local);
+    expect(profile.filePath, configFile.path);
+    expect(profile.nodeCount, greaterThanOrEqualTo(2));
+
+    // 3. Update profile content with syncToFile: true
+    final modifiedJson = DefaultConfigTemplate.getStandardConfigJson().replaceAll('Node-Sample', 'Node-Updated-01');
+    final updateSuccess = await notifier.updateProfileContent(
+      profile.id,
+      modifiedJson,
+      syncToFile: true,
+    );
+    expect(updateSuccess, isTrue);
+
+    // Verify disk file was updated
+    final diskContentAfterSave = await configFile.readAsString();
+    expect(diskContentAfterSave, contains('Node-Updated-01'));
+
+    // 4. Modify file on disk externally and call refreshProfile
+    final externalModified = diskContentAfterSave.replaceAll('Node-Updated-01', 'Node-Disk-External-99');
+    await configFile.writeAsString(externalModified);
+
+    final refreshSuccess = await notifier.refreshProfile(profile.id);
+    expect(refreshSuccess, isTrue);
+
+    state = container.read(profilesProvider);
+    expect(state.profiles.first.rawConfig, contains('Node-Disk-External-99'));
+
+    // Cleanup
+    await tempDir.delete(recursive: true);
+  });
+
+  testWidgets('ConfigEditorDialog renders, formats JSON, and tracks syntax validation', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final storage = await StorageService.init();
+
+    final profile = Profile(
+      id: 'test-p1',
+      name: 'Editor Test Profile',
+      type: ProfileType.local,
+      filePath: '/dummy/config.json',
+      updatedAt: DateTime.now(),
+      rawConfig: '{"log":{"level":"debug"},"outbounds":[{"type":"direct","tag":"direct"}]}',
+      nodeCount: 1,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          storageServiceProvider.overrideWithValue(storage),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: ConfigEditorDialog(profile: profile),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify dialog header elements
+    expect(find.text('Editor Test Profile'), findsOneWidget);
+    expect(find.text('sing-box JSON'), findsOneWidget);
+    expect(find.text('语法正确'), findsOneWidget);
+
+    // Verify format button is present
+    expect(find.byIcon(Icons.format_indent_increase_rounded), findsOneWidget);
+
+    // Tap format button
+    await tester.tap(find.byIcon(Icons.format_indent_increase_rounded));
+    await tester.pumpAndSettle();
+
+    // Verify JSON was indented (contains newlines)
+    expect(find.textContaining('  "log":'), findsOneWidget);
+
+    // Open Search Bar
+    await tester.tap(find.byIcon(Icons.search_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TextField), findsNWidgets(2)); // Editor + Search input
+  });
 }
+

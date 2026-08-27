@@ -283,8 +283,27 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
     }
   }
 
-  Future<bool> updateProfileContent(String id, String newRawContent) async {
+  Future<bool> updateProfileContent(
+    String id,
+    String newRawContent, {
+    bool syncToFile = true,
+  }) async {
     final parseResult = ProfileParser.parse(newRawContent);
+    Profile? currentProfile;
+    try {
+      currentProfile = state.profiles.firstWhere((p) => p.id == id);
+    } catch (_) {}
+
+    if (syncToFile &&
+        currentProfile != null &&
+        currentProfile.type == ProfileType.local &&
+        currentProfile.filePath != null) {
+      try {
+        final file = File(currentProfile.filePath!);
+        await file.writeAsString(newRawContent);
+      } catch (_) {}
+    }
+
     final updatedProfiles = state.profiles.map((p) {
       if (p.id == id) {
         return p.copyWith(
@@ -303,6 +322,36 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
 
   Future<bool> refreshProfile(String id) async {
     final profile = state.profiles.firstWhere((p) => p.id == id);
+    if (profile.type == ProfileType.local && profile.filePath != null) {
+      try {
+        final file = File(profile.filePath!);
+        if (!await file.exists()) {
+          state = state.copyWith(errorMessage: '本地配置文件不存在: ${profile.filePath}');
+          return false;
+        }
+        final rawContent = await file.readAsString();
+        final parseResult = ProfileParser.parse(rawContent);
+
+        final updatedProfiles = state.profiles.map((p) {
+          if (p.id == id) {
+            return p.copyWith(
+              rawConfig: rawContent,
+              nodeCount: parseResult.count,
+              updatedAt: DateTime.now(),
+            );
+          }
+          return p;
+        }).toList();
+
+        state = state.copyWith(profiles: updatedProfiles);
+        await _storage.saveProfiles(updatedProfiles);
+        return true;
+      } catch (e) {
+        state = state.copyWith(errorMessage: '重新读取本地文件失败: $e');
+        return false;
+      }
+    }
+
     if (profile.type != ProfileType.remote || profile.url == null) return false;
 
     _syncProxy();

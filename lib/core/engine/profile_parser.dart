@@ -58,8 +58,20 @@ class ProfileParser {
                 .whereType<Map<String, dynamic>>()
                 .where((item) => !['direct', 'block', 'dns'].contains(item['type']))
                 .toList();
+            List<Map<String, dynamic>> customRules = const [];
+            if (decoded['route'] is Map && decoded['route']['rules'] is List) {
+              customRules = (decoded['route']['rules'] as List)
+                  .whereType<Map<String, dynamic>>()
+                  .toList();
+            }
+            Map<String, dynamic>? customDns;
+            if (decoded['dns'] is Map) {
+              customDns = Map<String, dynamic>.from(decoded['dns']);
+            }
             return ProfileParserResult(
               outbounds: list,
+              customRules: customRules,
+              customDns: customDns,
               count: list.length,
               format: 'sing-box',
             );
