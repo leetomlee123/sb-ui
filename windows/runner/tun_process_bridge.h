@@ -15,7 +15,6 @@ struct NativeStartupTimings {
   int64_t engine_init_ms = 0;
   int64_t plugins_total_ms = 0;
   int64_t desktop_updater_ms = 0;
-  int64_t screen_retriever_ms = 0;
   int64_t tray_manager_ms = 0;
   int64_t window_manager_ms = 0;
   int64_t tun_bridge_ms = 0;

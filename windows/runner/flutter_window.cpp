@@ -4,11 +4,11 @@
 #include <optional>
 
 #include <desktop_updater/desktop_updater_plugin_c_api.h>
-#include <screen_retriever_windows/screen_retriever_windows_plugin_c_api.h>
 #include <tray_manager/tray_manager_plugin.h>
 #include <window_manager/window_manager_plugin.h>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "splash_window.h"
 #include "tun_process_bridge.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -47,36 +47,31 @@ bool FlutterWindow::OnCreate() {
   g_native_startup_timings.desktop_updater_ms =
       std::chrono::duration_cast<std::chrono::milliseconds>(p1 - p0).count();
 
-  ScreenRetrieverWindowsPluginCApiRegisterWithRegistrar(
-      registry->GetRegistrarForPlugin("ScreenRetrieverWindowsPluginCApi"));
-  const auto p2 = std::chrono::high_resolution_clock::now();
-  g_native_startup_timings.screen_retriever_ms =
-      std::chrono::duration_cast<std::chrono::milliseconds>(p2 - p1).count();
-
   TrayManagerPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("TrayManagerPlugin"));
-  const auto p3 = std::chrono::high_resolution_clock::now();
+  const auto p2 = std::chrono::high_resolution_clock::now();
   g_native_startup_timings.tray_manager_ms =
-      std::chrono::duration_cast<std::chrono::milliseconds>(p3 - p2).count();
+      std::chrono::duration_cast<std::chrono::milliseconds>(p2 - p1).count();
 
   WindowManagerPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("WindowManagerPlugin"));
-  const auto p4 = std::chrono::high_resolution_clock::now();
+  const auto p3 = std::chrono::high_resolution_clock::now();
   g_native_startup_timings.window_manager_ms =
-      std::chrono::duration_cast<std::chrono::milliseconds>(p4 - p3).count();
+      std::chrono::duration_cast<std::chrono::milliseconds>(p3 - p2).count();
 
   TunProcessBridge::RegisterWithMessenger(flutter_controller_->engine()->messenger());
-  const auto p5 = std::chrono::high_resolution_clock::now();
+  const auto p4 = std::chrono::high_resolution_clock::now();
   g_native_startup_timings.tun_bridge_ms =
-      std::chrono::duration_cast<std::chrono::milliseconds>(p5 - p4).count();
+      std::chrono::duration_cast<std::chrono::milliseconds>(p4 - p3).count();
 
   g_native_startup_timings.plugins_total_ms =
-      std::chrono::duration_cast<std::chrono::milliseconds>(p5 - t_plugins_start).count();
+      std::chrono::duration_cast<std::chrono::milliseconds>(p4 - t_plugins_start).count();
 
   const auto t_child_start = std::chrono::high_resolution_clock::now();
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
+    CloseNativeSplash();
     this->Show();
   });
 
@@ -89,6 +84,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  CloseNativeSplash();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

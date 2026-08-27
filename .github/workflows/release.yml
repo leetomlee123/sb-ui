@@ -53,7 +53,7 @@ jobs:
 
       - name: Build Flutter Windows Release
         run: |
-          flutter build windows --release --split-debug-info=build/symbols --tree-shake-icons
+          flutter build windows --release --obfuscate --split-debug-info=build/symbols --tree-shake-icons
 
       - name: Prepare Windows Release Bundle & Package with desktop_updater
         shell: pwsh

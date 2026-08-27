@@ -4,6 +4,7 @@
 #include <windows.h>
 
 #include "flutter_window.h"
+#include "splash_window.h"
 #include "tun_process_bridge.h"
 #include "utils.h"
 
@@ -27,6 +28,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   g_native_startup_timings.com_init_ms =
       std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
 
+  // Show native splash card immediately (0-3ms) unless launched minimized
+  std::wstring cmd_str(command_line ? command_line : L"");
+  bool is_minimized = (show_command == SW_HIDE || show_command == SW_MINIMIZE ||
+                       show_command == SW_SHOWMINNOACTIVE ||
+                       cmd_str.find(L"--minimized") != std::wstring::npos ||
+                       cmd_str.find(L"-m") != std::wstring::npos);
+  if (!is_minimized) {
+    ShowNativeSplash(instance);
+  }
+
   flutter::DartProject project(L"data");
 
   std::vector<std::string> command_line_arguments =
@@ -48,6 +59,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // the window right after the first frame.
   Win32Window::Size size(1020, 680);
   if (!window.Create(L"Singular", origin, size)) {
+    CloseNativeSplash();
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

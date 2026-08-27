@@ -324,7 +324,6 @@ void TunProcessBridge::HandleMethodCall(
     response[flutter::EncodableValue("engineInitMs")] = flutter::EncodableValue(g_native_startup_timings.engine_init_ms);
     response[flutter::EncodableValue("pluginsTotalMs")] = flutter::EncodableValue(g_native_startup_timings.plugins_total_ms);
     response[flutter::EncodableValue("desktopUpdaterMs")] = flutter::EncodableValue(g_native_startup_timings.desktop_updater_ms);
-    response[flutter::EncodableValue("screenRetrieverMs")] = flutter::EncodableValue(g_native_startup_timings.screen_retriever_ms);
     response[flutter::EncodableValue("trayManagerMs")] = flutter::EncodableValue(g_native_startup_timings.tray_manager_ms);
     response[flutter::EncodableValue("windowManagerMs")] = flutter::EncodableValue(g_native_startup_timings.window_manager_ms);
     response[flutter::EncodableValue("tunBridgeMs")] = flutter::EncodableValue(g_native_startup_timings.tun_bridge_ms);

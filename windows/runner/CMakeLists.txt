@@ -9,6 +9,7 @@ project(runner LANGUAGES CXX)
 add_executable(${BINARY_NAME} WIN32
   "flutter_window.cpp"
   "main.cpp"
+  "splash_window.cpp"
   "tun_process_bridge.cpp"
   "utils.cpp"
   "win32_window.cpp"
@@ -27,7 +28,7 @@ if(DEFINED FLUTTER_BUILD_NAME AND NOT "${FLUTTER_BUILD_NAME}" STREQUAL "")
 elseif(DEFINED FLUTTER_VERSION AND NOT "${FLUTTER_VERSION}" STREQUAL "")
   target_compile_definitions(${BINARY_NAME} PRIVATE "APP_VERSION_STRING=\"${FLUTTER_VERSION}\"")
 else()
-  target_compile_definitions(${BINARY_NAME} PRIVATE "APP_VERSION_STRING=\"1.2.26\"")
+  target_compile_definitions(${BINARY_NAME} PRIVATE "APP_VERSION_STRING=\"1.2.27\"")
 endif()
 
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION=\"${FLUTTER_VERSION}\"")

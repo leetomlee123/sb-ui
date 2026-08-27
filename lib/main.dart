@@ -61,10 +61,9 @@ void main(List<String> args) async {
             final engineInit = timings['engineInitMs'] ?? 0;
             final pluginsTotal = timings['pluginsTotalMs'] ?? 0;
             final p1 = timings['desktopUpdaterMs'] ?? 0;
-            final p2 = timings['screenRetrieverMs'] ?? 0;
-            final p3 = timings['trayManagerMs'] ?? 0;
-            final p4 = timings['windowManagerMs'] ?? 0;
-            final p5 = timings['tunBridgeMs'] ?? 0;
+            final p2 = timings['trayManagerMs'] ?? 0;
+            final p3 = timings['windowManagerMs'] ?? 0;
+            final p4 = timings['tunBridgeMs'] ?? 0;
             final childContent = timings['childContentMs'] ?? 0;
             final accounted = (comInit as int) + (winCreate as int) + (engineInit as int) + (pluginsTotal as int) + (childContent as int);
             final dispatch = (nativePreDartMs != null && nativePreDartMs > accounted)
@@ -75,7 +74,7 @@ void main(List<String> args) async {
             AppLogger.info('[Native Startup] ├── 2. Win32 宿主窗口建立 (CreateWindowEx): ${winCreate}ms');
             AppLogger.info('[Native Startup] ├── 3. FlutterEngine / Dart AOT 快照载入 (VM & GPU): ${engineInit}ms');
             AppLogger.info('[Native Startup] ├── 4. Native 插件注册 (总计: ${pluginsTotal}ms):');
-            AppLogger.info('[Native Startup] │   ├── desktop_updater: ${p1}ms | screen_retriever: ${p2}ms | tray: ${p3}ms | window: ${p4}ms | tun: ${p5}ms');
+            AppLogger.info('[Native Startup] │   ├── desktop_updater: ${p1}ms | tray: ${p2}ms | window: ${p3}ms | tun: ${p4}ms');
             AppLogger.info('[Native Startup] └── 5. 视图绑定与消息循环调度至 Dart main(): ${dispatch}ms');
           }
         } catch (_) {}
@@ -113,7 +112,6 @@ void main(List<String> args) async {
             windowButtonVisibility: false,
           );
           await windowManager.setPreventClose(true);
-          await windowManager.center();
           if (initialSettings.startMinimized) {
             await windowManager.hide();
           }
@@ -235,8 +233,10 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
             : 'assets/icons/app_icon.png';
 
         try {
-          await trayManager.setIcon(iconPath);
-          await trayManager.setToolTip('Singular');
+          await Future.wait([
+            trayManager.setIcon(iconPath),
+            trayManager.setToolTip('Singular'),
+          ]);
         } catch (_) {}
 
         await _updateTrayMenu();
