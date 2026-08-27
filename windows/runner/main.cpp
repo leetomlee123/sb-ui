@@ -15,9 +15,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       std::chrono::system_clock::now().time_since_epoch()).count();
   g_native_startup_timings.native_start_epoch_ms = native_start_time;
 
-  // Attach to console when present (e.g., 'flutter run') or create a
-  // new console when running with a debugger.
-  if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
+  // Attach to console when present (e.g., 'flutter run' or PowerShell/cmd launch)
+  // or create a new console when running with a debugger.
+  if (::AttachConsole(ATTACH_PARENT_PROCESS)) {
+    // Only redirect standard streams to CONOUT$ if not already redirected to a pipe/file.
+    DWORD stdout_type = ::GetFileType(::GetStdHandle(STD_OUTPUT_HANDLE));
+    if (stdout_type != FILE_TYPE_PIPE && stdout_type != FILE_TYPE_DISK) {
+      FILE *unused;
+      freopen_s(&unused, "CONOUT$", "w", stdout);
+    }
+    DWORD stderr_type = ::GetFileType(::GetStdHandle(STD_ERROR_HANDLE));
+    if (stderr_type != FILE_TYPE_PIPE && stderr_type != FILE_TYPE_DISK) {
+      FILE *unused;
+      freopen_s(&unused, "CONOUT$", "w", stderr);
+    }
+    std::ios::sync_with_stdio();
+    FlutterDesktopResyncOutputStreams();
+  } else if (::IsDebuggerPresent()) {
     CreateAndAttachConsole();
   }
 
@@ -39,6 +53,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   }
 
   flutter::DartProject project(L"data");
+
+  // Force Skia rendering engine by default instead of Impeller (OpenGLESSDF).
+  // In Flutter 3.47+, Impeller on Windows causes 1.5s~3s upfront shader compilation latency.
+  // Skia provides instant cold start (~50-100ms engine init) and rock-solid stability.
+  bool enable_impeller = (cmd_str.find(L"--enable-impeller") != std::wstring::npos);
+  project.set_impeller_switch(enable_impeller ? flutter::ImpellerSwitch::Enabled
+                                              : flutter::ImpellerSwitch::Disabled);
 
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();

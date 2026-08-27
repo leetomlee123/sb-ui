@@ -37,7 +37,7 @@ class AppLogger {
   }
 
   static void _append(LogEntry entry) {
-    debugPrint('[${entry.level.nameStr}] ${entry.message}');
+    debugPrintSynchronously('[${entry.level.nameStr}] ${entry.message}');
     if (_history.length >= maxHistory) {
       _history.removeAt(0);
     }
