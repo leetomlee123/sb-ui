@@ -783,7 +783,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(
-                            '${tr.appCurrentVersion}v${normalizeSemver(appUpdaterState.currentVersion ?? "1.2.31")}',
+                            '${tr.appCurrentVersion}v${normalizeSemver(appUpdaterState.currentVersion ?? "1.2.32")}',
                             style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Color(0xFF94A3B8)),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1102,7 +1102,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     style: TextStyle(fontSize: 11, color: textSecondary),
                   ),
                   value: settings.autoUpdateRuleset,
-                  activeColor: const Color(0xFF6366F1),
+                  activeThumbColor: const Color(0xFF6366F1),
                   onChanged: (val) {
                     ref.read(settingsProvider.notifier).toggleAutoUpdateRuleset(val);
                   },

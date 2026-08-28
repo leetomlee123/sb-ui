@@ -497,7 +497,7 @@ class ConfigGenerator {
       return {
         'tag': tag,
         'type': 'local',
-        if (effectiveDetour != null) 'detour': effectiveDetour,
+        'detour': ?effectiveDetour,
       };
     }
 
@@ -514,7 +514,7 @@ class ConfigGenerator {
           'server': host,
           if (port != 443) 'server_port': port,
           'path': path,
-          if (effectiveDetour != null) 'detour': effectiveDetour,
+          'detour': ?effectiveDetour,
         };
       }
     }
@@ -530,7 +530,7 @@ class ConfigGenerator {
           'type': 'tls',
           'server': host,
           if (port != 853) 'server_port': port,
-          if (effectiveDetour != null) 'detour': effectiveDetour,
+          'detour': ?effectiveDetour,
         };
       }
     }
@@ -548,7 +548,7 @@ class ConfigGenerator {
           'server': host,
           'server_port': port,
           if (isH3 && uri.path.isNotEmpty) 'path': uri.path,
-          if (effectiveDetour != null) 'detour': effectiveDetour,
+          'detour': ?effectiveDetour,
         };
       }
     }
@@ -564,7 +564,7 @@ class ConfigGenerator {
         'type': 'tcp',
         'server': host,
         if (port != null && port != 53) 'server_port': port,
-        if (effectiveDetour != null) 'detour': effectiveDetour,
+        'detour': ?effectiveDetour,
       };
     }
 
@@ -584,7 +584,7 @@ class ConfigGenerator {
       'type': 'udp',
       'server': host,
       if (port != null && port != 53) 'server_port': port,
-      if (effectiveDetour != null) 'detour': effectiveDetour,
+      'detour': ?effectiveDetour,
     };
   }
 
