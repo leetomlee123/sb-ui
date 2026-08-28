@@ -256,8 +256,8 @@ class ConfigGenerator {
       }
 
       final tunStack =
-          (settings.tunStack == 'mixed' || settings.tunStack.isEmpty)
-          ? 'system'
+          (settings.tunStack.isEmpty || settings.tunStack == 'system')
+          ? 'mixed'
           : settings.tunStack;
 
       inbounds.add({

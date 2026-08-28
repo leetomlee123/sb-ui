@@ -114,18 +114,24 @@ proxy-groups:
     expect(defaultSettings.hasAskedCloseToTray, isFalse);
     expect(defaultSettings.mixedPort, 7890);
     expect(defaultSettings.clashApiPort, 9090);
+    expect(defaultSettings.autoUpdateRuleset, isTrue);
+    expect(defaultSettings.tunStack, 'mixed');
 
     final json = defaultSettings.toJson();
     final restored = AppSettings.fromJson(json);
     expect(restored.closeToTray, isTrue);
     expect(restored.hasAskedCloseToTray, isFalse);
+    expect(restored.autoUpdateRuleset, isTrue);
+    expect(restored.tunStack, 'mixed');
 
     final updated = defaultSettings.copyWith(
       hasAskedCloseToTray: true,
       closeToTray: false,
+      autoUpdateRuleset: false,
     );
     expect(updated.hasAskedCloseToTray, isTrue);
     expect(updated.closeToTray, isFalse);
+    expect(updated.autoUpdateRuleset, isFalse);
   });
 
   test('ConfigGenerator Reality and Hysteria 2 structure', () {

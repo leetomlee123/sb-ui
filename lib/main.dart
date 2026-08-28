@@ -10,6 +10,7 @@ import 'core/i18n/translations.dart';
 import 'core/models/app_settings.dart';
 import 'core/providers/app_updater_provider.dart';
 import 'core/providers/core_provider.dart';
+import 'core/providers/geo_updater_provider.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/providers/storage_provider.dart';
 import 'core/services/app_updater_service.dart';
@@ -215,6 +216,7 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
       unawaited(_runBackgroundStartupTasks(ref.read(storageServiceProvider)));
       unawaited(_initTray());
       _scheduleSilentUpdateCheck();
+      _scheduleSilentRulesetUpdate();
     });
   }
 
@@ -301,6 +303,20 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
         if (!ref.read(settingsProvider).autoCheckAppUpdates) return;
         await ref.read(appUpdaterProvider.notifier).checkForUpdates();
       } catch (_) {}
+    });
+  }
+
+  /// Silent background update for GeoIP / GeoSite Rule-Sets (.srs), kept off the startup critical path.
+  void _scheduleSilentRulesetUpdate() {
+    Future.delayed(const Duration(seconds: 12), () async {
+      if (!mounted) return;
+      try {
+        if (!ref.read(settingsProvider).autoUpdateRuleset) return;
+        AppLogger.info('[Ruleset] 启动后自动检查并更新 GeoIP / GeoSite 规则集...');
+        await ref.read(geoUpdaterProvider.notifier).updateAllAssets(silent: true);
+      } catch (e) {
+        AppLogger.warn('[Ruleset] 后台自动更新规则集异常: $e');
+      }
     });
   }
 

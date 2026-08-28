@@ -251,6 +251,8 @@ class Translations {
   String get fileSize => isZh ? '大小: ' : 'Size: ';
   String get updateSingle => isZh ? '更新' : 'Update';
   String get geoInstalled => isZh ? '已就绪' : 'Ready';
+  String get autoUpdateRuleset => isZh ? '启动后自动更新规则集' : 'Auto-update Rule-Sets on Startup';
+  String get autoUpdateRulesetDesc => isZh ? '每次应用启动后自动在后台从高速 CDN 获取最新的 geoip-cn.srs 与 geosite-cn.srs' : 'Automatically fetch latest geoip-cn.srs and geosite-cn.srs from CDN in the background after app starts';
 
   String get autoStartTitle => isZh ? '开机自启动' : 'Launch at System Startup';
   String get autoStartSubtitle => isZh ? '系统登录后自动在后台启动应用并准备代理' : 'Automatically launch application on system startup';

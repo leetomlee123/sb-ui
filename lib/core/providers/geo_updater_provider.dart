@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/geo_asset.dart';
 import '../services/geo_updater_service.dart';
+import '../utils/app_logger.dart';
 import 'core_provider.dart';
 import 'settings_provider.dart';
 
@@ -110,63 +111,76 @@ class GeoUpdaterNotifier extends StateNotifier<GeoUpdaterState> {
     }
   }
 
-  Future<bool> updateAllAssets() async {
+  Future<bool> updateAllAssets({bool silent = false}) async {
     _syncProxy();
     if (state.assets.isEmpty) await refreshAssets();
     if (state.assets.isEmpty) return false;
 
-    state = state.copyWith(
-      isUpdating: true,
-      activeAssetName: null,
-      progress: 0.0,
-      statusMessage: 'Updating all Geo datasets...',
-      errorMessage: null,
-      successMessage: null,
-    );
+    if (!silent) {
+      state = state.copyWith(
+        isUpdating: true,
+        activeAssetName: null,
+        progress: 0.0,
+        statusMessage: 'Updating all Geo datasets...',
+        errorMessage: null,
+        successMessage: null,
+      );
+    }
 
     int succeeded = 0;
     for (int i = 0; i < state.assets.length; i++) {
       final asset = state.assets[i];
-      state = state.copyWith(
-        activeAssetName: asset.name,
-        statusMessage: 'Updating ${asset.name} (${i + 1}/${state.assets.length})...',
-      );
+      if (!silent) {
+        state = state.copyWith(
+          activeAssetName: asset.name,
+          statusMessage: 'Updating ${asset.name} (${i + 1}/${state.assets.length})...',
+        );
+      }
 
       try {
         await _service.updateGeoAsset(
           asset,
           onProgress: (subProgress, status) {
-            final overallProgress = (i + subProgress) / state.assets.length;
-            state = state.copyWith(progress: overallProgress, statusMessage: status);
+            if (!silent) {
+              final overallProgress = (i + subProgress) / state.assets.length;
+              state = state.copyWith(progress: overallProgress, statusMessage: status);
+            }
           },
         );
         succeeded++;
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.warn('[GeoUpdater] 规则集 ${asset.name} 更新失败: $e');
+      }
     }
 
     await refreshAssets();
 
     // If core is running, restart core to reload rules
     final isRunning = _ref.read(coreProvider).isRunning;
-    if (isRunning) {
+    if (isRunning && succeeded > 0) {
       await _ref.read(coreProvider.notifier).startCore();
     }
 
     if (succeeded > 0) {
-      state = state.copyWith(
-        isUpdating: false,
-        activeAssetName: null,
-        progress: 1.0,
-        statusMessage: 'All Geo assets updated successfully',
-        successMessage: '已成功更新 $succeeded 个 Geo 规则文件！',
-      );
+      AppLogger.info('[GeoUpdater] 成功更新 $succeeded 个规则集文件 (.srs)');
+      if (!silent) {
+        state = state.copyWith(
+          isUpdating: false,
+          activeAssetName: null,
+          progress: 1.0,
+          statusMessage: 'All Geo assets updated successfully',
+          successMessage: '已成功更新 $succeeded 个 Geo 规则文件！',
+        );
+      }
       return true;
     } else {
-      state = state.copyWith(
-        isUpdating: false,
-        activeAssetName: null,
-        errorMessage: 'Failed to update Geo datasets. Please check network connection.',
-      );
+      if (!silent) {
+        state = state.copyWith(
+          isUpdating: false,
+          activeAssetName: null,
+          errorMessage: 'Failed to update Geo datasets. Please check network connection.',
+        );
+      }
       return false;
     }
   }

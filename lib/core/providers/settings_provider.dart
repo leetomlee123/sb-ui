@@ -100,6 +100,10 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   Future<void> toggleAutoCheckAppUpdates(bool enabled) async {
     await updateSettings(state.copyWith(autoCheckAppUpdates: enabled));
   }
+
+  Future<void> toggleAutoUpdateRuleset(bool enabled) async {
+    await updateSettings(state.copyWith(autoUpdateRuleset: enabled));
+  }
 }
 
 final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((ref) {

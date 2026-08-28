@@ -40,6 +40,7 @@ class AppSettings {
   final bool showSpeedMetrics; // Dashboard: toggle speed metrics bento strip
   final bool showTelemetryChart; // Dashboard: toggle live traffic waveform chart
   final bool autoCheckAppUpdates; // Settings: silent update check on startup
+  final bool autoUpdateRuleset; // Settings: silent ruleset auto-update on startup
 
   const AppSettings({
     this.mixedPort = 7890,
@@ -47,7 +48,7 @@ class AppSettings {
     this.clashApiSecret = '',
     this.systemProxyEnabled = true,
     this.tunModeEnabled = false,
-    this.tunStack = 'system',
+    this.tunStack = 'mixed',
     this.logLevel = 'info',
     this.routingMode = RoutingMode.rule,
     this.autoStart = false,
@@ -64,6 +65,7 @@ class AppSettings {
     this.showSpeedMetrics = true,
     this.showTelemetryChart = true,
     this.autoCheckAppUpdates = true,
+    this.autoUpdateRuleset = true,
   });
 
   Map<String, dynamic> toJson() {
@@ -90,6 +92,7 @@ class AppSettings {
       'showSpeedMetrics': showSpeedMetrics,
       'showTelemetryChart': showTelemetryChart,
       'autoCheckAppUpdates': autoCheckAppUpdates,
+      'autoUpdateRuleset': autoUpdateRuleset,
     };
   }
 
@@ -100,7 +103,7 @@ class AppSettings {
       clashApiSecret: json['clashApiSecret'] as String? ?? '',
       systemProxyEnabled: json['systemProxyEnabled'] as bool? ?? false,
       tunModeEnabled: json['tunModeEnabled'] as bool? ?? false,
-      tunStack: (json['tunStack'] == 'mixed' || json['tunStack'] == null) ? 'system' : json['tunStack'] as String,
+      tunStack: (json['tunStack'] == 'system' || json['tunStack'] == null) ? 'mixed' : json['tunStack'] as String,
       logLevel: json['logLevel'] as String? ?? 'info',
       routingMode: RoutingMode.values.firstWhere(
         (e) => e.name == json['routingMode'],
@@ -120,6 +123,7 @@ class AppSettings {
       showSpeedMetrics: json['showSpeedMetrics'] as bool? ?? true,
       showTelemetryChart: json['showTelemetryChart'] as bool? ?? true,
       autoCheckAppUpdates: json['autoCheckAppUpdates'] as bool? ?? true,
+      autoUpdateRuleset: json['autoUpdateRuleset'] as bool? ?? true,
     );
   }
 
@@ -146,6 +150,7 @@ class AppSettings {
     bool? showSpeedMetrics,
     bool? showTelemetryChart,
     bool? autoCheckAppUpdates,
+    bool? autoUpdateRuleset,
   }) {
     return AppSettings(
       mixedPort: mixedPort ?? this.mixedPort,
@@ -170,6 +175,7 @@ class AppSettings {
       showSpeedMetrics: showSpeedMetrics ?? this.showSpeedMetrics,
       showTelemetryChart: showTelemetryChart ?? this.showTelemetryChart,
       autoCheckAppUpdates: autoCheckAppUpdates ?? this.autoCheckAppUpdates,
+      autoUpdateRuleset: autoUpdateRuleset ?? this.autoUpdateRuleset,
     );
   }
 
