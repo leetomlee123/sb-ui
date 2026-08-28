@@ -4,10 +4,117 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/theme.dart';
 import '../../../core/engine/profile_parser.dart';
 import '../../../core/i18n/translations.dart';
 import '../../../core/models/profile.dart';
 import '../../../core/providers/profiles_provider.dart';
+
+/// Lightweight syntax highlighting controller for sing-box JSON and YAML configs.
+class JsonCodeSyntaxController extends TextEditingController {
+  JsonCodeSyntaxController({super.text});
+
+  static final RegExp _tokenizer = RegExp(
+    r'(?<key>"[^"\\]*(?:\\.[^"\\]*)*")\s*(?=:)|'
+    r'(?<string>"[^"\\]*(?:\\.[^"\\]*)*")|'
+    r'(?<number>-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|'
+    r'(?<keyword>\b(?:true|false|null)\b)|'
+    r'(?<comment>\/\/[^\r\n]*|\/\*[\s\S]*?\*\/)',
+  );
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    final text = this.text;
+    final baseStyle = style ??
+        const TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 13.0,
+          height: 1.5,
+          color: Color(0xFFF8FAFC),
+        );
+
+    if (text.isEmpty) {
+      return TextSpan(text: '', style: baseStyle);
+    }
+
+    // Skip tokenizer on huge payload (>150KB) to ensure instant, non-blocking typing
+    if (text.length > 150000) {
+      return TextSpan(text: text, style: baseStyle);
+    }
+
+    final spans = <TextSpan>[];
+    int lastEnd = 0;
+
+    for (final match in _tokenizer.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(
+          text: text.substring(lastEnd, match.start),
+          style: baseStyle.copyWith(color: const Color(0xFF94A3B8)), // Punctuation & symbols
+        ));
+      }
+
+      final key = match.namedGroup('key');
+      final string = match.namedGroup('string');
+      final number = match.namedGroup('number');
+      final keyword = match.namedGroup('keyword');
+      final comment = match.namedGroup('comment');
+
+      if (key != null) {
+        spans.add(TextSpan(
+          text: key,
+          style: baseStyle.copyWith(
+            color: const Color(0xFF38BDF8), // Cyan / Sky blue for keys
+            fontWeight: FontWeight.w600,
+          ),
+        ));
+      } else if (string != null) {
+        spans.add(TextSpan(
+          text: string,
+          style: baseStyle.copyWith(
+            color: const Color(0xFF34D399), // Emerald green for string values
+          ),
+        ));
+      } else if (number != null) {
+        spans.add(TextSpan(
+          text: number,
+          style: baseStyle.copyWith(
+            color: const Color(0xFFFBBF24), // Amber gold for numbers/ports
+          ),
+        ));
+      } else if (keyword != null) {
+        spans.add(TextSpan(
+          text: keyword,
+          style: baseStyle.copyWith(
+            color: const Color(0xFFC084FC), // Violet purple for true/false/null
+            fontWeight: FontWeight.bold,
+          ),
+        ));
+      } else if (comment != null) {
+        spans.add(TextSpan(
+          text: comment,
+          style: baseStyle.copyWith(
+            color: const Color(0xFF64748B), // Slate muted for comments
+            fontStyle: FontStyle.italic,
+          ),
+        ));
+      }
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastEnd),
+        style: baseStyle.copyWith(color: const Color(0xFF94A3B8)),
+      ));
+    }
+
+    return TextSpan(children: spans, style: baseStyle);
+  }
+}
 
 class ConfigEditorDialog extends ConsumerStatefulWidget {
   final Profile profile;
@@ -22,7 +129,7 @@ class ConfigEditorDialog extends ConsumerStatefulWidget {
 }
 
 class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
-  late final TextEditingController _textCtrl;
+  late final JsonCodeSyntaxController _textCtrl;
   late final UndoHistoryController _undoCtrl;
   final ScrollController _scrollCtrl = ScrollController();
   final ScrollController _gutterCtrl = ScrollController();
@@ -60,7 +167,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   @override
   void initState() {
     super.initState();
-    _textCtrl = TextEditingController(text: widget.profile.rawConfig);
+    _textCtrl = JsonCodeSyntaxController(text: widget.profile.rawConfig);
     _undoCtrl = UndoHistoryController();
     _syncToFile = widget.profile.type == ProfileType.local && widget.profile.filePath != null;
 
@@ -425,51 +532,69 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   Widget build(BuildContext context) {
     final tr = ref.watch(translationsProvider);
     final screenSize = MediaQuery.of(context).size;
-    final dialogWidth = _isMaximized ? screenSize.width : min(1060.0, screenSize.width * 0.92);
+    final dialogWidth = _isMaximized ? screenSize.width : min(1080.0, screenSize.width * 0.92);
     final dialogHeight = _isMaximized ? screenSize.height : min(760.0, screenSize.height * 0.88);
 
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyS, control: true): _saveConfig,
-        const SingleActivator(LogicalKeyboardKey.keyS, meta: true): _saveConfig,
-        const SingleActivator(LogicalKeyboardKey.keyF, control: true): _toggleSearch,
-        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): _toggleSearch,
-        const SingleActivator(LogicalKeyboardKey.keyF, control: true, shift: true): _formatJson,
-        const SingleActivator(LogicalKeyboardKey.keyF, meta: true, shift: true): _formatJson,
-      },
-      child: Dialog(
-        insetPadding: _isMaximized ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_isMaximized ? 0 : 16),
-        ),
-        backgroundColor: const Color(0xFF0F172A),
-        child: Container(
-          width: dialogWidth,
-          height: dialogHeight,
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F172A),
+    // Explicitly scope the dialog to AppTheme.darkTheme so that even if the app
+    // is set to light theme, the code editor always renders a dedicated dark IDE canvas.
+    return Theme(
+      data: AppTheme.darkTheme.copyWith(
+        dialogTheme: DialogThemeData(
+          backgroundColor: const Color(0xFF080C16),
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(_isMaximized ? 0 : 16),
-            border: Border.all(color: const Color(0xFF334155), width: 1),
+            side: const BorderSide(color: Color(0xFF334155), width: 1),
           ),
-          child: Column(
-            children: [
-              // Header Toolbar
-              _buildHeader(tr),
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: false,
+          fillColor: Colors.transparent,
+          border: InputBorder.none,
+        ),
+      ),
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.keyS, control: true): _saveConfig,
+          const SingleActivator(LogicalKeyboardKey.keyS, meta: true): _saveConfig,
+          const SingleActivator(LogicalKeyboardKey.keyF, control: true): _toggleSearch,
+          const SingleActivator(LogicalKeyboardKey.keyF, meta: true): _toggleSearch,
+          const SingleActivator(LogicalKeyboardKey.keyF, control: true, shift: true): _formatJson,
+          const SingleActivator(LogicalKeyboardKey.keyF, meta: true, shift: true): _formatJson,
+        },
+        child: Dialog(
+          insetPadding: _isMaximized ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(_isMaximized ? 0 : 16),
+          ),
+          backgroundColor: const Color(0xFF080C16),
+          child: Container(
+            width: dialogWidth,
+            height: dialogHeight,
+            decoration: BoxDecoration(
+              color: const Color(0xFF080C16),
+              borderRadius: BorderRadius.circular(_isMaximized ? 0 : 16),
+              border: Border.all(color: const Color(0xFF334155), width: 1),
+            ),
+            child: Column(
+              children: [
+                // Header Toolbar
+                _buildHeader(tr),
 
-              // Search Bar (if activated)
-              if (_showSearch) _buildSearchBar(tr),
+                // Search Bar (if activated)
+                if (_showSearch) _buildSearchBar(tr),
 
-              // Error alert banner if syntax is invalid
-              if (_syntaxError != null) _buildSyntaxErrorBanner(tr),
+                // Error alert banner if syntax is invalid
+                if (_syntaxError != null) _buildSyntaxErrorBanner(tr),
 
-              // Main Code Editor with Line Numbers Gutter
-              Expanded(
-                child: _buildEditorBody(),
-              ),
+                // Main Code Editor with Line Numbers Gutter
+                Expanded(
+                  child: _buildEditorBody(),
+                ),
 
-              // Footer Status Bar
-              _buildFooter(tr),
-            ],
+                // Footer Status Bar
+                _buildFooter(tr),
+              ],
+            ),
           ),
         ),
       ),
@@ -480,8 +605,8 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       decoration: const BoxDecoration(
-        color: Color(0xFF1E293B),
-        border: Border(bottom: BorderSide(color: Color(0xFF334155))),
+        color: Color(0xFF131B2E),
+        border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
       ),
       child: Row(
         children: [
@@ -496,7 +621,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFFF1F5F9),
+                      color: Color(0xFFF8FAFC),
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -640,8 +765,8 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: const BoxDecoration(
-        color: Color(0xFF1E293B),
-        border: Border(bottom: BorderSide(color: Color(0xFF334155))),
+        color: Color(0xFF131B2E),
+        border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
       ),
       child: Row(
         children: [
@@ -658,7 +783,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 filled: true,
-                fillColor: const Color(0xFF0F172A),
+                fillColor: const Color(0xFF080C16),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),
                   borderSide: const BorderSide(color: Color(0xFF334155)),
@@ -749,7 +874,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
         Container(
           width: 54,
           decoration: const BoxDecoration(
-            color: Color(0xFF090D16),
+            color: Color(0xFF060911),
             border: Border(right: BorderSide(color: Color(0xFF1E293B))),
           ),
           child: ListView.builder(
@@ -777,7 +902,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
                     height: _lineHeightFactor,
                     color: isErrorLine
                         ? const Color(0xFFF87171)
-                        : (isCurrentLine ? const Color(0xFFE2E8F0) : const Color(0xFF475569)),
+                        : (isCurrentLine ? const Color(0xFFF1F5F9) : const Color(0xFF475569)),
                     fontWeight: (isCurrentLine || isErrorLine) ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
@@ -786,10 +911,10 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
           ),
         ),
 
-        // Text Field Area
+        // Text Field Area - Always solid dark obsidian background
         Expanded(
           child: Container(
-            color: const Color(0xFF0F172A),
+            color: const Color(0xFF080C16),
             child: _wordWrap
                 ? _buildTextField(null)
                 : SingleChildScrollView(
@@ -818,7 +943,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
         fontFamily: 'monospace',
         fontSize: _fontSize,
         height: _lineHeightFactor,
-        color: Color(0xFFE2E8F0),
+        color: Color(0xFFF8FAFC),
         letterSpacing: 0.3,
       ),
       cursorColor: const Color(0xFF818CF8),
@@ -828,6 +953,8 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
         border: InputBorder.none,
         enabledBorder: InputBorder.none,
         focusedBorder: InputBorder.none,
+        filled: true,
+        fillColor: Color(0xFF080C16), // Explicit dark background prevents light theme override
         isDense: true,
       ),
     );
@@ -850,8 +977,8 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
       decoration: const BoxDecoration(
-        color: Color(0xFF1E293B),
-        border: Border(top: BorderSide(color: Color(0xFF334155))),
+        color: Color(0xFF131B2E),
+        border: Border(top: BorderSide(color: Color(0xFF1E293B))),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,

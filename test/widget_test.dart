@@ -545,6 +545,51 @@ rules:
     await tester.pumpAndSettle();
 
     expect(find.byType(TextField), findsNWidgets(2)); // Editor + Search input
+
+    // Verify the editor TextField uses explicit dark background Color(0xFF080C16)
+    final editorField = tester.widget<TextField>(find.byType(TextField).first);
+    expect(editorField.decoration?.filled, isTrue);
+    expect(editorField.decoration?.fillColor, const Color(0xFF080C16));
+  });
+
+  testWidgets('JsonCodeSyntaxController produces syntax highlighted spans', (tester) async {
+    final controller = JsonCodeSyntaxController(
+      text: '{\n  "port": 7890,\n  "tag": "direct",\n  "enabled": true\n}',
+    );
+
+    late BuildContext testContext;
+    await tester.pumpWidget(
+      Builder(
+        builder: (context) {
+          testContext = context;
+          return const SizedBox();
+        },
+      ),
+    );
+
+    final span = controller.buildTextSpan(
+      context: testContext,
+      withComposing: false,
+    );
+
+    expect(span.children, isNotNull);
+    final textSpans = span.children!.whereType<TextSpan>().toList();
+
+    // Verify key "port" has cyan color
+    final portKey = textSpans.firstWhere((s) => s.text == '"port"');
+    expect(portKey.style?.color, const Color(0xFF38BDF8));
+
+    // Verify number 7890 has amber color
+    final portNum = textSpans.firstWhere((s) => s.text == '7890');
+    expect(portNum.style?.color, const Color(0xFFFBBF24));
+
+    // Verify string "direct" has emerald color
+    final directVal = textSpans.firstWhere((s) => s.text == '"direct"');
+    expect(directVal.style?.color, const Color(0xFF34D399));
+
+    // Verify boolean true has violet color
+    final trueVal = textSpans.firstWhere((s) => s.text == 'true');
+    expect(trueVal.style?.color, const Color(0xFFC084FC));
   });
 }
 

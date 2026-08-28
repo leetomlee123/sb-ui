@@ -822,15 +822,24 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
                             ),
                             if (localFilePreview.isNotEmpty) ...[
                               const SizedBox(height: 8),
-                              Text(
-                                '$localFilePreview\n...',
-                                style: const TextStyle(
-                                  fontFamily: 'monospace',
-                                  fontSize: 11,
-                                  color: Color(0xFF94A3B8),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF080C16),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFF1E293B)),
                                 ),
-                                maxLines: 4,
-                                overflow: TextOverflow.ellipsis,
+                                child: Text(
+                                  '$localFilePreview\n...',
+                                  style: const TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 11,
+                                    color: Color(0xFF38BDF8),
+                                  ),
+                                  maxLines: 4,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ],
                           ],
@@ -856,14 +865,32 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
                         ),
                       ],
                     ),
-                    TextField(
-                      controller: rawCtrl,
-                      maxLines: 7,
-                      decoration: InputDecoration(
-                        labelText: tr.configPayload,
-                        hintText: tr.configPayloadHint,
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF080C16),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF334155)),
                       ),
-                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      child: TextField(
+                        controller: rawCtrl,
+                        maxLines: 7,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          color: Color(0xFFF8FAFC),
+                        ),
+                        cursorColor: const Color(0xFF818CF8),
+                        decoration: InputDecoration(
+                          hintText: tr.configPayloadHint,
+                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          filled: false,
+                          fillColor: Colors.transparent,
+                        ),
+                      ),
                     ),
                   ],
                 ],
