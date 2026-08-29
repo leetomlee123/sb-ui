@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/traffic_data.dart';
 import 'core_provider.dart';
@@ -42,6 +43,9 @@ class TrafficNotifier extends StateNotifier<TrafficState> {
   Timer? _totalsSyncTimer;
   final ListQueue<TrafficPoint> _historyQueue = ListQueue<TrafficPoint>(90);
 
+  int _accumulatedUp = 0;
+  int _accumulatedDown = 0;
+
   TrafficNotifier(this._ref) : super(TrafficState()) {
     _ref.listen<CoreState>(coreProvider, (previous, next) {
       if (next.isRunning && (previous == null || !previous.isRunning)) {
@@ -58,6 +62,9 @@ class TrafficNotifier extends StateNotifier<TrafficState> {
     final client = _ref.read(clashApiClientProvider);
     if (client == null) return;
 
+    _accumulatedUp = 0;
+    _accumulatedDown = 0;
+
     // Immediately fetch ground-truth totals from kernel
     _syncTotals();
 
@@ -72,9 +79,18 @@ class TrafficNotifier extends StateNotifier<TrafficState> {
       }
       _historyQueue.addLast(point);
 
+      // Accumulate real-time streaming traffic deltas every second
+      _accumulatedUp += point.up;
+      _accumulatedDown += point.down;
+
+      final currentTotalUp = math.max(_accumulatedUp, state.totalUp);
+      final currentTotalDown = math.max(_accumulatedDown, state.totalDown);
+
       state = state.copyWith(
         currentUp: point.up,
         currentDown: point.down,
+        totalUp: currentTotalUp,
+        totalDown: currentTotalDown,
         history: _historyQueue.toList(growable: false),
       );
     });
@@ -85,9 +101,12 @@ class TrafficNotifier extends StateNotifier<TrafficState> {
     if (client == null) return;
     try {
       final data = await client.getConnectionsData();
+      _accumulatedDown = math.max(_accumulatedDown, data.downloadTotal);
+      _accumulatedUp = math.max(_accumulatedUp, data.uploadTotal);
+
       state = state.copyWith(
-        totalDown: data.downloadTotal,
-        totalUp: data.uploadTotal,
+        totalDown: math.max(_accumulatedDown, state.totalDown),
+        totalUp: math.max(_accumulatedUp, state.totalUp),
       );
     } catch (_) {}
   }

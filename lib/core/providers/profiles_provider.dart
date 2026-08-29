@@ -146,29 +146,7 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
       }
 
       final parseResult = ProfileParser.parse(rawContent);
-      
-      // Parse User-Info header if present (traffic/expire info)
-      int? upload;
-      int? download;
-      int? total;
-      DateTime? expire;
-      final userInfoHeader = response.headers.value('subscription-userinfo');
-      if (userInfoHeader != null) {
-        final pairs = userInfoHeader.split(';');
-        for (final pair in pairs) {
-          final kv = pair.trim().split('=');
-          if (kv.length == 2) {
-            final k = kv[0].trim();
-            final v = int.tryParse(kv[1].trim());
-            if (v != null) {
-              if (k == 'upload') upload = v;
-              if (k == 'download') download = v;
-              if (k == 'total') total = v;
-              if (k == 'expire') expire = DateTime.fromMillisecondsSinceEpoch(v * 1000);
-            }
-          }
-        }
-      }
+      final userInfo = _parseUserInfo(response.headers);
 
       final newProfile = Profile(
         id: _uuid.v4(),
@@ -179,10 +157,10 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
         autoUpdateIntervalHours: autoUpdateHours,
         nodeCount: parseResult.count,
         rawConfig: rawContent,
-        uploadTraffic: upload,
-        downloadTraffic: download,
-        totalTraffic: total,
-        expireDate: expire,
+        uploadTraffic: userInfo.upload,
+        downloadTraffic: userInfo.download,
+        totalTraffic: userInfo.total,
+        expireDate: userInfo.expire,
         active: state.profiles.isEmpty,
       );
 
@@ -376,6 +354,7 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
       );
       final rawContent = response.data ?? '';
       final parseResult = ProfileParser.parse(rawContent);
+      final userInfo = _parseUserInfo(response.headers);
 
       final updatedProfiles = state.profiles.map((p) {
         if (p.id == id) {
@@ -383,6 +362,10 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
             rawConfig: rawContent,
             nodeCount: parseResult.count,
             updatedAt: DateTime.now(),
+            uploadTraffic: userInfo.upload ?? p.uploadTraffic,
+            downloadTraffic: userInfo.download ?? p.downloadTraffic,
+            totalTraffic: userInfo.total ?? p.totalTraffic,
+            expireDate: userInfo.expire ?? p.expireDate,
           );
         }
         return p;
@@ -395,6 +378,31 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
       state = state.copyWith(isLoading: false, errorMessage: 'Update failed: $e');
       return false;
     }
+  }
+
+  static ({int? upload, int? download, int? total, DateTime? expire}) _parseUserInfo(Headers headers) {
+    int? upload;
+    int? download;
+    int? total;
+    DateTime? expire;
+    final userInfoHeader = headers.value('subscription-userinfo');
+    if (userInfoHeader != null) {
+      final pairs = userInfoHeader.split(';');
+      for (final pair in pairs) {
+        final kv = pair.trim().split('=');
+        if (kv.length == 2) {
+          final k = kv[0].trim().toLowerCase();
+          final v = int.tryParse(kv[1].trim());
+          if (v != null) {
+            if (k == 'upload') upload = v;
+            if (k == 'download') download = v;
+            if (k == 'total') total = v;
+            if (k == 'expire') expire = DateTime.fromMillisecondsSinceEpoch(v * 1000);
+          }
+        }
+      }
+    }
+    return (upload: upload, download: download, total: total, expire: expire);
   }
 
   /// Refreshes all remote subscription profiles in background (e.g. at startup or interval)

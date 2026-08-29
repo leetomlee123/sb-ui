@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -107,8 +108,8 @@ class _ConnectionsPageState extends ConsumerState<ConnectionsPage> {
     }
 
     final connections = connState.filteredConnections;
-    final effectiveTotalDown = connState.downloadTotal > 0 ? connState.downloadTotal : totalDown;
-    final effectiveTotalUp = connState.uploadTotal > 0 ? connState.uploadTotal : totalUp;
+    final effectiveTotalDown = math.max(connState.downloadTotal, totalDown);
+    final effectiveTotalUp = math.max(connState.uploadTotal, totalUp);
     final combinedTotal = effectiveTotalDown + effectiveTotalUp;
 
     return Padding(

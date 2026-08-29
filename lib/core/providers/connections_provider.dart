@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/connection_info.dart';
 import 'core_provider.dart';
@@ -200,8 +201,8 @@ class ConnectionsNotifier extends StateNotifier<ConnectionsState> {
 
       state = state.copyWith(
         connections: data.connections,
-        downloadTotal: data.downloadTotal > 0 ? data.downloadTotal : state.downloadTotal,
-        uploadTotal: data.uploadTotal > 0 ? data.uploadTotal : state.uploadTotal,
+        downloadTotal: math.max(state.downloadTotal, data.downloadTotal),
+        uploadTotal: math.max(state.uploadTotal, data.uploadTotal),
         topDomains: nextTopDomains ?? state.topDomains,
         topOutbounds: nextTopOutbounds ?? state.topOutbounds,
         protocolBreakdown: nextProtocolBreakdown ?? state.protocolBreakdown,
