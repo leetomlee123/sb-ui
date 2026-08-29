@@ -21,9 +21,37 @@ void main() {
       // Should not throw even in headless mock/test environments
     });
 
-    test('FirebaseService.logEvent and logError execute without exceptions', () async {
+    test('FirebaseService.logEvent, recordException and domain telemetry execute smoothly', () async {
       await FirebaseService.logEvent('test_event', {'param_key': 'param_value'});
       await FirebaseService.logError(Exception('Test error'), StackTrace.current, 'unit_test');
+      await FirebaseService.recordException(
+        Exception('Fatal test crash'),
+        stackTrace: StackTrace.current,
+        reason: 'unit_test_crash',
+        fatal: true,
+      );
+      await FirebaseService.logAppStartup(launchTimeMs: 120, nativeLoadMs: 30);
+      await FirebaseService.logCoreAction(
+        action: 'start',
+        routingMode: 'rule',
+        tunEnabled: true,
+        profileName: 'My Profile',
+      );
+      await FirebaseService.logSpeedTest(
+        totalNodes: 20,
+        testedNodes: 20,
+        successCount: 18,
+        averageLatencyMs: 85,
+      );
+      await FirebaseService.logProfileOperation(
+        action: 'add',
+        format: 'remote',
+        nodeCount: 50,
+      );
+      await FirebaseService.logFeatureToggle(
+        feature: 'system_proxy',
+        enabled: true,
+      );
     });
   });
 }

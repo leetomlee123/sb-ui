@@ -9,11 +9,13 @@ import 'package:flutter/foundation.dart';
 import '../../firebase_options.dart';
 import '../utils/app_logger.dart';
 
-/// Unified Firebase & Telemetry Service for Singular.
-/// Supports native FlutterFire initialization and graceful cross-platform fallback.
+/// Unified Firebase Analytics & Crash Reporting Service for Singular.
+/// Operates seamlessly and silently in the background with cross-platform REST & native fallback.
 class FirebaseService {
   static bool _isInitialized = false;
   static bool get isInitialized => _isInitialized;
+
+  static final DateTime _startTime = DateTime.now();
 
   static final Dio _dio = Dio(
     BaseOptions(
@@ -28,7 +30,7 @@ class FirebaseService {
       final options = DefaultFirebaseOptions.currentPlatform;
       await Firebase.initializeApp(options: options);
       _isInitialized = true;
-      AppLogger.info('[Firebase] 核心服务初始化成功 (Project: ${options.projectId})');
+      AppLogger.info('[Firebase] 核心服务就绪 (Project: ${options.projectId})');
     } catch (e, st) {
       AppLogger.info('[Firebase] 运行于本地兼容模式 (${e.toString()})');
       if (kDebugMode) {
@@ -37,7 +39,7 @@ class FirebaseService {
     }
   }
 
-  /// Logs user analytics and app telemetry events.
+  /// Sends a raw custom analytics event.
   static Future<void> logEvent(
     String name, [
     Map<String, dynamic>? parameters,
@@ -47,10 +49,8 @@ class FirebaseService {
       final measurementId = options.measurementId;
       final apiKey = options.apiKey;
 
-      // Log locally for diagnostics
-      AppLogger.debug('[Firebase Event] $name: ${parameters ?? {}}');
+      AppLogger.debug('[Firebase Analytics] $name: ${parameters ?? {}}');
 
-      // If measurement ID and API key are configured (non-placeholder), send GA4/Firebase Measurement Protocol payload
       if (measurementId != null &&
           measurementId.startsWith('G-') &&
           !apiKey.contains('Placeholder')) {
@@ -64,6 +64,7 @@ class FirebaseService {
               'params': {
                 'platform': Platform.operatingSystem,
                 'os_version': Platform.operatingSystemVersion,
+                'app_uptime_sec': DateTime.now().difference(_startTime).inSeconds,
                 'timestamp_micros': DateTime.now().microsecondsSinceEpoch,
                 ...?parameters,
               },
@@ -73,20 +74,113 @@ class FirebaseService {
         await _dio.post(url, data: jsonEncode(payload));
       }
     } catch (e) {
-      AppLogger.debug('[Firebase Event Error] $name: $e');
+      AppLogger.debug('[Firebase Analytics Error] $name: $e');
     }
   }
 
-  /// Reports non-fatal errors or exception telemetry.
+  /// Records an unhandled or non-fatal exception and sends a crash telemetry report.
+  static Future<void> recordException(
+    dynamic exception, {
+    StackTrace? stackTrace,
+    String? reason,
+    bool fatal = false,
+  }) async {
+    try {
+      final errorStr = exception.toString();
+      final traceSnippet = stackTrace != null
+          ? stackTrace.toString().split('\n').take(8).join(' | ')
+          : '';
+
+      AppLogger.error('[Firebase Crash Shield] ${fatal ? "FATAL" : "NON-FATAL"}: $errorStr (Reason: $reason)');
+
+      await logEvent(fatal ? 'app_crash' : 'app_exception', {
+        'error_type': exception.runtimeType.toString(),
+        'error_message': errorStr.length > 200 ? errorStr.substring(0, 200) : errorStr,
+        'stack_trace': traceSnippet.length > 300 ? traceSnippet.substring(0, 300) : traceSnippet,
+        'fatal': fatal ? 1 : 0,
+        'reason': reason,
+      });
+    } catch (_) {}
+  }
+
+  /// Convenience wrapper for non-fatal exception reporting.
   static Future<void> logError(
     Object error, [
     StackTrace? stackTrace,
     String? reason,
   ]) async {
-    AppLogger.error('[Firebase Error Reported] $error (Reason: $reason)');
-    await logEvent('app_exception', {
-      'error': error.toString().substring(0, error.toString().length > 100 ? 100 : error.toString().length),
-      'reason': ?reason,
+    await recordException(
+      error,
+      stackTrace: stackTrace,
+      reason: reason,
+      fatal: false,
+    );
+  }
+
+  // --- Domain Specific Telemetry Trackers ---
+
+  /// Logs application startup metrics.
+  static Future<void> logAppStartup({
+    required int launchTimeMs,
+    int? nativeLoadMs,
+  }) async {
+    await logEvent('app_startup', {
+      'launch_time_ms': launchTimeMs,
+      'native_load_ms': nativeLoadMs,
+    });
+  }
+
+  /// Logs sing-box core lifecycle actions.
+  static Future<void> logCoreAction({
+    required String action, // 'start', 'stop', 'restart', 'fail'
+    String? routingMode,
+    bool? tunEnabled,
+    String? profileName,
+    String? failureReason,
+  }) async {
+    await logEvent('core_$action', {
+      'routing_mode': routingMode,
+      'tun_enabled': tunEnabled != null ? (tunEnabled ? 1 : 0) : null,
+      'profile_name': profileName,
+      'failure_reason': failureReason,
+    });
+  }
+
+  /// Logs speed test metrics.
+  static Future<void> logSpeedTest({
+    required int totalNodes,
+    required int testedNodes,
+    required int successCount,
+    required int averageLatencyMs,
+  }) async {
+    await logEvent('speed_test_completed', {
+      'total_nodes': totalNodes,
+      'tested_nodes': testedNodes,
+      'success_count': successCount,
+      'avg_latency_ms': averageLatencyMs,
+    });
+  }
+
+  /// Logs subscription / profile operations.
+  static Future<void> logProfileOperation({
+    required String action, // 'add', 'update', 'delete', 'switch'
+    required String format, // 'sing-box', 'clash', 'uri-list'
+    int? nodeCount,
+  }) async {
+    await logEvent('profile_$action', {
+      'format': format,
+      'node_count': nodeCount,
+    });
+  }
+
+  /// Logs system proxy / TUN mode toggling.
+  static Future<void> logFeatureToggle({
+    required String feature, // 'system_proxy', 'tun_mode', 'fake_ip', 'ad_block'
+    required bool enabled,
+  }) async {
+    await logEvent('feature_toggled', {
+      'feature': feature,
+      'enabled': enabled ? 1 : 0,
     });
   }
 }

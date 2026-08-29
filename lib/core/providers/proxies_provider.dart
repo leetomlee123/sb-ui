@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../engine/profile_parser.dart';
 import '../models/proxy_node.dart';
+import '../services/firebase_service.dart';
 import 'core_provider.dart';
 import 'profiles_provider.dart';
 import 'settings_provider.dart';
@@ -545,6 +546,24 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
       final workers = List.generate(workerCount, (_) => worker());
 
       await Future.wait(workers);
+
+      // Log speed test completion telemetry
+      final testedDelays = targetNodeNames
+          .map((name) => state.nodes[name]?.delay)
+          .where((d) => d != null)
+          .cast<int>()
+          .toList();
+      final validDelays = testedDelays.where((d) => d > 0).toList();
+      final avgLatency = validDelays.isNotEmpty
+          ? (validDelays.reduce((a, b) => a + b) / validDelays.length).round()
+          : 0;
+
+      FirebaseService.logSpeedTest(
+        totalNodes: state.nodes.length,
+        testedNodes: targetNodeNames.length,
+        successCount: validDelays.length,
+        averageLatencyMs: avgLatency,
+      );
     } finally {
       if (_testGeneration == generation) {
         // 3. Safety cleanup: ensure no node in state is left stuck with isTesting: true

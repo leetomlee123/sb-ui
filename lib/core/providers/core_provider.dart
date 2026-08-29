@@ -6,6 +6,7 @@ import '../api/clash_api_client.dart';
 import '../engine/config_generator.dart';
 import '../engine/profile_parser.dart';
 import '../process/singbox_process_manager.dart';
+import '../services/firebase_service.dart';
 import '../services/storage_service.dart';
 import '../services/system_proxy_manager.dart';
 import 'profiles_provider.dart';
@@ -57,8 +58,12 @@ class CoreNotifier extends StateNotifier<CoreState> {
         _startUptimeTimer();
       } else {
         _stopUptimeTimer();
-        // Supervisor: If core was running and unexpectedly crashed/stopped, clean up system proxy
+        // Supervisor: If core was running and unexpectedly crashed/stopped, clean up system proxy and record crash
         if (prevStatus == CoreStatus.running && status != CoreStatus.running) {
+          FirebaseService.recordException(
+            Exception('sing-box process terminated unexpectedly'),
+            reason: 'core_unexpected_exit',
+          );
           final settings = _ref.read(settingsProvider);
           if (settings.systemProxyEnabled) {
             try {
@@ -168,6 +173,12 @@ class CoreNotifier extends StateNotifier<CoreState> {
 
         totalWatch.stop();
         _processManager.log('[Core] 核心服务启动就绪，全局耗时: ${totalWatch.elapsedMilliseconds}ms');
+        FirebaseService.logCoreAction(
+          action: 'start',
+          routingMode: settings.routingMode.name,
+          tunEnabled: settings.tunModeEnabled,
+          profileName: activeProfile.name,
+        );
       } else {
         totalWatch.stop();
         if (_processManager.status == CoreStatus.stopped) {
@@ -180,16 +191,23 @@ class CoreNotifier extends StateNotifier<CoreState> {
             status: CoreStatus.error,
             errorMessage: '启动 sing-box 失败，请查看日志排查。',
           );
+          FirebaseService.logCoreAction(action: 'fail', failureReason: 'process_start_failed');
+          FirebaseService.recordException(
+            Exception('Failed to start sing-box binary'),
+            reason: 'core_launch_failed',
+          );
         }
       }
       return success;
-    } catch (e) {
+    } catch (e, st) {
       totalWatch.stop();
       state = state.copyWith(
         status: CoreStatus.error,
         errorMessage: 'Error generating configuration: $e',
       );
       _processManager.log('[Core] 启动核心服务异常 (耗时: ${totalWatch.elapsedMilliseconds}ms): $e');
+      FirebaseService.logCoreAction(action: 'fail', failureReason: e.toString());
+      FirebaseService.recordException(e, stackTrace: st, reason: 'core_generate_failed');
       return false;
     }
   }
@@ -211,6 +229,7 @@ class CoreNotifier extends StateNotifier<CoreState> {
   }
 
   Future<void> stopCore() async {
+    FirebaseService.logCoreAction(action: 'stop');
     // Clear system proxy
     try {
       final cleared = await SystemProxyManager.clearProxy();

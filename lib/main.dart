@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -83,11 +84,16 @@ void main(List<String> args) async {
       }());
     }
 
-    // 1. Flutter framework error handler (prevent UI termination)
+    // 1. Flutter framework & root isolate unhandled error handler
     FlutterError.onError = (FlutterErrorDetails details) {
       FlutterError.presentError(details);
       AppLogger.error('[FlutterError] ${details.exceptionAsString()}');
-      FirebaseService.logError(details.exception, details.stack, 'flutter_framework');
+      FirebaseService.recordException(details.exception, stackTrace: details.stack, reason: 'flutter_framework');
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      AppLogger.error('[PlatformDispatcher] Unhandled isolate error: $error\n$stack');
+      FirebaseService.recordException(error, stackTrace: stack, reason: 'platform_dispatcher', fatal: true);
+      return true;
     };
 
     // 2. Parallel Fast Boot: initialize storage & window manager concurrently
@@ -144,7 +150,7 @@ void main(List<String> args) async {
     );
   }, (error, stackTrace) {
     AppLogger.error('[Unhandled Exception Shield] $error\n$stackTrace');
-    FirebaseService.logError(error, stackTrace, 'unhandled_zone');
+    FirebaseService.recordException(error, stackTrace: stackTrace, reason: 'unhandled_zone', fatal: true);
   });
 }
 
@@ -217,10 +223,12 @@ class _SingboxAppState extends ConsumerState<SingboxApp> with TrayListener, Wind
           AppLogger.info(
             '[App Startup] 从双击 EXE 到首帧呈现实时物理总耗时: ${totalPhysicalMs}ms',
           );
+          FirebaseService.logAppStartup(launchTimeMs: totalPhysicalMs, nativeLoadMs: dartRenderMs);
         } else {
           AppLogger.info(
             '[App Startup] 应用首帧渲染完成，总冷启动耗时: ${dartRenderMs}ms',
           );
+          FirebaseService.logAppStartup(launchTimeMs: dartRenderMs);
         }
       }
       unawaited(_runBackgroundStartupTasks(ref.read(storageServiceProvider)));

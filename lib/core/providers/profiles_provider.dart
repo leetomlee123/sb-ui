@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../engine/profile_parser.dart';
 import '../models/profile.dart';
+import '../services/firebase_service.dart';
 import '../services/storage_service.dart';
 import '../utils/proxy_dio_helper.dart';
 import 'core_provider.dart';
@@ -197,8 +198,14 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
       if (state.profiles.isEmpty) {
         await _storage.setActiveProfileId(newProfile.id);
       }
+      FirebaseService.logProfileOperation(
+        action: 'add',
+        format: 'remote',
+        nodeCount: parseResult.count,
+      );
       return true;
-    } catch (e) {
+    } catch (e, st) {
+      FirebaseService.recordException(e, stackTrace: st, reason: 'profile_add_url_failed');
       state = state.copyWith(
         isLoading: false,
         errorMessage: 'Failed to download subscription: $e',
@@ -242,8 +249,14 @@ class ProfilesNotifier extends StateNotifier<ProfilesState> {
       if (state.profiles.isEmpty) {
         await _storage.setActiveProfileId(newProfile.id);
       }
+      FirebaseService.logProfileOperation(
+        action: 'add',
+        format: 'local',
+        nodeCount: parseResult.count,
+      );
       return true;
-    } catch (e) {
+    } catch (e, st) {
+      FirebaseService.recordException(e, stackTrace: st, reason: 'profile_add_local_failed');
       state = state.copyWith(errorMessage: 'Failed to load local file: $e');
       return false;
     }

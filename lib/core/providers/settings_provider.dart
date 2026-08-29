@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/app_settings.dart';
 import '../services/autostart_service.dart';
+import '../services/firebase_service.dart';
 import '../services/storage_service.dart';
 import 'storage_provider.dart';
 
@@ -31,10 +32,12 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   Future<void> toggleSystemProxy(bool enabled) async {
     await updateSettings(state.copyWith(systemProxyEnabled: enabled));
+    FirebaseService.logFeatureToggle(feature: 'system_proxy', enabled: enabled);
   }
 
   Future<void> toggleTunMode(bool enabled) async {
     await updateSettings(state.copyWith(tunModeEnabled: enabled));
+    FirebaseService.logFeatureToggle(feature: 'tun_mode', enabled: enabled);
   }
 
   Future<void> updateTunStack(String stack) async {
@@ -43,6 +46,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   Future<void> setRoutingMode(RoutingMode mode) async {
     await updateSettings(state.copyWith(routingMode: mode));
+    FirebaseService.logFeatureToggle(feature: 'routing_mode_${mode.name}', enabled: true);
   }
 
   Future<void> setThemeMode(String mode) async {
