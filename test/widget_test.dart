@@ -253,7 +253,8 @@ proxy-groups:
 
     // 4. Route Rules: Sniff, Hijack DNS, AdBlock, AI, Streaming
     final rules = config['route']['rules'] as List;
-    expect(rules.any((r) => r['action'] == 'sniff'), isTrue);
+    final sniffRule = rules.firstWhere((r) => r['action'] == 'sniff');
+    expect(sniffRule['override_destination'], isTrue);
     expect(rules.any((r) => r['protocol'] == 'dns' && r['action'] == 'hijack-dns'), isTrue);
     expect(rules.any((r) => r['action'] == 'reject'), isTrue); // AdBlock
     expect(rules.any((r) => r['outbound'] == 'Proxy'), isTrue); // AI
