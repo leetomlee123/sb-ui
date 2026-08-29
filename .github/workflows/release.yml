@@ -104,20 +104,31 @@ jobs:
       - name: Import Release Key & Sign Package
         env:
           DESKTOP_UPDATER_KEY_BUNDLE_PASSPHRASE: "SingularAppReleaseKey2026Pass"
+          RELEASE_TAG: ${{ github.ref_name || github.event.inputs.tag_name }}
         run: |
           # 1. Import private key seed into Linux local key store (instant & secure)
           dart run desktop_updater:release keys import --input release-key.dukey --passphrase-env DESKTOP_UPDATER_KEY_BUNDLE_PASSPHRASE
 
-          # 2. Package and sign Windows release artifact
+          # 2. Extract semantic version and build number from tag and pubspec.yaml
+          VERSION="${RELEASE_TAG#v}"
+          BUILD_NUMBER=$(grep -E '^version:' pubspec.yaml | sed -E 's/.*(\+|build\.)([0-9]+).*/\2/')
+          if [ -z "$BUILD_NUMBER" ]; then
+            BUILD_NUMBER="1"
+          fi
+          echo "Packaging Singular version=$VERSION build_number=$BUILD_NUMBER"
+
+          # 3. Package and sign Windows release artifact
           dart run desktop_updater:release publish \
             --platform windows \
             --project-type manual \
             --artifact-root windows-bundle \
             --executable-relative-path singular.exe \
             --app-name singular \
-            --package-id singular
+            --package-id singular \
+            --version "$VERSION" \
+            --build-number "$BUILD_NUMBER"
 
-          # 3. Generate SHA-256 Checksums
+          # 4. Generate SHA-256 Checksums
           cd dist/desktop_updater/releases
           find . -name "*.zip" -exec sha256sum {} + > ../../../SHA256SUMS.txt
           cd ../../..
