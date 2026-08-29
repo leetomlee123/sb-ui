@@ -54,6 +54,7 @@ class SingboxProcessManager {
   Stream<LogEntry> get outputStream => _outputController.stream;
   DateTime? get startedAt => _startedAt;
   int? get elevatedPid => _elevatedPid;
+  bool get isIntentionalStop => _intentionalStop;
 
   /// True when we spawned the core ourselves and mirror its stdout.
   /// When false (elevated TUN process), logs must come from the Clash API WS.

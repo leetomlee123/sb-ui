@@ -60,10 +60,12 @@ class CoreNotifier extends StateNotifier<CoreState> {
         _stopUptimeTimer();
         // Supervisor: If core was running and unexpectedly crashed/stopped, clean up system proxy and record crash
         if (prevStatus == CoreStatus.running && status != CoreStatus.running) {
-          FirebaseService.recordException(
-            Exception('sing-box process terminated unexpectedly'),
-            reason: 'core_unexpected_exit',
-          );
+          if (!_processManager.isIntentionalStop) {
+            FirebaseService.recordException(
+              Exception('sing-box process terminated unexpectedly'),
+              reason: 'core_unexpected_exit',
+            );
+          }
           final settings = _ref.read(settingsProvider);
           if (settings.systemProxyEnabled) {
             try {
