@@ -77,6 +77,9 @@ class _ManualNodeFormDialogState extends ConsumerState<ManualNodeFormDialog> {
   String _udpRelayMode = 'native'; // 'native', 'quic'
   bool _zeroRtt = false;
 
+  // Interface / Wi-Fi Binding
+  final _bindInterfaceCtrl = TextEditingController();
+
   @override
   void dispose() {
     _tagCtrl.dispose();
@@ -97,6 +100,7 @@ class _ManualNodeFormDialogState extends ConsumerState<ManualNodeFormDialog> {
     _obfsPasswordCtrl.dispose();
     _upMbpsCtrl.dispose();
     _downMbpsCtrl.dispose();
+    _bindInterfaceCtrl.dispose();
     super.dispose();
   }
 
@@ -146,10 +150,11 @@ class _ManualNodeFormDialogState extends ConsumerState<ManualNodeFormDialog> {
     final tag = _tagCtrl.text.trim().isEmpty ? 'Custom Node' : _tagCtrl.text.trim();
     final server = _serverCtrl.text.trim();
     final port = int.tryParse(_portCtrl.text.trim()) ?? 443;
+    final Map<String, dynamic> map;
 
     switch (_protocol) {
       case ProtocolOption.shadowsocks:
-        final map = <String, dynamic>{
+        map = <String, dynamic>{
           'type': 'shadowsocks',
           'tag': tag,
           'server': server,
@@ -163,10 +168,10 @@ class _ManualNodeFormDialogState extends ConsumerState<ManualNodeFormDialog> {
         if (_pluginOptsCtrl.text.trim().isNotEmpty) {
           map['plugin_opts'] = _pluginOptsCtrl.text.trim();
         }
-        return map;
+        break;
 
       case ProtocolOption.vmess:
-        final map = <String, dynamic>{
+        map = <String, dynamic>{
           'type': 'vmess',
           'tag': tag,
           'server': server,
@@ -195,10 +200,10 @@ class _ManualNodeFormDialogState extends ConsumerState<ManualNodeFormDialog> {
           if (_allowInsecure) tls['insecure'] = true;
           map['tls'] = tls;
         }
-        return map;
+        break;
 
       case ProtocolOption.vless:
-        final map = <String, dynamic>{
+        map = <String, dynamic>{
           'type': 'vless',
           'tag': tag,
           'server': server,
@@ -249,10 +254,10 @@ class _ManualNodeFormDialogState extends ConsumerState<ManualNodeFormDialog> {
           };
           map['tls'] = tls;
         }
-        return map;
+        break;
 
       case ProtocolOption.trojan:
-        final map = <String, dynamic>{
+        map = <String, dynamic>{
           'type': 'trojan',
           'tag': tag,
           'server': server,
@@ -279,10 +284,10 @@ class _ManualNodeFormDialogState extends ConsumerState<ManualNodeFormDialog> {
           }
           map['transport'] = transport;
         }
-        return map;
+        break;
 
       case ProtocolOption.hysteria2:
-        final map = <String, dynamic>{
+        map = <String, dynamic>{
           'type': 'hysteria2',
           'tag': tag,
           'server': server,
@@ -304,10 +309,10 @@ class _ManualNodeFormDialogState extends ConsumerState<ManualNodeFormDialog> {
         final down = int.tryParse(_downMbpsCtrl.text.trim());
         if (up != null && up > 0) map['up_mbps'] = up;
         if (down != null && down > 0) map['down_mbps'] = down;
-        return map;
+        break;
 
       case ProtocolOption.tuic:
-        final map = <String, dynamic>{
+        map = <String, dynamic>{
           'type': 'tuic',
           'tag': tag,
           'server': server,
@@ -324,11 +329,11 @@ class _ManualNodeFormDialogState extends ConsumerState<ManualNodeFormDialog> {
             'alpn': ['h3'],
           },
         };
-        return map;
+        break;
 
       case ProtocolOption.socks5:
       case ProtocolOption.http:
-        final map = <String, dynamic>{
+        map = <String, dynamic>{
           'type': _protocol.typeKey,
           'tag': tag,
           'server': server,
@@ -340,8 +345,14 @@ class _ManualNodeFormDialogState extends ConsumerState<ManualNodeFormDialog> {
         if (_passwordCtrl.text.trim().isNotEmpty) {
           map['password'] = _passwordCtrl.text.trim();
         }
-        return map;
+        break;
     }
+
+    final iface = _bindInterfaceCtrl.text.trim();
+    if (iface.isNotEmpty) {
+      map['bind_interface'] = iface;
+    }
+    return map;
   }
 
   Future<void> _submit() async {
@@ -491,7 +502,24 @@ class _ManualNodeFormDialogState extends ConsumerState<ManualNodeFormDialog> {
               // 4. Transport & TLS (for VMess, VLESS, Trojan)
               if ([ProtocolOption.vmess, ProtocolOption.vless, ProtocolOption.trojan].contains(_protocol)) ...[
                 _buildTransportAndTlsSection(context, tr),
+                const SizedBox(height: 18),
               ],
+
+              // 5. Interface & Wi-Fi Binding
+              Text(
+                tr.isZh ? '出口网卡与 Wi-Fi 绑定 (可选)' : 'INTERFACE & WI-FI BINDING (OPTIONAL)',
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _bindInterfaceCtrl,
+                decoration: InputDecoration(
+                  labelText: tr.isZh ? '绑定物理网卡 / Wi-Fi 名称 (bind_interface)' : 'Bind Network Interface (e.g. Wi-Fi 2)',
+                  hintText: tr.isZh ? '例如：Wi-Fi、Wi-Fi 2、WLAN 或以太网 (留空默认跟随系统)' : 'e.g. Wi-Fi, Wi-Fi 2, eth0, wlan0',
+                  helperText: tr.isZh ? '指定此节点流量仅通过特定的 Wi-Fi 或物理网卡出口发送' : 'Direct this node traffic through a specific physical NIC / Wi-Fi',
+                  prefixIcon: const Icon(Icons.wifi_rounded, size: 18),
+                ),
+              ),
             ],
           ),
         ),
