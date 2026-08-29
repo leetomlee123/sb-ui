@@ -3,17 +3,22 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../firebase_options.dart';
 import '../utils/app_logger.dart';
 
-/// Unified Firebase Analytics & Crash Reporting Service for Singular.
-/// Operates seamlessly and silently in the background with cross-platform REST & native fallback.
+/// Unified Firebase Analytics & Crashlytics Service for Singular.
+/// Operates seamlessly and silently in the background with native SDK plugins & REST fallback.
 class FirebaseService {
   static bool _isInitialized = false;
   static bool get isInitialized => _isInitialized;
+
+  static FirebaseAnalytics? _analytics;
+  static FirebaseCrashlytics? _crashlytics;
 
   static final DateTime _startTime = DateTime.now();
 
@@ -24,13 +29,33 @@ class FirebaseService {
     ),
   );
 
-  /// Initializes Firebase asynchronously during app startup.
+  /// Initializes Firebase Core, Analytics, and Crashlytics asynchronously during app startup.
   static Future<void> init() async {
     try {
       final options = DefaultFirebaseOptions.currentPlatform;
       await Firebase.initializeApp(options: options);
       _isInitialized = true;
-      AppLogger.info('[Firebase] 核心服务就绪 (Project: ${options.projectId})');
+
+      // Initialize official plugins where platform support is available
+      try {
+        _analytics = FirebaseAnalytics.instance;
+      } catch (_) {}
+
+      try {
+        _crashlytics = FirebaseCrashlytics.instance;
+        // Pass all uncaught "fatal" errors from the framework to Crashlytics
+        FlutterError.onError = (details) {
+          _crashlytics?.recordFlutterFatalError(details);
+          recordException(
+            details.exception,
+            stackTrace: details.stack,
+            reason: 'flutter_fatal',
+            fatal: true,
+          );
+        };
+      } catch (_) {}
+
+      AppLogger.info('[Firebase] 核心服务与插件就绪 (Project: ${options.projectId})');
     } catch (e, st) {
       AppLogger.info('[Firebase] 运行于本地兼容模式 (${e.toString()})');
       if (kDebugMode) {
@@ -39,17 +64,30 @@ class FirebaseService {
     }
   }
 
-  /// Sends a raw custom analytics event.
+  /// Sends a raw custom analytics event via official FirebaseAnalytics SDK or fallback REST endpoint.
   static Future<void> logEvent(
     String name, [
     Map<String, dynamic>? parameters,
   ]) async {
     try {
+      AppLogger.debug('[Firebase Analytics] $name: ${parameters ?? {}}');
+
+      // 1. Try official FirebaseAnalytics plugin
+      if (_analytics != null) {
+        try {
+          // Convert parameters to map of Object types accepted by FirebaseAnalytics
+          final Map<String, Object>? converted = parameters?.map(
+            (key, value) => MapEntry(key, value is Object ? value : value.toString()),
+          );
+          await _analytics!.logEvent(name: name, parameters: converted);
+          return;
+        } catch (_) {}
+      }
+
+      // 2. Fallback to Google Analytics 4 / Firebase Measurement Protocol
       final options = DefaultFirebaseOptions.currentPlatform;
       final measurementId = options.measurementId;
       final apiKey = options.apiKey;
-
-      AppLogger.debug('[Firebase Analytics] $name: ${parameters ?? {}}');
 
       if (measurementId != null &&
           measurementId.startsWith('G-') &&
@@ -78,7 +116,7 @@ class FirebaseService {
     }
   }
 
-  /// Records an unhandled or non-fatal exception and sends a crash telemetry report.
+  /// Records an unhandled or non-fatal exception to Firebase Crashlytics & telemetry report.
   static Future<void> recordException(
     dynamic exception, {
     StackTrace? stackTrace,
@@ -91,8 +129,21 @@ class FirebaseService {
           ? stackTrace.toString().split('\n').take(8).join(' | ')
           : '';
 
-      AppLogger.error('[Firebase Crash Shield] ${fatal ? "FATAL" : "NON-FATAL"}: $errorStr (Reason: $reason)');
+      AppLogger.error('[Firebase Crashlytics] ${fatal ? "FATAL" : "NON-FATAL"}: $errorStr (Reason: $reason)');
 
+      // 1. Try official FirebaseCrashlytics plugin
+      if (_crashlytics != null) {
+        try {
+          await _crashlytics!.recordError(
+            exception,
+            stackTrace,
+            reason: reason,
+            fatal: fatal,
+          );
+        } catch (_) {}
+      }
+
+      // 2. Send structured crash/exception event
       await logEvent(fatal ? 'app_crash' : 'app_exception', {
         'error_type': exception.runtimeType.toString(),
         'error_message': errorStr.length > 200 ? errorStr.substring(0, 200) : errorStr,
