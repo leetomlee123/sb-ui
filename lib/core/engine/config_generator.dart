@@ -313,14 +313,8 @@ class ConfigGenerator {
 
     // 9. Route rules based on routingMode (sing-box 1.11+ route actions)
     final List<Map<String, dynamic>> routeRules = [
-      if (settings.sniffingEnabled)
-        {
-          'action': 'sniff',
-          if (settings.sniffingOverrideDestination)
-            'override_destination': true,
-        },
-      if (settings.dnsHijack)
-        {'protocol': 'dns', 'action': 'hijack-dns'},
+      if (settings.sniffingEnabled) {'action': 'sniff'},
+      if (settings.dnsHijack) {'protocol': 'dns', 'action': 'hijack-dns'},
     ];
 
     // Inject custom profile rules (e.g. Clash PROCESS-NAME, DOMAIN-SUFFIX, IP-CIDR) with highest priority
