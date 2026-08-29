@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme.dart';
+import '../../../core/engine/default_config_template.dart';
 import '../../../core/engine/profile_parser.dart';
 import '../../../core/i18n/translations.dart';
 import '../../../core/models/profile.dart';
@@ -117,11 +118,19 @@ class JsonCodeSyntaxController extends TextEditingController {
 }
 
 class ConfigEditorDialog extends ConsumerStatefulWidget {
-  final Profile profile;
+  final Profile? profile;
+  final String? initialContent;
+  final String? title;
+  final String? filePath;
+  final Future<bool> Function(String content)? onSave;
 
   const ConfigEditorDialog({
     super.key,
-    required this.profile,
+    this.profile,
+    this.initialContent,
+    this.title,
+    this.filePath,
+    this.onSave,
   });
 
   @override
@@ -143,6 +152,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   late bool _syncToFile;
   bool _isSyncingScroll = false;
   bool _hasUnsavedChanges = false;
+  late String _initialContent;
 
   int _cursorLine = 1;
   int _cursorCol = 1;
@@ -164,12 +174,17 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   static const double _lineHeightFactor = 1.5;
   static const double _lineHeight = _fontSize * _lineHeightFactor; // ~19.5px
 
+  String? get _effectiveFilePath => widget.filePath ?? widget.profile?.filePath;
+  String get _displayTitle => widget.title ?? widget.profile?.name ?? 'config.json';
+
   @override
   void initState() {
     super.initState();
-    _textCtrl = JsonCodeSyntaxController(text: widget.profile.rawConfig);
+    _initialContent = widget.profile?.rawConfig ?? widget.initialContent ?? '';
+    _textCtrl = JsonCodeSyntaxController(text: _initialContent);
     _undoCtrl = UndoHistoryController();
-    _syncToFile = widget.profile.type == ProfileType.local && widget.profile.filePath != null;
+    _syncToFile = (widget.profile?.type == ProfileType.local && widget.profile?.filePath != null) ||
+        widget.filePath != null;
 
     _textCtrl.addListener(_onTextChanged);
     _scrollCtrl.addListener(_syncScrollGutter);
@@ -206,7 +221,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   void _onTextChanged() {
     _updateCursorAndStats();
     _validateSyntax(_textCtrl.text);
-    if (!_hasUnsavedChanges && _textCtrl.text != widget.profile.rawConfig) {
+    if (!_hasUnsavedChanges && _textCtrl.text != _initialContent) {
       setState(() {
         _hasUnsavedChanges = true;
       });
@@ -216,10 +231,18 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
     }
   }
 
+  int _longestLineWidth = 1;
+
   void _updateCursorAndStats() {
     final text = _textCtrl.text;
     final lines = text.split('\n');
     _lineCount = max(1, lines.length);
+
+    int longest = 1;
+    for (final line in lines) {
+      if (line.length > longest) longest = line.length;
+    }
+    _longestLineWidth = longest;
 
     final sel = _textCtrl.selection;
     if (sel.isValid) {
@@ -229,87 +252,83 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
       _cursorLine = linesBefore.length;
       _cursorCol = linesBefore.last.length + 1;
     }
-    if (mounted) setState(() {});
+    setState(() {});
   }
 
-  void _validateSyntax(String text) {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) {
-      _syntaxError = null;
-      _syntaxErrorOffset = null;
-      _syntaxErrorLine = null;
-      _syntaxErrorCol = null;
-      _detectedFormat = 'Empty';
-      _nodeCount = 0;
+  void _validateSyntax(String content) {
+    if (content.trim().isEmpty) {
+      setState(() {
+        _syntaxError = null;
+        _syntaxErrorOffset = null;
+        _syntaxErrorLine = null;
+        _syntaxErrorCol = null;
+        _detectedFormat = 'Empty';
+        _nodeCount = 0;
+      });
       return;
     }
 
+    final parseRes = ProfileParser.parse(content);
+    if (parseRes.format == 'sing-box') {
+      _detectedFormat = 'sing-box JSON';
+    } else if (parseRes.format == 'clash') {
+      _detectedFormat = 'Clash YAML';
+    } else if (parseRes.format == 'uri-list') {
+      _detectedFormat = 'URI List';
+    } else {
+      _detectedFormat = parseRes.format.toUpperCase();
+    }
+    _nodeCount = parseRes.count;
+
+    // Check JSON syntax if JSON format
+    final trimmed = content.trim();
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
       try {
-        jsonDecode(trimmed);
-        final parseResult = ProfileParser.parse(trimmed);
-        _syntaxError = null;
-        _syntaxErrorOffset = null;
-        _syntaxErrorLine = null;
-        _syntaxErrorCol = null;
-        _detectedFormat = 'sing-box JSON';
-        _nodeCount = parseResult.count;
+        jsonDecode(content);
+        setState(() {
+          _syntaxError = null;
+          _syntaxErrorOffset = null;
+          _syntaxErrorLine = null;
+          _syntaxErrorCol = null;
+        });
       } on FormatException catch (e) {
-        _syntaxError = e.message;
-        _syntaxErrorOffset = e.offset;
-        _detectedFormat = 'JSON (Invalid)';
-        if (e.offset != null) {
-          final before = text.substring(0, e.offset!.clamp(0, text.length));
-          final lines = before.split('\n');
-          _syntaxErrorLine = lines.length;
-          _syntaxErrorCol = lines.last.length + 1;
-        }
-      } catch (e) {
-        _syntaxError = e.toString();
-        _syntaxErrorOffset = null;
-        _detectedFormat = 'JSON (Invalid)';
-      }
-    } else if (trimmed.contains('proxies:') ||
-        trimmed.contains('proxy-groups:') ||
-        trimmed.contains('rules:')) {
-      try {
-        final parseResult = ProfileParser.parse(trimmed);
-        _syntaxError = null;
-        _syntaxErrorOffset = null;
-        _syntaxErrorLine = null;
-        _syntaxErrorCol = null;
-        _detectedFormat = 'Clash YAML';
-        _nodeCount = parseResult.count;
-      } catch (e) {
-        _syntaxError = 'YAML Error: $e';
-        _detectedFormat = 'YAML (Invalid)';
+        final offset = e.offset ?? 0;
+        final textBefore = content.substring(0, min(offset, content.length));
+        final lines = textBefore.split('\n');
+        final line = lines.length;
+        final col = lines.last.length + 1;
+
+        setState(() {
+          _syntaxError = e.message;
+          _syntaxErrorOffset = offset;
+          _syntaxErrorLine = line;
+          _syntaxErrorCol = col;
+        });
       }
     } else {
-      final parseResult = ProfileParser.parse(trimmed);
-      _syntaxError = null;
-      _syntaxErrorOffset = null;
-      _syntaxErrorLine = null;
-      _syntaxErrorCol = null;
-      _detectedFormat = 'URI List';
-      _nodeCount = parseResult.count;
+      setState(() {
+        _syntaxError = null;
+        _syntaxErrorOffset = null;
+        _syntaxErrorLine = null;
+        _syntaxErrorCol = null;
+      });
     }
   }
 
-  void _jumpToError() {
-    if (_syntaxErrorOffset != null) {
-      final offset = _syntaxErrorOffset!.clamp(0, _textCtrl.text.length);
-      _textCtrl.selection = TextSelection.collapsed(offset: offset);
-      final textBefore = _textCtrl.text.substring(0, offset);
-      final line = textBefore.split('\n').length;
-      final targetScroll = max(0.0, (line - 4) * _lineHeight);
-      if (_scrollCtrl.hasClients) {
-        _scrollCtrl.animateTo(
-          targetScroll,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-      _editorFocusNode.requestFocus();
+  void _jumpToSyntaxError() {
+    if (_syntaxErrorOffset == null) return;
+    final offset = _syntaxErrorOffset!.clamp(0, _textCtrl.text.length);
+    _textCtrl.selection = TextSelection.collapsed(offset: offset);
+    _editorFocusNode.requestFocus();
+
+    // Scroll to error line
+    if (_syntaxErrorLine != null && _scrollCtrl.hasClients) {
+      final targetScroll = max(0.0, (_syntaxErrorLine! - 4) * _lineHeight);
+      _scrollCtrl.animateTo(
+        targetScroll,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
     }
   }
 
@@ -317,15 +336,11 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
     try {
       final decoded = jsonDecode(_textCtrl.text);
       final formatted = const JsonEncoder.withIndent('  ').convert(decoded);
-      final prevSelection = _textCtrl.selection;
       _textCtrl.text = formatted;
-      if (prevSelection.isValid && prevSelection.end <= formatted.length) {
-        _textCtrl.selection = prevSelection;
-      }
       _validateSyntax(formatted);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('已成功格式化 JSON'),
+          content: Text('已美化并格式化 JSON 代码'),
           duration: Duration(seconds: 1),
           backgroundColor: Color(0xFF10B981),
         ),
@@ -361,6 +376,19 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
         ),
       );
     }
+  }
+
+  void _loadStandardTemplate() {
+    final template = DefaultConfigTemplate.getStandardConfigJson();
+    _textCtrl.text = template;
+    _validateSyntax(template);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('已载入标准 sing-box config.json 模板'),
+        backgroundColor: Color(0xFF10B981),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
   void _toggleSearch() {
@@ -445,9 +473,10 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   }
 
   Future<void> _reloadFromDisk() async {
-    if (widget.profile.filePath == null) return;
+    final path = _effectiveFilePath;
+    if (path == null) return;
     try {
-      final file = File(widget.profile.filePath!);
+      final file = File(path);
       if (await file.exists()) {
         final content = await file.readAsString();
         _textCtrl.text = content;
@@ -465,7 +494,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('本地文件不存在: ${widget.profile.filePath}'),
+              content: Text('本地文件不存在: $path'),
               backgroundColor: const Color(0xFFF43F5E),
             ),
           );
@@ -509,22 +538,64 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
     }
 
     final newContent = _textCtrl.text;
-    await ref.read(profilesProvider.notifier).updateProfileContent(
-          widget.profile.id,
-          newContent,
-          syncToFile: _syncToFile,
+
+    // Custom onSave callback handler
+    if (widget.onSave != null) {
+      final success = await widget.onSave!(newContent);
+      if (success && mounted) {
+        Navigator.pop(context, true);
+      }
+      return;
+    }
+
+    // Profile update handler
+    if (widget.profile != null) {
+      await ref.read(profilesProvider.notifier).updateProfileContent(
+            widget.profile!.id,
+            newContent,
+            syncToFile: _syncToFile,
+          );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_syncToFile && widget.profile!.filePath != null
+                ? '配置已保存并同步至本地文件: ${widget.profile!.filePath}'
+                : '配置已成功保存'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+      return;
+    }
+
+    // Direct local config.json creation / save
+    final path = _effectiveFilePath;
+    if (_syncToFile && path != null) {
+      try {
+        final file = File(path);
+        await file.writeAsString(newContent);
+      } catch (_) {}
+    }
+
+    final success = await ref.read(profilesProvider.notifier).addProfileFromRawText(
+          name: _displayTitle,
+          rawContent: newContent,
         );
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_syncToFile && widget.profile.filePath != null
-              ? '配置已保存并同步至本地文件: ${widget.profile.filePath}'
-              : '配置已成功保存'),
-          backgroundColor: const Color(0xFF10B981),
-        ),
-      );
-      Navigator.pop(context);
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(path != null
+                ? '配置已成功保存并同步至文件: $path'
+                : '配置已成功保存为本地配置文件'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+        Navigator.pop(context, true);
+      }
     }
   }
 
@@ -535,8 +606,6 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
     final dialogWidth = _isMaximized ? screenSize.width : min(1080.0, screenSize.width * 0.92);
     final dialogHeight = _isMaximized ? screenSize.height : min(760.0, screenSize.height * 0.88);
 
-    // Explicitly scope the dialog to AppTheme.darkTheme so that even if the app
-    // is set to light theme, the code editor always renders a dedicated dark IDE canvas.
     return Theme(
       data: AppTheme.darkTheme.copyWith(
         dialogTheme: DialogThemeData(
@@ -602,6 +671,8 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   }
 
   Widget _buildHeader(Translations tr) {
+    final hasFilePath = _effectiveFilePath != null;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       decoration: const BoxDecoration(
@@ -613,100 +684,99 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
           const Icon(Icons.code_rounded, color: Color(0xFF818CF8), size: 20),
           const SizedBox(width: 10),
           Expanded(
-            child: Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    widget.profile.name,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  Text(
+                    _displayTitle,
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFFF8FAFC),
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const SizedBox(width: 10),
-                // Format badge
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.5)),
-                  ),
-                  child: Text(
-                    _detectedFormat,
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Nodes count badge
-                if (_nodeCount > 0)
+                  const SizedBox(width: 10),
+                  // Format badge
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                      color: const Color(0xFF6366F1).withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                      border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.5)),
                     ),
                     child: Text(
-                      '$_nodeCount ${tr.nodesCount}',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF34D399)),
+                      _detectedFormat,
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
                     ),
                   ),
-                const SizedBox(width: 8),
-                // Syntax status badge
-                if (_syntaxError == null)
+                  const SizedBox(width: 8),
+                  // Nodes count badge
+                  if (_nodeCount > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                      ),
+                      child: Text(
+                        '$_nodeCount ${tr.nodesCount}',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF34D399)),
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  // Syntax status badge
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                      color: _syntaxError == null
+                          ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                          : const Color(0xFFF43F5E).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.check_circle_outline_rounded, size: 12, color: Color(0xFF10B981)),
-                        const SizedBox(width: 4),
-                        Text(
-                          tr.syntaxValid,
-                          style: const TextStyle(fontSize: 11, color: Color(0xFF10B981)),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  InkWell(
-                    onTap: _jumpToError,
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF43F5E).withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFFF43F5E).withValues(alpha: 0.6)),
+                      border: Border.all(
+                        color: _syntaxError == null
+                            ? const Color(0xFF10B981).withValues(alpha: 0.4)
+                            : const Color(0xFFF43F5E).withValues(alpha: 0.4),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.error_outline_rounded, size: 12, color: Color(0xFFF43F5E)),
-                          const SizedBox(width: 4),
-                          Text(
-                            _syntaxErrorLine != null
-                                ? '${tr.syntaxError}: 第 $_syntaxErrorLine 行'
-                                : tr.syntaxError,
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFF43F5E)),
-                          ),
-                        ],
+                    ),
+                    child: Text(
+                      _syntaxError == null ? tr.syntaxValid : tr.syntaxError,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: _syntaxError == null ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
                       ),
                     ),
                   ),
-              ],
+                  if (_hasUnsavedChanges) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+                      ),
+                      child: const Text(
+                        '未保存',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFFBBF24)),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
 
           // Action tools
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+            tooltip: '载入标准模板',
+            color: const Color(0xFF94A3B8),
+            hoverColor: const Color(0xFF334155),
+            onPressed: _loadStandardTemplate,
+          ),
           IconButton(
             icon: const Icon(Icons.format_indent_increase_rounded, size: 18),
             tooltip: '${tr.formatJson} (Ctrl+Shift+F)',
@@ -733,7 +803,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
             hoverColor: const Color(0xFF334155),
             onPressed: () => setState(() => _wordWrap = !_wordWrap),
           ),
-          if (widget.profile.type == ProfileType.local && widget.profile.filePath != null)
+          if (hasFilePath)
             IconButton(
               icon: const Icon(Icons.file_open_outlined, size: 18),
               tooltip: tr.reloadFromFile,
@@ -765,63 +835,63 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: const BoxDecoration(
-        color: Color(0xFF131B2E),
+        color: Color(0xFF0F172A),
         border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
       ),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, size: 18, color: Color(0xFF818CF8)),
-          const SizedBox(width: 8),
+          const Icon(Icons.search_rounded, color: Color(0xFF818CF8), size: 18),
+          const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: _searchCtrl,
               focusNode: _searchFocusNode,
-              style: const TextStyle(fontSize: 13, color: Color(0xFFF1F5F9)),
+              style: const TextStyle(fontSize: 13, color: Color(0xFFF8FAFC)),
               decoration: InputDecoration(
-                hintText: tr.isZh ? '输入关键词在配置中查找...' : 'Search in config...',
+                hintText: '${tr.findText}...',
                 hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 filled: true,
                 fillColor: const Color(0xFF080C16),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),
                   borderSide: const BorderSide(color: Color(0xFF334155)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: const BorderSide(color: Color(0xFF334155)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: const BorderSide(color: Color(0xFF818CF8)),
                 ),
               ),
               onSubmitted: (_) => _nextMatch(),
             ),
           ),
-          const SizedBox(width: 12),
-          Text(
-            _matches.isNotEmpty
-                ? '${_currentMatchIndex + 1} / ${_matches.length}'
-                : (_searchCtrl.text.isNotEmpty ? '0 / 0' : ''),
-            style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8), fontFamily: 'monospace'),
-          ),
-          const SizedBox(width: 8),
+          if (_matches.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                '${_currentMatchIndex + 1} / ${_matches.length}',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8), fontFamily: 'monospace'),
+              ),
+            )
+          else if (_searchCtrl.text.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                tr.noMatchesFound,
+                style: const TextStyle(fontSize: 12, color: Color(0xFFF43F5E)),
+              ),
+            ),
           IconButton(
-            icon: const Icon(Icons.keyboard_arrow_up_rounded, size: 20),
-            tooltip: tr.isZh ? '上一个' : 'Previous',
+            icon: const Icon(Icons.arrow_upward_rounded, size: 16),
+            tooltip: tr.findPrevious,
             color: const Color(0xFF94A3B8),
-            onPressed: _matches.isNotEmpty ? _prevMatch : null,
+            onPressed: _prevMatch,
           ),
           IconButton(
-            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
-            tooltip: tr.isZh ? '下一个' : 'Next',
+            icon: const Icon(Icons.arrow_downward_rounded, size: 16),
+            tooltip: tr.findNext,
             color: const Color(0xFF94A3B8),
-            onPressed: _matches.isNotEmpty ? _nextMatch : null,
+            onPressed: _nextMatch,
           ),
           IconButton(
-            icon: const Icon(Icons.close_rounded, size: 18),
+            icon: const Icon(Icons.close_rounded, size: 16),
             tooltip: tr.close,
             color: const Color(0xFF94A3B8),
             onPressed: _toggleSearch,
@@ -834,32 +904,27 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   Widget _buildSyntaxErrorBanner(Translations tr) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: const BoxDecoration(
-        color: Color(0xFF450A0A),
-        border: Border(bottom: BorderSide(color: Color(0xFF991B1B))),
-      ),
+      color: const Color(0xFFF43F5E).withValues(alpha: 0.15),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, size: 18, color: Color(0xFFF87171)),
-          const SizedBox(width: 10),
+          const Icon(Icons.error_outline_rounded, size: 16, color: Color(0xFFF43F5E)),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
-              _syntaxErrorLine != null
-                  ? '第 $_syntaxErrorLine 行，第 $_syntaxErrorCol 列: $_syntaxError'
-                  : '语法解析异常: $_syntaxError',
-              style: const TextStyle(fontSize: 12, color: Color(0xFFFECACA), fontFamily: 'monospace'),
-              maxLines: 1,
+              '${tr.jsonSyntaxError}: $_syntaxError${_syntaxErrorLine != null ? ' (行: $_syntaxErrorLine, 列: $_syntaxErrorCol)' : ''}',
+              style: const TextStyle(fontSize: 12, color: Color(0xFFFDA4AF)),
               overflow: TextOverflow.ellipsis,
             ),
           ),
           if (_syntaxErrorOffset != null)
             TextButton.icon(
-              onPressed: _jumpToError,
-              icon: const Icon(Icons.my_location_rounded, size: 14, color: Color(0xFFF87171)),
-              label: Text(
-                tr.jumpToError,
-                style: const TextStyle(fontSize: 12, color: Color(0xFFF87171), fontWeight: FontWeight.bold),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFF43F5E),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               ),
+              onPressed: _jumpToSyntaxError,
+              icon: const Icon(Icons.near_me_rounded, size: 14),
+              label: Text(tr.jumpToError, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
             ),
         ],
       ),
@@ -867,112 +932,125 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   }
 
   Widget _buildEditorBody() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Gutter Line Numbers
-        Container(
-          width: 54,
-          decoration: const BoxDecoration(
-            color: Color(0xFF060911),
-            border: Border(right: BorderSide(color: Color(0xFF1E293B))),
-          ),
-          child: ListView.builder(
-            controller: _gutterCtrl,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            itemCount: _lineCount,
-            physics: const NeverScrollableScrollPhysics(),
-            itemBuilder: (context, index) {
-              final lineNum = index + 1;
-              final isCurrentLine = lineNum == _cursorLine;
-              final isErrorLine = lineNum == _syntaxErrorLine;
+    return Container(
+      color: const Color(0xFF080C16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Gutter: Line numbers
+          Container(
+            width: 56,
+            color: const Color(0xFF0B101E),
+            child: ListView.builder(
+              controller: _gutterCtrl,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.only(top: 14, bottom: 20),
+              itemCount: _lineCount,
+              itemBuilder: (ctx, i) {
+                final lineNum = i + 1;
+                final isCurrent = lineNum == _cursorLine;
+                final isError = lineNum == _syntaxErrorLine;
 
-              return Container(
-                height: _lineHeight,
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 10),
-                color: isErrorLine
-                    ? const Color(0xFFDC2626).withValues(alpha: 0.3)
-                    : (isCurrentLine ? const Color(0xFF334155).withValues(alpha: 0.4) : null),
-                child: Text(
-                  '$lineNum',
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: _fontSize,
-                    height: _lineHeightFactor,
-                    color: isErrorLine
-                        ? const Color(0xFFF87171)
-                        : (isCurrentLine ? const Color(0xFFF1F5F9) : const Color(0xFF475569)),
-                    fontWeight: (isCurrentLine || isErrorLine) ? FontWeight.bold : FontWeight.normal,
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
+                Color numColor = const Color(0xFF475569);
+                if (isError) {
+                  numColor = const Color(0xFFF43F5E);
+                } else if (isCurrent) {
+                  numColor = const Color(0xFF818CF8);
+                }
 
-        // Text Field Area - Always solid dark obsidian background
-        Expanded(
-          child: Container(
-            color: const Color(0xFF080C16),
-            child: _wordWrap
-                ? _buildTextField(null)
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 800),
-                      child: _buildTextField(double.infinity),
+                return SizedBox(
+                  height: _lineHeight,
+                  child: Container(
+                    padding: const EdgeInsets.only(right: 12),
+                    alignment: Alignment.centerRight,
+                    color: isCurrent
+                        ? const Color(0xFF1E293B).withValues(alpha: 0.3)
+                        : (isError ? const Color(0xFFF43F5E).withValues(alpha: 0.15) : null),
+                    child: Text(
+                      '$lineNum',
+                      style: TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 11.5,
+                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                        color: numColor,
+                      ),
                     ),
                   ),
+                );
+              },
+            ),
           ),
-        ),
-      ],
-    );
-  }
 
-  Widget _buildTextField(double? width) {
-    final field = TextField(
-      controller: _textCtrl,
-      focusNode: _editorFocusNode,
-      undoController: _undoCtrl,
-      scrollController: _scrollCtrl,
-      maxLines: null,
-      expands: true,
-      keyboardType: TextInputType.multiline,
-      style: const TextStyle(
-        fontFamily: 'monospace',
-        fontSize: _fontSize,
-        height: _lineHeightFactor,
-        color: Color(0xFFF8FAFC),
-        letterSpacing: 0.3,
+          // Code Text Area
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _scrollCtrl,
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 20),
+              scrollDirection: Axis.vertical,
+              child: _wordWrap
+                  ? TextField(
+                      controller: _textCtrl,
+                      undoController: _undoCtrl,
+                      focusNode: _editorFocusNode,
+                      maxLines: null,
+                      keyboardType: TextInputType.multiline,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: _fontSize,
+                        height: _lineHeightFactor,
+                        color: Color(0xFFF8FAFC),
+                      ),
+                      cursorColor: const Color(0xFF818CF8),
+                      cursorWidth: 2.0,
+                      decoration: const InputDecoration(
+                        filled: true,
+                        fillColor: Color(0xFF080C16),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    )
+                  : SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minWidth: 800,
+                          maxWidth: max(800.0, _longestLineWidth * 8.5 + 100),
+                        ),
+                        child: TextField(
+                          controller: _textCtrl,
+                          undoController: _undoCtrl,
+                          focusNode: _editorFocusNode,
+                          maxLines: null,
+                          keyboardType: TextInputType.multiline,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: _fontSize,
+                            height: _lineHeightFactor,
+                            color: Color(0xFFF8FAFC),
+                          ),
+                          cursorColor: const Color(0xFF818CF8),
+                          cursorWidth: 2.0,
+                          decoration: const InputDecoration(
+                            filled: true,
+                            fillColor: Color(0xFF080C16),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+        ],
       ),
-      cursorColor: const Color(0xFF818CF8),
-      cursorWidth: 2,
-      decoration: const InputDecoration(
-        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        focusedBorder: InputBorder.none,
-        filled: true,
-        fillColor: Color(0xFF080C16), // Explicit dark background prevents light theme override
-        isDense: true,
-      ),
     );
-
-    return width != null ? SizedBox(width: max(800.0, _calculateLongestLine()), child: field) : field;
-  }
-
-  double _calculateLongestLine() {
-    final lines = _textCtrl.text.split('\n');
-    int maxLen = 0;
-    for (final l in lines) {
-      if (l.length > maxLen) maxLen = l.length;
-    }
-    return max(900.0, maxLen * 8.5);
   }
 
   Widget _buildFooter(Translations tr) {
     final fileSizeKb = (_textCtrl.text.length / 1024).toStringAsFixed(1);
+    final path = _effectiveFilePath;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
@@ -992,7 +1070,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
                   _buildStatusChip('行: $_cursorLine, 列: $_cursorCol'),
                   const SizedBox(width: 14),
                   _buildStatusChip('$_lineCount 行 | ${_textCtrl.text.length} 字符 | $fileSizeKb KB'),
-                  if (widget.profile.type == ProfileType.local && widget.profile.filePath != null) ...[
+                  if (path != null) ...[
                     const SizedBox(width: 16),
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1006,7 +1084,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${tr.syncToFile} (${widget.profile.filePath})',
+                          '${tr.syncToFile} ($path)',
                           style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                         ),
                       ],

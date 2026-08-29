@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/engine/config_generator.dart';
@@ -20,6 +19,7 @@ import '../../core/services/storage_service.dart';
 import '../../core/utils/byte_formatter.dart';
 import '../../core/utils/version_utils.dart';
 import '../../shared/widgets/double_bezel_card.dart';
+import '../profiles/widgets/config_editor_dialog.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -215,49 +215,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with SingleTickerPr
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.code_rounded, color: Color(0xFF818CF8)),
-            const SizedBox(width: 8),
-            Text(ref.read(translationsProvider).previewConfigTitle, style: const TextStyle(fontSize: 16)),
-            const Spacer(),
-            IconButton(
-              tooltip: ref.read(translationsProvider).copyAll,
-              icon: const Icon(Icons.copy_rounded, size: 18),
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: jsonStr));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(ref.read(translationsProvider).logsCopied), duration: const Duration(seconds: 2)),
-                );
-              },
-            ),
-          ],
-        ),
-        content: SizedBox(
-          width: 750,
-          height: 500,
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
-            ),
-            child: SingleChildScrollView(
-              child: SelectableText(
-                jsonStr,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12, height: 1.4),
+      builder: (ctx) => ConfigEditorDialog(
+        title: '实时配置 (Live config.json)',
+        initialContent: jsonStr,
+        onSave: (newContent) async {
+          final now = DateTime.now();
+          final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+          final success = await ref.read(profilesProvider.notifier).addProfileFromRawText(
+                name: '自定义配置 ($timeStr)',
+                rawContent: newContent,
+              );
+          if (success && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('已成功将编辑的配置保存并激活为新的本地配置！'),
+                backgroundColor: Color(0xFF10B981),
               ),
-            ),
-          ),
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(ref.read(translationsProvider).cancel),
-          ),
-        ],
+            );
+          }
+          return success;
+        },
       ),
     );
   }

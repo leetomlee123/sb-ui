@@ -127,9 +127,13 @@ class Translations {
   String get formatJson => isZh ? '格式化' : 'Format';
   String get minifyJson => isZh ? '压缩' : 'Minify';
   String get findText => isZh ? '查找' : 'Find';
+  String get findPrevious => isZh ? '上一个 (Shift+Enter)' : 'Previous (Shift+Enter)';
+  String get findNext => isZh ? '下一个 (Enter)' : 'Next (Enter)';
+  String get noMatchesFound => isZh ? '无匹配项' : 'No matches found';
   String get wordWrap => isZh ? '自动换行' : 'Word Wrap';
   String get syntaxValid => isZh ? '语法正确' : 'Valid';
   String get syntaxError => isZh ? '语法错误' : 'Syntax Error';
+  String get jsonSyntaxError => isZh ? 'JSON 语法错误' : 'JSON Syntax Error';
   String get jumpToError => isZh ? '定位错误' : 'Jump to Error';
   String get configSaved => isZh ? '配置已保存' : 'Configuration saved';
   String get reloadFromFile => isZh ? '重新从本地文件载入' : 'Reload from Local File';

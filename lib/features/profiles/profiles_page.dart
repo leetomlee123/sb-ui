@@ -126,6 +126,28 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
               Row(
                 children: [
                   OutlinedButton.icon(
+                    onPressed: () {
+                      final activeProfile = profilesState.activeProfile;
+                      if (activeProfile != null) {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => ConfigEditorDialog(profile: activeProfile),
+                        );
+                      } else {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => ConfigEditorDialog(
+                            title: tr.isZh ? '本地主配置 (config.json)' : 'Local config.json',
+                            initialContent: DefaultConfigTemplate.getStandardConfigJson(),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.code_rounded, size: 16),
+                    label: Text(tr.isZh ? '编辑 config.json' : 'Edit config.json'),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
                     onPressed: () => _showManualNodeDialog(context),
                     icon: const Icon(Icons.tune_rounded, size: 16),
                     label: Text(tr.tabManualForm),
@@ -851,8 +873,26 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
                   // Tab 2: Raw Text / URI
                   if (tabIndex == 2) ...[
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        TextButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            showDialog(
+                              context: context,
+                              builder: (editorCtx) => ConfigEditorDialog(
+                                title: nameCtrl.text.trim().isNotEmpty
+                                    ? nameCtrl.text.trim()
+                                    : (tr.isZh ? '新建本地配置 (config.json)' : 'New config.json'),
+                                initialContent: rawCtrl.text.isNotEmpty
+                                    ? rawCtrl.text
+                                    : DefaultConfigTemplate.getStandardConfigJson(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.open_in_new_rounded, size: 14),
+                          label: Text(tr.isZh ? '打开高级编辑器' : 'Open in Code Editor', style: const TextStyle(fontSize: 11)),
+                        ),
                         TextButton.icon(
                           onPressed: () {
                             try {
