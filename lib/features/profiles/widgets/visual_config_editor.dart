@@ -495,6 +495,28 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    if (ob['bind_interface'] != null && ob['bind_interface'].toString().isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.wifi_rounded, size: 11, color: Color(0xFF818CF8)),
+                            const SizedBox(width: 3),
+                            Text(
+                              '${ob['bind_interface']}',
+                              style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     if (ob['default'] != null) ...[
                       const SizedBox(width: 8),
                       Text('默认: ${ob['default']}', style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
@@ -578,6 +600,7 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
           ? ((data['tls'] as Map)['reality'] as Map)['short_id'] ?? ''
           : '',
     );
+    final bindInterfaceCtrl = TextEditingController(text: (data['bind_interface'] ?? '').toString());
 
     String selectedType = (data['type'] ?? 'vless').toString().toLowerCase();
     List<String> selectedGroupOutbounds = (data['outbounds'] is List)
@@ -712,6 +735,18 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                         }).toList(),
                       ),
                     ],
+                    // Bind Interface (Optional: Wi-Fi, Ethernet, etc.)
+                    if (!['block', 'dns'].contains(selectedType)) ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: bindInterfaceCtrl,
+                        decoration: const InputDecoration(
+                          labelText: '绑定网卡/Wi-Fi 接口 (bind_interface，可选)',
+                          hintText: '例如: Wi-Fi、Wi-Fi 2、WLAN 或以太网 (留空默认跟随系统)',
+                          helperText: '可将此出口或直连通道绑定至指定 Wi-Fi 网卡',
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -730,6 +765,13 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                   final updated = Map<String, dynamic>.from(data);
                   updated['type'] = selectedType;
                   updated['tag'] = newTag;
+
+                  final bindIface = bindInterfaceCtrl.text.trim();
+                  if (bindIface.isNotEmpty) {
+                    updated['bind_interface'] = bindIface;
+                  } else {
+                    updated.remove('bind_interface');
+                  }
 
                   if (!['selector', 'urltest', 'direct', 'block', 'dns'].contains(selectedType)) {
                     updated['server'] = serverCtrl.text.trim();
