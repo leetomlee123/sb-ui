@@ -15,8 +15,10 @@ import '../../core/providers/core_updater_provider.dart';
 import '../../core/providers/geo_updater_provider.dart';
 import '../../core/providers/profiles_provider.dart';
 import '../../core/providers/settings_provider.dart';
+import '../../core/services/firebase_service.dart';
 import '../../core/services/network_doctor_service.dart';
 import '../../core/services/storage_service.dart';
+import '../../firebase_options.dart';
 import '../../core/utils/byte_formatter.dart';
 import '../../core/utils/version_utils.dart';
 import '../../shared/widgets/double_bezel_card.dart';
@@ -1225,6 +1227,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with SingleTickerPr
           ),
           const SizedBox(height: 24),
           _buildDoctorSection(context, settings, coreIsRunning, tr),
+          const SizedBox(height: 24),
+          _buildFirebaseSection(context, tr),
         ],
       ),
     );
@@ -1572,6 +1576,105 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with SingleTickerPr
                 onPressed: () => _showDoctorDialog(context, settings, isRunning, tr),
                 icon: const Icon(Icons.play_arrow_rounded, size: 16),
                 label: Text(tr.isZh ? '立即体检' : 'Run Diagnostics', style: const TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFirebaseSection(BuildContext context, Translations tr) {
+    final options = DefaultFirebaseOptions.currentPlatform;
+    final isConfigured = !options.apiKey.contains('Placeholder');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(tr.isZh ? '云端服务与遥测 (FIREBASE)' : 'CLOUD SERVICES & TELEMETRY'),
+        DoubleBezelCard(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.local_fire_department_rounded,
+                  color: Color(0xFFF59E0B),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          tr.isZh ? 'Firebase 遥测与异常防护' : 'Firebase Telemetry & Crash Shields',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (isConfigured ? const Color(0xFF10B981) : const Color(0xFF6366F1))
+                                .withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            isConfigured
+                                ? (tr.isZh ? '已连接云端' : 'Connected')
+                                : (tr.isZh ? '本地防护模式' : 'Local Shield'),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: isConfigured ? const Color(0xFF10B981) : const Color(0xFF818CF8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      tr.isZh
+                          ? '项目 ID: ${options.projectId} • 自动捕获未捕获异常并保障核心稳定'
+                          : 'Project ID: ${options.projectId} • Automatic crash shields active',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await FirebaseService.logEvent('manual_test_ping', {
+                    'source': 'settings_ui',
+                    'timestamp': DateTime.now().toIso8601String(),
+                  });
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          tr.isZh ? 'Firebase 遥测测试事件已记录' : 'Firebase test event recorded',
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.send_rounded, size: 14),
+                label: Text(
+                  tr.isZh ? '测试遥测' : 'Test Ping',
+                  style: const TextStyle(fontSize: 12),
+                ),
               ),
             ],
           ),
