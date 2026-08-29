@@ -380,6 +380,49 @@ proxy-groups:
     expect(yamlTags.contains('YAML-Dead'), isFalse);
   });
 
+  test('ProxiesNotifier stopTesting clears testing flags and removeUnavailableNodes preserves active delays', () async {
+    SharedPreferences.setMockInitialValues({});
+    final storage = await StorageService.init();
+    final container = ProviderContainer(
+      overrides: [storageServiceProvider.overrideWithValue(storage)],
+    );
+    final notifier = container.read(proxiesProvider.notifier);
+
+    // Seed state with 3 nodes (one working, one timeout, one in testing)
+    notifier.state = notifier.state.copyWith(
+      nodes: {
+        'Node-Fast': ProxyNode(name: 'Node-Fast', type: OutboundType.vless, delay: 45),
+        'Node-Dead': ProxyNode(name: 'Node-Dead', type: OutboundType.vless, delay: -1),
+        'Node-Testing': ProxyNode(name: 'Node-Testing', type: OutboundType.vless, isTesting: true),
+      },
+      groups: {
+        'Proxy': ProxyGroup(
+          name: 'Proxy',
+          type: OutboundType.selector,
+          current: 'Node-Fast',
+          all: ['Node-Fast', 'Node-Dead', 'Node-Testing'],
+        ),
+      },
+      isTestingAll: true,
+    );
+
+    expect(container.read(proxiesProvider).isTestingAll, isTrue);
+    expect(container.read(proxiesProvider).nodes['Node-Testing']!.isTesting, isTrue);
+
+    // 1. Test stopTesting()
+    notifier.stopTesting();
+    expect(container.read(proxiesProvider).isTestingAll, isFalse);
+    expect(container.read(proxiesProvider).nodes['Node-Testing']!.isTesting, isFalse);
+    expect(container.read(proxiesProvider).nodes['Node-Fast']!.delay, 45);
+
+    // 2. Test removeUnavailableNodes()
+    final deletedCount = await notifier.removeUnavailableNodes();
+    expect(deletedCount, 1);
+    expect(container.read(proxiesProvider).nodes.containsKey('Node-Dead'), isFalse);
+    expect(container.read(proxiesProvider).nodes.containsKey('Node-Fast'), isTrue);
+    expect(container.read(proxiesProvider).nodes['Node-Fast']!.delay, 45); // Preserved delay!
+  });
+
   test('Clash Dual-NIC interface binding, process rules, and DNS policy test', () {
     const yamlContent = '''
 dns:

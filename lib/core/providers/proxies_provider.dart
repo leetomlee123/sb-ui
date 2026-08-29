@@ -157,6 +157,8 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
     return groups.keys.first;
   }
 
+  final Map<String, int> _delayCache = {};
+
   Future<void> _populateFromActiveProfile() async {
     if (_populateInFlight) return;
     try {
@@ -188,6 +190,7 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
             type: OutboundType.fromString(type),
             server: ob['server']?.toString(),
             port: ob['server_port'] is int ? ob['server_port'] : int.tryParse(ob['server_port']?.toString() ?? ''),
+            delay: _delayCache[tag] ?? state.nodes[tag]?.delay,
             raw: ob,
           );
         }
@@ -256,7 +259,15 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
           if (['selector', 'urltest', 'fallback', 'loadbalance'].contains(type)) {
             groups[key] = ProxyGroup.fromClashApi(key, val);
           } else {
-            nodes[key] = ProxyNode.fromClashApi(key, val);
+            final parsed = ProxyNode.fromClashApi(key, val);
+            final preservedDelay = parsed.delay ?? _delayCache[key] ?? state.nodes[key]?.delay;
+            if (preservedDelay != null) {
+              _delayCache[key] = preservedDelay;
+            }
+            nodes[key] = parsed.copyWith(
+              delay: preservedDelay,
+              isTesting: false,
+            );
           }
         }
       });
@@ -296,8 +307,27 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
     state = state.copyWith(hideUnavailable: hide);
   }
 
+  void stopTesting() {
+    _testGeneration++;
+    final updatedNodes = Map<String, ProxyNode>.from(state.nodes);
+    bool changed = false;
+    for (final entry in updatedNodes.entries) {
+      if (entry.value.isTesting) {
+        updatedNodes[entry.key] = entry.value.copyWith(isTesting: false);
+        changed = true;
+      }
+    }
+    state = state.copyWith(
+      nodes: changed ? updatedNodes : state.nodes,
+      isTestingAll: false,
+    );
+  }
+
   Future<int> removeUnavailableNodes() async {
-    // 1. Identify all unavailable nodes (delay != null && delay <= 0)
+    // 1. Immediately abort any running test batch
+    stopTesting();
+
+    // 2. Identify all unavailable nodes (delay != null && delay <= 0)
     final deadNodeNames = state.nodes.entries
         .where((e) => e.value.delay != null && e.value.delay! <= 0)
         .map((e) => e.key)
@@ -307,7 +337,12 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
       return 0;
     }
 
-    // 2. Remove dead nodes from in-memory state
+    // 3. Remove dead nodes from delay cache
+    for (final dead in deadNodeNames) {
+      _delayCache.remove(dead);
+    }
+
+    // 4. Remove dead nodes from in-memory state
     final updatedNodes = Map<String, ProxyNode>.from(state.nodes)
       ..removeWhere((key, _) => deadNodeNames.contains(key));
 
@@ -327,9 +362,10 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
     state = state.copyWith(
       nodes: updatedNodes,
       groups: updatedGroups,
+      isTestingAll: false,
     );
 
-    // 3. Update the active profile's rawConfig on disk and in ProfilesState
+    // 5. Update the active profile's rawConfig on disk and in ProfilesState
     final activeProfile = _ref.read(profilesProvider).activeProfile;
     if (activeProfile != null && activeProfile.rawConfig.isNotEmpty) {
       final newRawConfig = ProfileParser.removeNodesFromContent(
@@ -342,7 +378,7 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
       );
     }
 
-    // 4. If core is running, restart core to apply updated node list immediately
+    // 6. If core is running, restart core to apply updated node list immediately
     final isRunning = _ref.read(coreProvider).isRunning;
     if (isRunning) {
       await _ref.read(coreProvider.notifier).restartCore();
@@ -428,11 +464,14 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
       delay = null;
     }
 
+    final finalDelay = delay ?? -1;
+    _delayCache[nodeName] = finalDelay;
+
     // 2. Atomically update with fresh state snapshot
     final latestNodes = Map<String, ProxyNode>.from(state.nodes);
     final target = latestNodes[nodeName] ?? current;
     latestNodes[nodeName] = target.copyWith(
-      delay: delay ?? -1,
+      delay: finalDelay,
       isTesting: false,
     );
     state = state.copyWith(nodes: latestNodes);
@@ -486,12 +525,15 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
 
           if (_testGeneration != generation) return;
 
+          final finalDelay = delay ?? -1;
+          _delayCache[nodeName] = finalDelay;
+
           // Fresh atomic update for completed node
           final freshNodes = Map<String, ProxyNode>.from(state.nodes);
           final current = freshNodes[nodeName];
           if (current != null) {
             freshNodes[nodeName] = current.copyWith(
-              delay: delay ?? -1,
+              delay: finalDelay,
               isTesting: false,
             );
             state = state.copyWith(nodes: freshNodes);

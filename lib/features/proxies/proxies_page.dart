@@ -151,30 +151,44 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
 
               const SizedBox(width: 12),
 
-              // Speed Test Button
-              ElevatedButton.icon(
-                onPressed: proxiesState.isTestingAll
-                    ? null
-                    : () {
-                        ref.read(proxiesProvider.notifier).testAllInSelectedGroup();
-                      },
-                icon: proxiesState.isTestingAll
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.speed_rounded, size: 15),
-                label: Text(
-                  proxiesState.isTestingAll
-                      ? (tr.isZh ? '正在测速...' : 'Testing...')
-                      : tr.pingAll,
-                  style: const TextStyle(fontSize: 12),
+              // Speed Test Button / Stop Test Button
+              if (proxiesState.isTestingAll)
+                ElevatedButton.icon(
+                  onPressed: () {
+                    ref.read(proxiesProvider.notifier).stopTesting();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(tr.testStopped),
+                        duration: const Duration(seconds: 1),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.stop_circle_rounded, size: 16, color: Colors.white),
+                  label: Text(
+                    tr.stopPing,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFEF4444),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  ),
+                )
+              else
+                ElevatedButton.icon(
+                  onPressed: () {
+                    ref.read(proxiesProvider.notifier).testAllInSelectedGroup();
+                  },
+                  icon: const Icon(Icons.speed_rounded, size: 15),
+                  label: Text(
+                    tr.pingAll,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  ),
                 ),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                ),
-              ),
 
               const SizedBox(width: 6),
 

@@ -92,6 +92,8 @@ class Translations {
   String deletedUnavailableNodesCount(int count) => isZh ? '已成功删除 $count 个不可用节点' : 'Successfully deleted $count unavailable nodes';
   String get quickSelectNode => isZh ? '快捷切换出口节点' : 'Quick Switch Outbound Node';
   String get nodeSwitchedTo => isZh ? '已切换出口节点: ' : 'Active node switched to: ';
+  String get stopPing => isZh ? '停止测速' : 'Stop Test';
+  String get testStopped => isZh ? '已停止测速' : 'Speed test stopped';
 
   // Profiles Page
   String get subAndProfiles => isZh ? '配置与订阅管理' : 'SUBSCRIPTIONS & PROFILES';
