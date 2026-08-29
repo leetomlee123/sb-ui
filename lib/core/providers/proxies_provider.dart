@@ -17,6 +17,7 @@ class ProxiesState {
   final Map<String, ProxyGroup> groups;
   final Map<String, ProxyNode> nodes;
   final bool isLoading;
+  final bool isTestingAll;
   final String? selectedGroup;
   final String searchQuery;
   final ProxySortMode sortMode;
@@ -26,6 +27,7 @@ class ProxiesState {
     this.groups = const {},
     this.nodes = const {},
     this.isLoading = false,
+    this.isTestingAll = false,
     this.selectedGroup,
     this.searchQuery = '',
     this.sortMode = ProxySortMode.defaultOrder,
@@ -92,6 +94,7 @@ class ProxiesState {
     Map<String, ProxyGroup>? groups,
     Map<String, ProxyNode>? nodes,
     bool? isLoading,
+    bool? isTestingAll,
     String? selectedGroup,
     String? searchQuery,
     ProxySortMode? sortMode,
@@ -101,6 +104,7 @@ class ProxiesState {
       groups: groups ?? this.groups,
       nodes: nodes ?? this.nodes,
       isLoading: isLoading ?? this.isLoading,
+      isTestingAll: isTestingAll ?? this.isTestingAll,
       selectedGroup: selectedGroup ?? this.selectedGroup,
       searchQuery: searchQuery ?? this.searchQuery,
       sortMode: sortMode ?? this.sortMode,
@@ -345,33 +349,122 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
     return anySuccess;
   }
 
+  int _testGeneration = 0;
+
   Future<void> testNodeDelay(String nodeName) async {
     final client = _ref.read(clashApiClientProvider);
     if (client == null) return;
 
-    if (state.nodes.containsKey(nodeName)) {
-      final current = state.nodes[nodeName]!;
-      final updatedNodes = Map<String, ProxyNode>.from(state.nodes);
-      updatedNodes[nodeName] = current.copyWith(isTesting: true);
-      state = state.copyWith(nodes: updatedNodes);
+    final current = state.nodes[nodeName];
+    if (current == null) return;
 
-      final delay = await client.testDelay(nodeName);
-      final nodeAfter = state.nodes[nodeName] ?? current;
-      // If delay is null or <= 0, mark as -1 (Timeout/Unavailable)
-      updatedNodes[nodeName] = nodeAfter.copyWith(delay: delay ?? -1, isTesting: false);
-      state = state.copyWith(nodes: updatedNodes);
+    // 1. Atomically mark node as testing
+    final updating = Map<String, ProxyNode>.from(state.nodes);
+    updating[nodeName] = current.copyWith(isTesting: true);
+    state = state.copyWith(nodes: updating);
+
+    int? delay;
+    try {
+      delay = await client.testDelay(nodeName).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => null,
+      );
+    } catch (_) {
+      delay = null;
     }
+
+    // 2. Atomically update with fresh state snapshot
+    final latestNodes = Map<String, ProxyNode>.from(state.nodes);
+    final target = latestNodes[nodeName] ?? current;
+    latestNodes[nodeName] = target.copyWith(
+      delay: delay ?? -1,
+      isTesting: false,
+    );
+    state = state.copyWith(nodes: latestNodes);
   }
 
   Future<void> testAllInSelectedGroup() async {
-    if (state.selectedGroup == null || !state.groups.containsKey(state.selectedGroup)) return;
-    final group = state.groups[state.selectedGroup]!;
-    final List<Future> tests = [];
+    final selectedGroup = state.selectedGroup;
+    if (selectedGroup == null || !state.groups.containsKey(selectedGroup)) return;
+    final client = _ref.read(clashApiClientProvider);
+    if (client == null) return;
 
-    for (final nodeName in group.all) {
-      tests.add(testNodeDelay(nodeName));
+    final group = state.groups[selectedGroup]!;
+    final List<String> targetNodeNames = group.all
+        .where((name) => state.nodes.containsKey(name))
+        .toList();
+
+    if (targetNodeNames.isEmpty) return;
+
+    final generation = ++_testGeneration;
+
+    // 1. Mark all targeted nodes as testing in ONE atomic state update
+    final initialNodes = Map<String, ProxyNode>.from(state.nodes);
+    for (final name in targetNodeNames) {
+      if (initialNodes.containsKey(name)) {
+        initialNodes[name] = initialNodes[name]!.copyWith(isTesting: true);
+      }
     }
-    await Future.wait(tests);
+    state = state.copyWith(nodes: initialNodes, isTestingAll: true);
+
+    try {
+      // 2. Concurrently test in worker pool of 12 parallel tasks
+      const concurrency = 12;
+      int currentIndex = 0;
+
+      Future<void> worker() async {
+        while (currentIndex < targetNodeNames.length) {
+          if (_testGeneration != generation) return;
+          final index = currentIndex++;
+          if (index >= targetNodeNames.length) break;
+          final nodeName = targetNodeNames[index];
+
+          int? delay;
+          try {
+            delay = await client.testDelay(nodeName).timeout(
+              const Duration(seconds: 5),
+              onTimeout: () => null,
+            );
+          } catch (_) {
+            delay = null;
+          }
+
+          if (_testGeneration != generation) return;
+
+          // Fresh atomic update for completed node
+          final freshNodes = Map<String, ProxyNode>.from(state.nodes);
+          final current = freshNodes[nodeName];
+          if (current != null) {
+            freshNodes[nodeName] = current.copyWith(
+              delay: delay ?? -1,
+              isTesting: false,
+            );
+            state = state.copyWith(nodes: freshNodes);
+          }
+        }
+      }
+
+      final workerCount = targetNodeNames.length < concurrency ? targetNodeNames.length : concurrency;
+      final workers = List.generate(workerCount, (_) => worker());
+
+      await Future.wait(workers);
+    } finally {
+      if (_testGeneration == generation) {
+        // 3. Safety cleanup: ensure no node in state is left stuck with isTesting: true
+        final cleanupNodes = Map<String, ProxyNode>.from(state.nodes);
+        bool hasStuck = false;
+        for (final entry in cleanupNodes.entries) {
+          if (entry.value.isTesting) {
+            cleanupNodes[entry.key] = entry.value.copyWith(isTesting: false);
+            hasStuck = true;
+          }
+        }
+        state = state.copyWith(
+          nodes: hasStuck ? cleanupNodes : state.nodes,
+          isTestingAll: false,
+        );
+      }
+    }
   }
 }
 

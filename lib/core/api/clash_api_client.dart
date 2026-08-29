@@ -67,7 +67,7 @@ class ClashApiClient {
 
   Future<int?> testDelay(String nodeName, {
     String testUrl = 'https://www.gstatic.com/generate_204',
-    int timeout = 4000,
+    int timeout = 3500,
   }) async {
     try {
       final encodedNode = Uri.encodeComponent(nodeName);
@@ -77,6 +77,10 @@ class ClashApiClient {
           'url': testUrl,
           'timeout': timeout,
         },
+        options: Options(
+          receiveTimeout: Duration(milliseconds: timeout + 1500),
+          sendTimeout: const Duration(seconds: 3),
+        ),
       );
       if (response.statusCode == 200 && response.data is Map) {
         return response.data['delay'] as int?;

@@ -153,11 +153,24 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
 
               // Speed Test Button
               ElevatedButton.icon(
-                onPressed: () {
-                  ref.read(proxiesProvider.notifier).testAllInSelectedGroup();
-                },
-                icon: const Icon(Icons.speed_rounded, size: 15),
-                label: Text(tr.pingAll, style: const TextStyle(fontSize: 12)),
+                onPressed: proxiesState.isTestingAll
+                    ? null
+                    : () {
+                        ref.read(proxiesProvider.notifier).testAllInSelectedGroup();
+                      },
+                icon: proxiesState.isTestingAll
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.speed_rounded, size: 15),
+                label: Text(
+                  proxiesState.isTestingAll
+                      ? (tr.isZh ? '正在测速...' : 'Testing...')
+                      : tr.pingAll,
+                  style: const TextStyle(fontSize: 12),
+                ),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
