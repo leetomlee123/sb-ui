@@ -15,8 +15,8 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release-windows:
-    name: Build & Release Windows (x64)
+  build-windows:
+    name: Build Windows Binary (x64)
     runs-on: windows-latest
     steps:
       - name: Checkout repository
@@ -46,7 +46,7 @@ jobs:
           Expand-Archive -Path "wintun.zip" -DestinationPath "wintun_extracted"
           Copy-Item -Path "wintun_extracted/wintun/bin/amd64/wintun.dll" -Destination "core-bin/wintun.dll"
 
-      - name: Install dependencies & verify
+      - name: Install dependencies & run unit tests
         run: |
           flutter pub get
           flutter test
@@ -55,10 +55,8 @@ jobs:
         run: |
           flutter build windows --release --obfuscate --split-debug-info=build/symbols --tree-shake-icons
 
-      - name: Prepare Windows Release Bundle & Package with desktop_updater
+      - name: Assemble Windows Bundle
         shell: pwsh
-        env:
-          DESKTOP_UPDATER_KEY_BUNDLE_PASSPHRASE: "SingularAppReleaseKey2026Pass"
         run: |
           $bundleDir = "build/windows/x64/runner/Release"
           
@@ -72,26 +70,58 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$bundleDir/config"
           Copy-Item -Path "assets/rules/*" -Destination "$bundleDir/config"
 
-          # Import release signing key bundle
+      - name: Upload Windows Bundle Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-bundle
+          path: build/windows/x64/runner/Release/
+          if-no-files-found: error
+          retention-days: 1
+
+  package-and-release:
+    name: Sign, Package & Release
+    needs: build-windows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter / Dart
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Download Windows Bundle Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-release-bundle
+          path: windows-bundle
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Import Release Key & Sign Package
+        env:
+          DESKTOP_UPDATER_KEY_BUNDLE_PASSPHRASE: "SingularAppReleaseKey2026Pass"
+        run: |
+          # 1. Import private key seed into Linux local key store (instant & secure)
           dart run desktop_updater:release keys import --input release-key.dukey --passphrase-env DESKTOP_UPDATER_KEY_BUNDLE_PASSPHRASE
 
-          # Attempt incremental update first, fallback to initial feed creation if no feed exists yet
-          Write-Host "Publishing update with desktop_updater..."
-          $publishOutput = & dart run desktop_updater:release publish --platform windows --project-type flutter --app-name singular --package-id singular 2>&1
-          $publishExit = $LASTEXITCODE
-          Write-Host ($publishOutput -join "`n")
-          if ($publishExit -ne 0) {
-            Write-Host "Incremental publish returned exit code $publishExit. Attempting initial feed publication..."
-            dart run desktop_updater:release publish --platform windows --project-type flutter --app-name singular --package-id singular --initialize-feed
-          }
+          # 2. Package and sign Windows release artifact
+          dart run desktop_updater:release publish \
+            --platform windows \
+            --project-type manual \
+            --artifact-root windows-bundle \
+            --executable-relative-path singular.exe \
+            --app-name singular \
+            --package-id singular
 
-          # Generate SHA256 Checksum for the signed desktop_updater release package
-          $artifactZip = Get-ChildItem -Path "dist/desktop_updater/releases" -Filter "*.zip" -Recurse | Select-Object -First 1
-          if ($artifactZip) {
-            $hash = (Get-FileHash -Path $artifactZip.FullName -Algorithm SHA256).Hash.ToLower()
-            "$hash  $($artifactZip.Name)" | Out-File -FilePath "SHA256SUMS.txt" -Encoding ascii
-            Write-Host "Generated checksum for $($artifactZip.Name): $hash"
-          }
+          # 3. Generate SHA-256 Checksums
+          cd dist/desktop_updater/releases
+          find . -name "*.zip" -exec sha256sum {} + > ../../../SHA256SUMS.txt
+          cd ../../..
+          cat SHA256SUMS.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
