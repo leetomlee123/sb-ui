@@ -11,9 +11,9 @@ void main() {
       expect(options.projectId, isNotEmpty);
       expect(options.apiKey, isNotEmpty);
       expect(options.appId, isNotEmpty);
-      expect(DefaultFirebaseOptions.windows.projectId, 'singular-app');
-      expect(DefaultFirebaseOptions.linux.projectId, 'singular-app');
-      expect(DefaultFirebaseOptions.macos.projectId, 'singular-app');
+      expect(DefaultFirebaseOptions.windows.projectId, 'singular-6cc8b');
+      expect(DefaultFirebaseOptions.linux.projectId, 'singular-6cc8b');
+      expect(DefaultFirebaseOptions.macos.projectId, 'singular-6cc8b');
     });
 
     test('FirebaseService.init handles test environment without crashing', () async {

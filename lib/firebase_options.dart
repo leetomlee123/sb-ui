@@ -22,10 +22,6 @@ class DefaultFirebaseOptions {
     'FIREBASE_PROJECT_ID',
     defaultValue: 'singular-app',
   );
-  static const String _defaultMeasurementId = String.fromEnvironment(
-    'FIREBASE_MEASUREMENT_ID',
-    defaultValue: 'G-XXXXXXXXXX',
-  );
 
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
@@ -48,11 +44,13 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: _defaultApiKey,
-    appId: _defaultAppId,
-    messagingSenderId: _defaultMessagingSenderId,
-    projectId: _defaultProjectId,
-    measurementId: _defaultMeasurementId,
+    apiKey: 'AIzaSyBLLJkiI90CmiX1RaSQ8_JqYvDA_Fv0pgk',
+    appId: '1:280076108420:web:792b3cf869762b0c9078d1',
+    messagingSenderId: '280076108420',
+    projectId: 'singular-6cc8b',
+    authDomain: 'singular-6cc8b.firebaseapp.com',
+    storageBucket: 'singular-6cc8b.firebasestorage.app',
+    measurementId: 'G-BY41K6ZT8L',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
@@ -71,26 +69,31 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: _defaultApiKey,
-    appId: _defaultAppId,
-    messagingSenderId: _defaultMessagingSenderId,
-    projectId: _defaultProjectId,
-    iosBundleId: 'com.example.singular',
+    apiKey: 'AIzaSyBsIqXbsfzR96xS2A1zyK29OXQniRixpk4',
+    appId: '1:280076108420:ios:5ee85a85618139289078d1',
+    messagingSenderId: '280076108420',
+    projectId: 'singular-6cc8b',
+    storageBucket: 'singular-6cc8b.firebasestorage.app',
+    iosBundleId: 'com.singbox.ui.sbUi',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: _defaultApiKey,
-    appId: _defaultAppId,
-    messagingSenderId: _defaultMessagingSenderId,
-    projectId: _defaultProjectId,
-    measurementId: _defaultMeasurementId,
+    apiKey: 'AIzaSyBLLJkiI90CmiX1RaSQ8_JqYvDA_Fv0pgk',
+    appId: '1:280076108420:web:792b3cf869762b0c9078d1',
+    messagingSenderId: '280076108420',
+    projectId: 'singular-6cc8b',
+    authDomain: 'singular-6cc8b.firebaseapp.com',
+    storageBucket: 'singular-6cc8b.firebasestorage.app',
+    measurementId: 'G-BY41K6ZT8L',
   );
 
   static const FirebaseOptions linux = FirebaseOptions(
-    apiKey: _defaultApiKey,
-    appId: _defaultAppId,
-    messagingSenderId: _defaultMessagingSenderId,
-    projectId: _defaultProjectId,
-    measurementId: _defaultMeasurementId,
+    apiKey: 'AIzaSyBLLJkiI90CmiX1RaSQ8_JqYvDA_Fv0pgk',
+    appId: '1:280076108420:web:792b3cf869762b0c9078d1',
+    messagingSenderId: '280076108420',
+    projectId: 'singular-6cc8b',
+    authDomain: 'singular-6cc8b.firebaseapp.com',
+    storageBucket: 'singular-6cc8b.firebasestorage.app',
+    measurementId: 'G-BY41K6ZT8L',
   );
 }
