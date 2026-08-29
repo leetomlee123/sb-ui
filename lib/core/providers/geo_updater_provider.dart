@@ -78,7 +78,7 @@ class GeoUpdaterNotifier extends StateNotifier<GeoUpdaterState> {
     );
 
     try {
-      await _service.updateGeoAsset(
+      final wasChanged = await _service.updateGeoAsset(
         asset,
         onProgress: (progress, status) {
           state = state.copyWith(progress: progress, statusMessage: status);
@@ -87,9 +87,9 @@ class GeoUpdaterNotifier extends StateNotifier<GeoUpdaterState> {
 
       await refreshAssets();
 
-      // If core is running, seamlessly reload/restart it to apply the new rules immediately
+      // If core is running and rule content actually changed, seamlessly reload/restart core
       final isRunning = _ref.read(coreProvider).isRunning;
-      if (isRunning) {
+      if (isRunning && wasChanged) {
         await _ref.read(coreProvider.notifier).startCore();
       }
 
@@ -97,8 +97,8 @@ class GeoUpdaterNotifier extends StateNotifier<GeoUpdaterState> {
         isUpdating: false,
         activeAssetName: null,
         progress: 1.0,
-        statusMessage: '${asset.name} updated successfully',
-        successMessage: '${asset.displayName} 已成功更新为最新版本！',
+        statusMessage: wasChanged ? '${asset.name} updated successfully' : '${asset.name} is up-to-date',
+        successMessage: wasChanged ? '${asset.displayName} 已成功更新为最新版本！' : '${asset.displayName} 已是最新版本',
       );
       return true;
     } catch (e) {
@@ -127,7 +127,8 @@ class GeoUpdaterNotifier extends StateNotifier<GeoUpdaterState> {
       );
     }
 
-    int succeeded = 0;
+    int changedCount = 0;
+    int checkedCount = 0;
     for (int i = 0; i < state.assets.length; i++) {
       final asset = state.assets[i];
       if (!silent) {
@@ -138,7 +139,7 @@ class GeoUpdaterNotifier extends StateNotifier<GeoUpdaterState> {
       }
 
       try {
-        await _service.updateGeoAsset(
+        final wasChanged = await _service.updateGeoAsset(
           asset,
           onProgress: (subProgress, status) {
             if (!silent) {
@@ -147,7 +148,8 @@ class GeoUpdaterNotifier extends StateNotifier<GeoUpdaterState> {
             }
           },
         );
-        succeeded++;
+        checkedCount++;
+        if (wasChanged) changedCount++;
       } catch (e) {
         AppLogger.warn('[GeoUpdater] 规则集 ${asset.name} 更新失败: $e');
       }
@@ -155,21 +157,23 @@ class GeoUpdaterNotifier extends StateNotifier<GeoUpdaterState> {
 
     await refreshAssets();
 
-    // If core is running, restart core to reload rules
+    // If core is running and rules actually changed, restart core to reload rules
     final isRunning = _ref.read(coreProvider).isRunning;
-    if (isRunning && succeeded > 0) {
+    if (isRunning && changedCount > 0) {
       await _ref.read(coreProvider.notifier).startCore();
     }
 
-    if (succeeded > 0) {
-      AppLogger.info('[GeoUpdater] 成功更新 $succeeded 个规则集文件 (.srs)');
+    if (checkedCount > 0) {
+      if (changedCount > 0) {
+        AppLogger.info('[GeoUpdater] 成功同步最新规则集: $changedCount 个文件已更新生效');
+      }
       if (!silent) {
         state = state.copyWith(
           isUpdating: false,
           activeAssetName: null,
           progress: 1.0,
-          statusMessage: 'All Geo assets updated successfully',
-          successMessage: '已成功更新 $succeeded 个 Geo 规则文件！',
+          statusMessage: changedCount > 0 ? 'All Geo assets updated successfully' : 'All Geo assets are up to date',
+          successMessage: changedCount > 0 ? '已成功更新 $changedCount 个 Geo 规则文件！' : '当前规则集均已是最新版本',
         );
       }
       return true;

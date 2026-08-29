@@ -131,10 +131,29 @@ class GeoUpdaterService {
     final targetFile = File(p.join(configDir.path, asset.name));
 
     if (fileBytes != null && fileBytes.isNotEmpty) {
+      if (await targetFile.exists()) {
+        try {
+          final existingBytes = await targetFile.readAsBytes();
+          if (existingBytes.length == fileBytes.length) {
+            bool identical = true;
+            for (int i = 0; i < existingBytes.length; i++) {
+              if (existingBytes[i] != fileBytes[i]) {
+                identical = false;
+                break;
+              }
+            }
+            if (identical) {
+              onProgress?.call(1.0, '${asset.name} 已经是最新版本。');
+              return false; // Already up-to-date, no change
+            }
+          }
+        } catch (_) {}
+      }
+
       onProgress?.call(0.9, 'Saving ${asset.name}...');
       await targetFile.writeAsBytes(fileBytes);
       onProgress?.call(1.0, '${asset.name} updated successfully.');
-      return true;
+      return true; // Actually updated with new content
     }
 
     // Fallback: If offline and local target file does not exist or is empty, copy from bundled assets/rules
