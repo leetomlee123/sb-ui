@@ -4,6 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   desktop_updater
+  firebase_core
   screen_retriever_windows
   tray_manager
   window_manager

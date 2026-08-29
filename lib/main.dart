@@ -14,6 +14,7 @@ import 'core/providers/geo_updater_provider.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/providers/storage_provider.dart';
 import 'core/services/app_updater_service.dart';
+import 'core/services/firebase_service.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/system_proxy_manager.dart';
 import 'core/utils/app_logger.dart';
@@ -86,6 +87,7 @@ void main(List<String> args) async {
     FlutterError.onError = (FlutterErrorDetails details) {
       FlutterError.presentError(details);
       AppLogger.error('[FlutterError] ${details.exceptionAsString()}');
+      FirebaseService.logError(details.exception, details.stack, 'flutter_framework');
     };
 
     // 2. Parallel Fast Boot: initialize storage & window manager concurrently
@@ -142,12 +144,20 @@ void main(List<String> args) async {
     );
   }, (error, stackTrace) {
     AppLogger.error('[Unhandled Exception Shield] $error\n$stackTrace');
+    FirebaseService.logError(error, stackTrace, 'unhandled_zone');
   });
 }
 
 /// Asynchronous non-blocking maintenance tasks performed in background strictly after the first frame has rendered.
 Future<void> _runBackgroundStartupTasks(StorageService storageService) async {
   final bgStopwatch = Stopwatch()..start();
+
+  // 0. Initialize Firebase & log startup telemetry
+  try {
+    await FirebaseService.init();
+    await FirebaseService.logEvent('app_startup_completed');
+  } catch (_) {}
+
   // 1. Clear any orphan system proxy left by abnormal previous shutdowns.
   //    Only spawns PowerShell when the dirty flag says a proxy of ours may
   //    still be applied — skips it entirely on normal launches.
