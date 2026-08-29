@@ -246,7 +246,7 @@ class ConfigGenerator {
       }
     }
 
-    // 8. Inbounds list
+    // 8. Inbounds list (sing-box 1.11+ modern schema)
     final List<Map<String, dynamic>> inbounds = [];
 
     if (settings.separateInboundPorts) {
@@ -255,18 +255,12 @@ class ConfigGenerator {
         'tag': 'http-in',
         'listen': settings.allowLan ? '0.0.0.0' : '127.0.0.1',
         'listen_port': settings.httpPort,
-        if (settings.sniffingEnabled) 'sniff': true,
-        if (settings.sniffingEnabled && settings.sniffingOverrideDestination)
-          'sniff_override_destination': true,
       });
       inbounds.add({
         'type': 'socks',
         'tag': 'socks-in',
         'listen': settings.allowLan ? '0.0.0.0' : '127.0.0.1',
         'listen_port': settings.socksPort,
-        if (settings.sniffingEnabled) 'sniff': true,
-        if (settings.sniffingEnabled && settings.sniffingOverrideDestination)
-          'sniff_override_destination': true,
       });
     } else {
       inbounds.add({
@@ -274,9 +268,6 @@ class ConfigGenerator {
         'tag': 'mixed-in',
         'listen': settings.allowLan ? '0.0.0.0' : '127.0.0.1',
         'listen_port': settings.mixedPort,
-        if (settings.sniffingEnabled) 'sniff': true,
-        if (settings.sniffingEnabled && settings.sniffingOverrideDestination)
-          'sniff_override_destination': true,
       });
     }
 
@@ -306,8 +297,10 @@ class ConfigGenerator {
         'type': 'tun',
         'tag': 'tun-in',
         'interface_name': 'singbox-tun',
-        'address': ['172.19.0.1/30'],
-        if (settings.tunIpv6) 'inet6_address': ['fdfe:dcba:9876::1/126'],
+        'address': [
+          '172.19.0.1/30',
+          if (settings.tunIpv6) 'fdfe:dcba:9876::1/126',
+        ],
         'mtu': settings.tunMtu,
         'auto_route': true,
         'strict_route': settings.tunStrictRoute,
@@ -315,16 +308,19 @@ class ConfigGenerator {
         if (routeExcludeAddresses.isNotEmpty)
           'route_exclude_address': routeExcludeAddresses,
         'stack': tunStack,
-        if (settings.sniffingEnabled) 'sniff': true,
-        if (settings.sniffingEnabled && settings.sniffingOverrideDestination)
-          'sniff_override_destination': true,
       });
     }
 
-    // 9. Route rules based on routingMode
+    // 9. Route rules based on routingMode (sing-box 1.11+ route actions)
     final List<Map<String, dynamic>> routeRules = [
-      if (settings.sniffingEnabled) {'action': 'sniff'},
-      if (settings.dnsHijack) {'protocol': 'dns', 'action': 'hijack-dns'},
+      if (settings.sniffingEnabled)
+        {
+          'action': 'sniff',
+          if (settings.sniffingOverrideDestination)
+            'override_destination': true,
+        },
+      if (settings.dnsHijack)
+        {'protocol': 'dns', 'action': 'hijack-dns'},
     ];
 
     // Inject custom profile rules (e.g. Clash PROCESS-NAME, DOMAIN-SUFFIX, IP-CIDR) with highest priority

@@ -241,7 +241,7 @@ proxy-groups:
     // 2. TUN: GSO, IPv6, MTU
     final tunIn = inbounds.firstWhere((i) => i['tag'] == 'tun-in');
     expect(tunIn['gso'], isTrue);
-    expect(tunIn['inet6_address'], contains('fdfe:dcba:9876::1/126'));
+    expect(tunIn['address'], contains('fdfe:dcba:9876::1/126'));
     expect(tunIn['mtu'], 1500);
 
     // 3. DNS: Fake-IP
@@ -503,7 +503,7 @@ rules:
     expect(tunInbound['strict_route'], isTrue);
     expect(tunInbound['address'], contains('172.19.0.1/30'));
     expect(tunInbound.containsKey('inet4_address'), isFalse);
-    expect(tunInbound['sniff'], isTrue);
+    expect(tunInbound.containsKey('sniff'), isFalse);
 
     final routeRules = config['route']['rules'] as List;
 
