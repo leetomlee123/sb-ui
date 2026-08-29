@@ -10,6 +10,7 @@ import '../../../core/engine/profile_parser.dart';
 import '../../../core/i18n/translations.dart';
 import '../../../core/models/profile.dart';
 import '../../../core/providers/profiles_provider.dart';
+import 'visual_config_editor.dart';
 
 /// Lightweight syntax highlighting controller for sing-box JSON and YAML configs.
 class JsonCodeSyntaxController extends TextEditingController {
@@ -154,6 +155,9 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   bool _hasUnsavedChanges = false;
   late String _initialContent;
 
+  int _editorMode = 0; // 0: Visual GUI, 1: JSON Code Editor
+  Map<String, dynamic>? _parsedVisualMap;
+
   int _cursorLine = 1;
   int _cursorCol = 1;
   int _lineCount = 1;
@@ -192,6 +196,21 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
 
     _validateSyntax(_textCtrl.text);
     _updateCursorAndStats();
+    _tryParseVisualMap(_textCtrl.text);
+  }
+
+  void _tryParseVisualMap(String content) {
+    final trimmed = content.trim();
+    if (trimmed.startsWith('{')) {
+      try {
+        final dynamic decoded = jsonDecode(content);
+        if (decoded is Map<String, dynamic>) {
+          _parsedVisualMap = decoded;
+          return;
+        }
+      } catch (_) {}
+    }
+    _parsedVisualMap = null;
   }
 
   @override
@@ -221,6 +240,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   void _onTextChanged() {
     _updateCursorAndStats();
     _validateSyntax(_textCtrl.text);
+    _tryParseVisualMap(_textCtrl.text);
     if (!_hasUnsavedChanges && _textCtrl.text != _initialContent) {
       setState(() {
         _hasUnsavedChanges = true;
@@ -655,10 +675,25 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
                 // Error alert banner if syntax is invalid
                 if (_syntaxError != null) _buildSyntaxErrorBanner(tr),
 
-                // Main Code Editor with Line Numbers Gutter
-                Expanded(
-                  child: _buildEditorBody(),
-                ),
+                // Main Code Editor with Line Numbers Gutter OR Visual Config Editor
+                if (_editorMode == 0 && _parsedVisualMap != null)
+                  Expanded(
+                    child: VisualConfigEditor(
+                      config: _parsedVisualMap!,
+                      onChanged: (updatedMap) {
+                        _parsedVisualMap = updatedMap;
+                        final jsonStr = const JsonEncoder.withIndent('  ').convert(updatedMap);
+                        _textCtrl.text = jsonStr;
+                        _hasUnsavedChanges = true;
+                        _validateSyntax(jsonStr);
+                        setState(() {});
+                      },
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: _buildEditorBody(),
+                  ),
 
                 // Footer Status Bar
                 _buildFooter(tr),
@@ -674,157 +709,213 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
     final hasFilePath = _effectiveFilePath != null;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: const BoxDecoration(
         color: Color(0xFF131B2E),
         border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.code_rounded, color: Color(0xFF818CF8), size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  Text(
-                    _displayTitle,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFF8FAFC),
-                    ),
+          // Top Row: Title, Badges & Window Controls
+          Row(
+            children: [
+              const Icon(Icons.code_rounded, color: Color(0xFF818CF8), size: 18),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  _displayTitle,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFF8FAFC),
                   ),
-                  const SizedBox(width: 10),
-                  // Format badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1).withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.5)),
-                    ),
-                    child: Text(
-                      _detectedFormat,
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Nodes count badge
-                  if (_nodeCount > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
-                      ),
-                      child: Text(
-                        '$_nodeCount ${tr.nodesCount}',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF34D399)),
-                      ),
-                    ),
-                  const SizedBox(width: 8),
-                  // Syntax status badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: _syntaxError == null
-                          ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                          : const Color(0xFFF43F5E).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: _syntaxError == null
-                            ? const Color(0xFF10B981).withValues(alpha: 0.4)
-                            : const Color(0xFFF43F5E).withValues(alpha: 0.4),
-                      ),
-                    ),
-                    child: Text(
-                      _syntaxError == null ? tr.syntaxValid : tr.syntaxError,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: _syntaxError == null ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
-                      ),
-                    ),
-                  ),
-                  if (_hasUnsavedChanges) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
-                      ),
-                      child: const Text(
-                        '未保存',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFFBBF24)),
-                      ),
-                    ),
-                  ],
-                ],
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              // Format badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.5)),
+                ),
+                child: Text(
+                  _detectedFormat,
+                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
+                ),
+              ),
+              if (_nodeCount > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    '$_nodeCount ${tr.nodesCount}',
+                    style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF34D399)),
+                  ),
+                ),
+              ],
+              const SizedBox(width: 6),
+              // Syntax status badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _syntaxError == null
+                      ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                      : const Color(0xFFF43F5E).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: _syntaxError == null
+                        ? const Color(0xFF10B981).withValues(alpha: 0.4)
+                        : const Color(0xFFF43F5E).withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Text(
+                  _syntaxError == null ? tr.syntaxValid : tr.syntaxError,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.bold,
+                    color: _syntaxError == null ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
+                  ),
+                ),
+              ),
+              if (_hasUnsavedChanges) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+                  ),
+                  child: const Text(
+                    '未保存',
+                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFFFBBF24)),
+                  ),
+                ),
+              ],
+              const Spacer(),
+              IconButton(
+                icon: Icon(_isMaximized ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded, size: 18),
+                tooltip: _isMaximized ? tr.restore : tr.maximize,
+                color: const Color(0xFF94A3B8),
+                hoverColor: const Color(0xFF334155),
+                onPressed: () => setState(() => _isMaximized = !_isMaximized),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 18),
+                tooltip: tr.close,
+                color: const Color(0xFF94A3B8),
+                hoverColor: const Color(0xFF334155),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
           ),
+          const SizedBox(height: 6),
 
-          // Action tools
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-            tooltip: '载入标准模板',
-            color: const Color(0xFF94A3B8),
-            hoverColor: const Color(0xFF334155),
-            onPressed: _loadStandardTemplate,
-          ),
-          IconButton(
-            icon: const Icon(Icons.format_indent_increase_rounded, size: 18),
-            tooltip: '${tr.formatJson} (Ctrl+Shift+F)',
-            color: const Color(0xFF94A3B8),
-            hoverColor: const Color(0xFF334155),
-            onPressed: _formatJson,
-          ),
-          IconButton(
-            icon: const Icon(Icons.compress_rounded, size: 18),
-            tooltip: tr.minifyJson,
-            color: const Color(0xFF94A3B8),
-            hoverColor: const Color(0xFF334155),
-            onPressed: _minifyJson,
-          ),
-          IconButton(
-            icon: Icon(Icons.search_rounded, size: 18, color: _showSearch ? const Color(0xFF818CF8) : const Color(0xFF94A3B8)),
-            tooltip: '${tr.findText} (Ctrl+F)',
-            hoverColor: const Color(0xFF334155),
-            onPressed: _toggleSearch,
-          ),
-          IconButton(
-            icon: Icon(Icons.wrap_text_rounded, size: 18, color: _wordWrap ? const Color(0xFF818CF8) : const Color(0xFF94A3B8)),
-            tooltip: tr.wordWrap,
-            hoverColor: const Color(0xFF334155),
-            onPressed: () => setState(() => _wordWrap = !_wordWrap),
-          ),
-          if (hasFilePath)
-            IconButton(
-              icon: const Icon(Icons.file_open_outlined, size: 18),
-              tooltip: tr.reloadFromFile,
-              color: const Color(0xFF94A3B8),
-              hoverColor: const Color(0xFF334155),
-              onPressed: _reloadFromDisk,
-            ),
-          const SizedBox(width: 6),
-          IconButton(
-            icon: Icon(_isMaximized ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded, size: 20),
-            tooltip: _isMaximized ? tr.restore : tr.maximize,
-            color: const Color(0xFF94A3B8),
-            hoverColor: const Color(0xFF334155),
-            onPressed: () => setState(() => _isMaximized = !_isMaximized),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close_rounded, size: 20),
-            tooltip: tr.close,
-            color: const Color(0xFF94A3B8),
-            hoverColor: const Color(0xFF334155),
-            onPressed: () => Navigator.pop(context),
+          // Sub-Toolbar: Mode Switcher & Tools
+          Row(
+            children: [
+              SegmentedButton<int>(
+                style: const ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 4)),
+                ),
+                segments: const [
+                  ButtonSegment(
+                    value: 0,
+                    icon: Icon(Icons.dashboard_customize_rounded, size: 13),
+                    label: Text('可视化编辑', style: TextStyle(fontSize: 11)),
+                  ),
+                  ButtonSegment(
+                    value: 1,
+                    icon: Icon(Icons.code_rounded, size: 13),
+                    label: Text('JSON 源码', style: TextStyle(fontSize: 11)),
+                  ),
+                ],
+                selected: {_editorMode},
+                onSelectionChanged: (set) {
+                  final newMode = set.first;
+                  if (newMode == 0) {
+                    try {
+                      final decoded = jsonDecode(_textCtrl.text);
+                      if (decoded is Map<String, dynamic>) {
+                        setState(() {
+                          _parsedVisualMap = decoded;
+                          _editorMode = 0;
+                        });
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('当前配置不是标准 JSON 对象结构，请在代码模式下修改'),
+                            backgroundColor: Color(0xFFF43F5E),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('存在语法错误，无法进入可视化视图: $e'),
+                          backgroundColor: const Color(0xFFF43F5E),
+                        ),
+                      );
+                    }
+                  } else {
+                    setState(() => _editorMode = 1);
+                  }
+                },
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline_rounded, size: 17),
+                tooltip: '载入标准模板',
+                color: const Color(0xFF94A3B8),
+                hoverColor: const Color(0xFF334155),
+                onPressed: _loadStandardTemplate,
+              ),
+              IconButton(
+                icon: const Icon(Icons.format_indent_increase_rounded, size: 17),
+                tooltip: '${tr.formatJson} (Ctrl+Shift+F)',
+                color: const Color(0xFF94A3B8),
+                hoverColor: const Color(0xFF334155),
+                onPressed: _formatJson,
+              ),
+              IconButton(
+                icon: const Icon(Icons.compress_rounded, size: 17),
+                tooltip: tr.minifyJson,
+                color: const Color(0xFF94A3B8),
+                hoverColor: const Color(0xFF334155),
+                onPressed: _minifyJson,
+              ),
+              IconButton(
+                icon: Icon(Icons.search_rounded, size: 17, color: _showSearch ? const Color(0xFF818CF8) : const Color(0xFF94A3B8)),
+                tooltip: '${tr.findText} (Ctrl+F)',
+                hoverColor: const Color(0xFF334155),
+                onPressed: _toggleSearch,
+              ),
+              IconButton(
+                icon: Icon(Icons.wrap_text_rounded, size: 17, color: _wordWrap ? const Color(0xFF818CF8) : const Color(0xFF94A3B8)),
+                tooltip: tr.wordWrap,
+                hoverColor: const Color(0xFF334155),
+                onPressed: () => setState(() => _wordWrap = !_wordWrap),
+              ),
+              if (hasFilePath)
+                IconButton(
+                  icon: const Icon(Icons.file_open_outlined, size: 17),
+                  tooltip: tr.reloadFromFile,
+                  color: const Color(0xFF94A3B8),
+                  hoverColor: const Color(0xFF334155),
+                  onPressed: _reloadFromDisk,
+                ),
+            ],
           ),
         ],
       ),

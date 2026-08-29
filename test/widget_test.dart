@@ -15,6 +15,7 @@ import 'package:singular/core/providers/storage_provider.dart';
 import 'package:singular/core/services/storage_service.dart';
 import 'package:singular/core/utils/proxy_flag_helper.dart';
 import 'package:singular/features/profiles/widgets/config_editor_dialog.dart';
+import 'package:singular/features/profiles/widgets/visual_config_editor.dart';
 import 'package:singular/features/shell/main_shell_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -756,6 +757,14 @@ rules:
     expect(find.text('sing-box JSON'), findsOneWidget);
     expect(find.text('语法正确'), findsOneWidget);
 
+    // Verify mode switcher is present
+    expect(find.text('可视化编辑'), findsOneWidget);
+    expect(find.text('JSON 源码'), findsOneWidget);
+
+    // Switch to JSON Code mode
+    await tester.tap(find.text('JSON 源码'));
+    await tester.pumpAndSettle();
+
     // Verify format button is present
     expect(find.byIcon(Icons.format_indent_increase_rounded), findsOneWidget);
 
@@ -816,6 +825,79 @@ rules:
     // Verify boolean true has violet color
     final trueVal = textSpans.firstWhere((s) => s.text == 'true');
     expect(trueVal.style?.color, const Color(0xFFC084FC));
+  });
+
+  testWidgets('VisualConfigEditor renders outbounds, inbounds, route, and dns tabs', (tester) async {
+    final sampleConfig = {
+      'log': {'level': 'info', 'timestamp': true},
+      'inbounds': [
+        {'type': 'mixed', 'tag': 'mixed-in', 'listen': '127.0.0.1', 'listen_port': 2080}
+      ],
+      'outbounds': [
+        {'type': 'vless', 'tag': 'Hong Kong 01', 'server': 'hk.example.com', 'server_port': 443},
+        {'type': 'selector', 'tag': 'Proxy', 'outbounds': ['Hong Kong 01', 'direct']},
+        {'type': 'direct', 'tag': 'direct'},
+        {'type': 'block', 'tag': 'block'},
+        {'type': 'dns', 'tag': 'dns-out'}
+      ],
+      'route': {
+        'final': 'Proxy',
+        'auto_detect_interface': true,
+        'rules': [
+          {'action': 'route', 'protocol': 'dns', 'outbound': 'dns-out'},
+          {'action': 'route', 'ip_is_private': true, 'outbound': 'direct'}
+        ]
+      },
+      'dns': {
+        'servers': [
+          {'tag': 'remote-dns', 'address': 'tls://1.1.1.1', 'detour': 'Proxy'},
+          {'tag': 'local-dns', 'address': '223.5.5.5', 'detour': 'direct'}
+        ],
+        'rules': [
+          {'domain_suffix': 'google.com', 'server': 'remote-dns'}
+        ]
+      }
+    };
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: VisualConfigEditor(
+            config: sampleConfig,
+            onChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify Outbounds Tab by default
+    expect(find.text('出站 (Outbounds)'), findsOneWidget);
+    expect(find.text('Hong Kong 01'), findsOneWidget);
+    expect(find.text('Proxy'), findsOneWidget);
+    expect(find.text('添加出站'), findsOneWidget);
+
+    // Switch to Inbounds Tab
+    await tester.tap(find.text('入站 (Inbounds)'));
+    await tester.pumpAndSettle();
+    expect(find.text('mixed-in'), findsOneWidget);
+    expect(find.text('添加入站'), findsOneWidget);
+
+    // Switch to Route Tab
+    await tester.tap(find.text('路由分流 (Route)'));
+    await tester.pumpAndSettle();
+    expect(find.text('默认出站 (Final):'), findsOneWidget);
+    expect(find.text('添加路由规则'), findsOneWidget);
+
+    // Switch to DNS Tab
+    await tester.tap(find.text('DNS 配置 (DNS)'));
+    await tester.pumpAndSettle();
+    expect(find.text('remote-dns'), findsOneWidget);
+    expect(find.text('local-dns'), findsOneWidget);
+
+    // Switch to General Tab
+    await tester.tap(find.text('日志与通用 (General)'));
+    await tester.pumpAndSettle();
+    expect(find.text('日志输出设置 (Log):'), findsOneWidget);
   });
 }
 
