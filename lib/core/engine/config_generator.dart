@@ -228,15 +228,57 @@ class ConfigGenerator {
       }
     }
 
+    // 7. Inject TCP Fast Open and Multiplex for proxy outbounds
+    for (final ob in finalOutbounds) {
+      final type = (ob['type'] ?? '').toString().toLowerCase();
+      if (_proxyTypes.contains(type)) {
+        if (settings.tcpFastOpen) {
+          ob['tcp_fast_open'] = true;
+        }
+        if (settings.multiplex != 'none') {
+          ob['multiplex'] = {
+            'enabled': true,
+            'protocol': settings.multiplex,
+            'max_connections': 4,
+            'min_streams': 4,
+          };
+        }
+      }
+    }
+
     // 8. Inbounds list
-    final List<Map<String, dynamic>> inbounds = [
-      {
+    final List<Map<String, dynamic>> inbounds = [];
+
+    if (settings.separateInboundPorts) {
+      inbounds.add({
+        'type': 'http',
+        'tag': 'http-in',
+        'listen': settings.allowLan ? '0.0.0.0' : '127.0.0.1',
+        'listen_port': settings.httpPort,
+        if (settings.sniffingEnabled) 'sniff': true,
+        if (settings.sniffingEnabled && settings.sniffingOverrideDestination)
+          'sniff_override_destination': true,
+      });
+      inbounds.add({
+        'type': 'socks',
+        'tag': 'socks-in',
+        'listen': settings.allowLan ? '0.0.0.0' : '127.0.0.1',
+        'listen_port': settings.socksPort,
+        if (settings.sniffingEnabled) 'sniff': true,
+        if (settings.sniffingEnabled && settings.sniffingOverrideDestination)
+          'sniff_override_destination': true,
+      });
+    } else {
+      inbounds.add({
         'type': 'mixed',
         'tag': 'mixed-in',
         'listen': settings.allowLan ? '0.0.0.0' : '127.0.0.1',
         'listen_port': settings.mixedPort,
-      },
-    ];
+        if (settings.sniffingEnabled) 'sniff': true,
+        if (settings.sniffingEnabled && settings.sniffingOverrideDestination)
+          'sniff_override_destination': true,
+      });
+    }
 
     // TUN Inbound (if enabled)
     if (settings.tunModeEnabled) {
@@ -265,18 +307,24 @@ class ConfigGenerator {
         'tag': 'tun-in',
         'interface_name': 'singbox-tun',
         'address': ['172.19.0.1/30'],
+        if (settings.tunIpv6) 'inet6_address': ['fdfe:dcba:9876::1/126'],
+        'mtu': settings.tunMtu,
         'auto_route': true,
-        'strict_route': false,
+        'strict_route': settings.tunStrictRoute,
+        if (settings.tunGso) 'gso': true,
         if (routeExcludeAddresses.isNotEmpty)
           'route_exclude_address': routeExcludeAddresses,
         'stack': tunStack,
+        if (settings.sniffingEnabled) 'sniff': true,
+        if (settings.sniffingEnabled && settings.sniffingOverrideDestination)
+          'sniff_override_destination': true,
       });
     }
 
     // 9. Route rules based on routingMode
     final List<Map<String, dynamic>> routeRules = [
-      {'action': 'sniff'},
-      {'protocol': 'dns', 'action': 'hijack-dns'},
+      if (settings.sniffingEnabled) {'action': 'sniff'},
+      if (settings.dnsHijack) {'protocol': 'dns', 'action': 'hijack-dns'},
     ];
 
     // Inject custom profile rules (e.g. Clash PROCESS-NAME, DOMAIN-SUFFIX, IP-CIDR) with highest priority
@@ -321,6 +369,91 @@ class ConfigGenerator {
       routeRules.addAll(mergedCustomRules);
     }
 
+    // Inject AdBlock rules if enabled
+    if (settings.blockAds) {
+      routeRules.add({
+        'domain_suffix': [
+          'doubleclick.net',
+          'googlesyndication.com',
+          'googleadservices.com',
+          'adservice.google.com',
+          'unityads.unity3d.com',
+          'vungle.com',
+          'applovin.com',
+          'admob.com',
+        ],
+        'action': 'reject',
+      });
+    }
+
+    // Inject AI services routing rules
+    if (settings.aiServicesRoute == 'direct') {
+      routeRules.add({
+        'domain_suffix': [
+          'openai.com',
+          'chatgpt.com',
+          'oaistatic.com',
+          'oaiusercontent.com',
+          'anthropic.com',
+          'claude.ai',
+          'gemini.google.com',
+          'bard.google.com',
+          'ai.google.dev',
+        ],
+        'outbound': 'direct',
+      });
+    } else if (settings.aiServicesRoute == 'proxy') {
+      routeRules.add({
+        'domain_suffix': [
+          'openai.com',
+          'chatgpt.com',
+          'oaistatic.com',
+          'oaiusercontent.com',
+          'anthropic.com',
+          'claude.ai',
+          'gemini.google.com',
+          'bard.google.com',
+          'ai.google.dev',
+        ],
+        'outbound': primaryProxyTag,
+      });
+    }
+
+    // Inject Streaming Media routing rules
+    if (settings.streamMediaRoute == 'direct') {
+      routeRules.add({
+        'domain_suffix': [
+          'netflix.com',
+          'nflxvideo.net',
+          'nflximg.net',
+          'disneyplus.com',
+          'disney-plus.net',
+          'spotify.com',
+          'scdn.co',
+          'youtube.com',
+          'googlevideo.com',
+          'ytimg.com',
+        ],
+        'outbound': 'direct',
+      });
+    } else if (settings.streamMediaRoute == 'proxy') {
+      routeRules.add({
+        'domain_suffix': [
+          'netflix.com',
+          'nflxvideo.net',
+          'nflximg.net',
+          'disneyplus.com',
+          'disney-plus.net',
+          'spotify.com',
+          'scdn.co',
+          'youtube.com',
+          'googlevideo.com',
+          'ytimg.com',
+        ],
+        'outbound': primaryProxyTag,
+      });
+    }
+
     routeRules.add({'ip_is_private': true, 'outbound': 'direct'});
 
     if (settings.routingMode == RoutingMode.global) {
@@ -341,20 +474,23 @@ class ConfigGenerator {
     }
 
     // local-dns detour:
-    //   - TUN mode   → no detour (TUN handles all routing)
-    //   - dual-NIC   → detour:'direct' ONLY when direct outbound has bind_interface
-    //                  (sing-box FATAL: "detour to an empty direct outbound makes no sense")
-    //   - single-NIC → no detour (sing-box routes via its own table)
     final bool directHasInterface =
         !settings.tunModeEnabled && proxyInterface != null;
-    final List<Map<String, dynamic>> dnsServers = [
+    final List<Map<String, dynamic>> dnsServers = [];
+    if (settings.fakeIpEnabled) {
+      dnsServers.add({
+        'tag': 'fakeip-dns',
+        'type': 'fakeip',
+      });
+    }
+    dnsServers.addAll([
       buildDnsServer('remote-dns', settings.remoteDns, detour: primaryProxyTag),
       buildDnsServer(
         'local-dns',
         settings.directDns,
         detour: directHasInterface ? 'direct' : null,
       ),
-    ];
+    ]);
 
     final List<Map<String, dynamic>> dnsRules = [];
 
@@ -420,7 +556,7 @@ class ConfigGenerator {
       },
       {'rule_set': 'geosite-cn', 'server': 'local-dns'},
       {'clash_mode': 'Direct', 'server': 'local-dns'},
-      {'clash_mode': 'Global', 'server': 'remote-dns'},
+      {'clash_mode': 'Global', 'server': settings.fakeIpEnabled ? 'fakeip-dns' : 'remote-dns'},
     ]);
 
     final String geoipPath = (configDir != null && configDir.isNotEmpty)
@@ -443,8 +579,13 @@ class ConfigGenerator {
       'dns': {
         'servers': dnsServers,
         'rules': dnsRules,
-        'final': 'remote-dns',
-        'strategy': 'prefer_ipv4',
+        'final': settings.fakeIpEnabled ? 'fakeip-dns' : 'remote-dns',
+        'strategy': settings.dnsStrategy,
+        if (settings.fakeIpEnabled)
+          'fakeip': {
+            'enabled': true,
+            'inet4_range': settings.fakeIpRange,
+          },
       },
       'inbounds': inbounds,
       'outbounds': finalOutbounds,

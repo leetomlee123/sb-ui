@@ -116,6 +116,24 @@ proxy-groups:
     expect(defaultSettings.clashApiPort, 9090);
     expect(defaultSettings.autoUpdateRuleset, isTrue);
     expect(defaultSettings.tunStack, 'mixed');
+    expect(defaultSettings.fakeIpEnabled, isFalse);
+    expect(defaultSettings.fakeIpRange, '198.18.0.0/15');
+    expect(defaultSettings.dnsHijack, isTrue);
+    expect(defaultSettings.dnsStrategy, 'prefer_ipv4');
+    expect(defaultSettings.separateInboundPorts, isFalse);
+    expect(defaultSettings.httpPort, 7890);
+    expect(defaultSettings.socksPort, 7891);
+    expect(defaultSettings.blockAds, isFalse);
+    expect(defaultSettings.aiServicesRoute, 'proxy');
+    expect(defaultSettings.streamMediaRoute, 'proxy');
+    expect(defaultSettings.tunGso, isFalse);
+    expect(defaultSettings.tunIpv6, isFalse);
+    expect(defaultSettings.tunMtu, 9000);
+    expect(defaultSettings.tunStrictRoute, isTrue);
+    expect(defaultSettings.sniffingEnabled, isTrue);
+    expect(defaultSettings.sniffingOverrideDestination, isTrue);
+    expect(defaultSettings.tcpFastOpen, isFalse);
+    expect(defaultSettings.multiplex, 'none');
 
     final json = defaultSettings.toJson();
     final restored = AppSettings.fromJson(json);
@@ -123,15 +141,130 @@ proxy-groups:
     expect(restored.hasAskedCloseToTray, isFalse);
     expect(restored.autoUpdateRuleset, isTrue);
     expect(restored.tunStack, 'mixed');
+    expect(restored.fakeIpEnabled, isFalse);
+    expect(restored.fakeIpRange, '198.18.0.0/15');
+    expect(restored.dnsHijack, isTrue);
+    expect(restored.dnsStrategy, 'prefer_ipv4');
+    expect(restored.separateInboundPorts, isFalse);
+    expect(restored.httpPort, 7890);
+    expect(restored.socksPort, 7891);
+    expect(restored.blockAds, isFalse);
+    expect(restored.aiServicesRoute, 'proxy');
+    expect(restored.streamMediaRoute, 'proxy');
+    expect(restored.tunGso, isFalse);
+    expect(restored.tunIpv6, isFalse);
+    expect(restored.tunMtu, 9000);
+    expect(restored.tunStrictRoute, isTrue);
+    expect(restored.sniffingEnabled, isTrue);
+    expect(restored.sniffingOverrideDestination, isTrue);
+    expect(restored.tcpFastOpen, isFalse);
+    expect(restored.multiplex, 'none');
 
     final updated = defaultSettings.copyWith(
       hasAskedCloseToTray: true,
       closeToTray: false,
       autoUpdateRuleset: false,
+      fakeIpEnabled: true,
+      separateInboundPorts: true,
+      httpPort: 1080,
+      socksPort: 1081,
+      blockAds: true,
+      aiServicesRoute: 'direct',
+      tunGso: true,
+      tunIpv6: true,
+      tunMtu: 1500,
+      tcpFastOpen: true,
+      multiplex: 'yamux',
     );
     expect(updated.hasAskedCloseToTray, isTrue);
     expect(updated.closeToTray, isFalse);
     expect(updated.autoUpdateRuleset, isFalse);
+    expect(updated.fakeIpEnabled, isTrue);
+    expect(updated.separateInboundPorts, isTrue);
+    expect(updated.httpPort, 1080);
+    expect(updated.socksPort, 1081);
+    expect(updated.blockAds, isTrue);
+    expect(updated.aiServicesRoute, 'direct');
+    expect(updated.tunGso, isTrue);
+    expect(updated.tunIpv6, isTrue);
+    expect(updated.tunMtu, 1500);
+    expect(updated.tcpFastOpen, isTrue);
+    expect(updated.multiplex, 'yamux');
+  });
+
+  test('ConfigGenerator advanced visual configurations (Fake-IP, inbounds, rules, TUN GSO, Multiplex)', () {
+    const advancedSettings = AppSettings(
+      fakeIpEnabled: true,
+      fakeIpRange: '198.18.0.0/15',
+      dnsHijack: true,
+      dnsStrategy: 'prefer_ipv4',
+      separateInboundPorts: true,
+      httpPort: 8080,
+      socksPort: 10808,
+      blockAds: true,
+      aiServicesRoute: 'proxy',
+      streamMediaRoute: 'direct',
+      tunModeEnabled: true,
+      tunGso: true,
+      tunIpv6: true,
+      tunMtu: 1500,
+      tunStrictRoute: true,
+      sniffingEnabled: true,
+      sniffingOverrideDestination: true,
+      tcpFastOpen: true,
+      multiplex: 'yamux',
+    );
+
+    final node = {
+      'type': 'vless',
+      'tag': 'US-Test-Node',
+      'server': '1.2.3.4',
+      'server_port': 443,
+      'uuid': '00000000-0000-0000-0000-000000000000',
+    };
+
+    final config = ConfigGenerator.generate(
+      settings: advancedSettings,
+      parsedOutbounds: [node],
+    );
+
+    // 1. Inbounds: Separate HTTP and SOCKS
+    final inbounds = config['inbounds'] as List;
+    final httpIn = inbounds.firstWhere((i) => i['tag'] == 'http-in');
+    expect(httpIn['type'], 'http');
+    expect(httpIn['listen_port'], 8080);
+
+    final socksIn = inbounds.firstWhere((i) => i['tag'] == 'socks-in');
+    expect(socksIn['type'], 'socks');
+    expect(socksIn['listen_port'], 10808);
+
+    // 2. TUN: GSO, IPv6, MTU
+    final tunIn = inbounds.firstWhere((i) => i['tag'] == 'tun-in');
+    expect(tunIn['gso'], isTrue);
+    expect(tunIn['inet6_address'], contains('fdfe:dcba:9876::1/126'));
+    expect(tunIn['mtu'], 1500);
+
+    // 3. DNS: Fake-IP
+    final dns = config['dns'] as Map<String, dynamic>;
+    expect(dns['final'], 'fakeip-dns');
+    expect(dns['strategy'], 'prefer_ipv4');
+    expect(dns['fakeip']['enabled'], isTrue);
+    expect(dns['fakeip']['inet4_range'], '198.18.0.0/15');
+
+    // 4. Route Rules: Sniff, Hijack DNS, AdBlock, AI, Streaming
+    final rules = config['route']['rules'] as List;
+    expect(rules.any((r) => r['action'] == 'sniff'), isTrue);
+    expect(rules.any((r) => r['protocol'] == 'dns' && r['action'] == 'hijack-dns'), isTrue);
+    expect(rules.any((r) => r['action'] == 'reject'), isTrue); // AdBlock
+    expect(rules.any((r) => r['outbound'] == 'Proxy'), isTrue); // AI
+    expect(rules.any((r) => r['outbound'] == 'direct'), isTrue); // Streaming direct
+
+    // 5. Outbounds: TFO & Multiplex (yamux)
+    final outbounds = config['outbounds'] as List;
+    final testNode = outbounds.firstWhere((o) => o['tag'] == 'US-Test-Node');
+    expect(testNode['tcp_fast_open'], isTrue);
+    expect(testNode['multiplex']['enabled'], isTrue);
+    expect(testNode['multiplex']['protocol'], 'yamux');
   });
 
   test('ConfigGenerator Reality and Hysteria 2 structure', () {
@@ -321,13 +454,13 @@ rules:
       customDns: parseResult.customDns,
     );
 
-    // Verify TUN strict_route is false and address is modern array
+    // Verify TUN strict_route and address is modern array
     final inbounds = config['inbounds'] as List;
     final tunInbound = inbounds.firstWhere((i) => i['type'] == 'tun');
-    expect(tunInbound['strict_route'], isFalse);
+    expect(tunInbound['strict_route'], isTrue);
     expect(tunInbound['address'], contains('172.19.0.1/30'));
     expect(tunInbound.containsKey('inet4_address'), isFalse);
-    expect(tunInbound.containsKey('sniff'), isFalse);
+    expect(tunInbound['sniff'], isTrue);
 
     final routeRules = config['route']['rules'] as List;
 

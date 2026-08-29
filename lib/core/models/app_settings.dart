@@ -42,6 +42,34 @@ class AppSettings {
   final bool autoCheckAppUpdates; // Settings: silent update check on startup
   final bool autoUpdateRuleset; // Settings: silent ruleset auto-update on startup
 
+  // DNS Advanced
+  final bool fakeIpEnabled;
+  final String fakeIpRange;
+  final bool dnsHijack;
+  final String dnsStrategy; // 'prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only'
+
+  // Inbounds
+  final bool separateInboundPorts;
+  final int httpPort;
+  final int socksPort;
+
+  // Routing & Scenario Rules
+  final bool blockAds;
+  final String aiServicesRoute; // 'proxy', 'direct'
+  final String streamMediaRoute; // 'proxy', 'direct'
+
+  // TUN & Kernel
+  final bool tunGso;
+  final bool tunIpv6;
+  final int tunMtu;
+  final bool tunStrictRoute;
+
+  // Sniffing & Advanced
+  final bool sniffingEnabled;
+  final bool sniffingOverrideDestination;
+  final bool tcpFastOpen;
+  final String multiplex; // 'none', 'smux', 'yamux', 'h2mux'
+
   const AppSettings({
     this.mixedPort = 7890,
     this.clashApiPort = 9090,
@@ -66,6 +94,29 @@ class AppSettings {
     this.showTelemetryChart = true,
     this.autoCheckAppUpdates = true,
     this.autoUpdateRuleset = true,
+    // DNS Advanced
+    this.fakeIpEnabled = false,
+    this.fakeIpRange = '198.18.0.0/15',
+    this.dnsHijack = true,
+    this.dnsStrategy = 'prefer_ipv4',
+    // Inbounds
+    this.separateInboundPorts = false,
+    this.httpPort = 7890,
+    this.socksPort = 7891,
+    // Routing & Rules
+    this.blockAds = false,
+    this.aiServicesRoute = 'proxy',
+    this.streamMediaRoute = 'proxy',
+    // TUN
+    this.tunGso = false,
+    this.tunIpv6 = false,
+    this.tunMtu = 9000,
+    this.tunStrictRoute = true,
+    // Sniffing & Advanced
+    this.sniffingEnabled = true,
+    this.sniffingOverrideDestination = true,
+    this.tcpFastOpen = false,
+    this.multiplex = 'none',
   });
 
   Map<String, dynamic> toJson() {
@@ -93,6 +144,29 @@ class AppSettings {
       'showTelemetryChart': showTelemetryChart,
       'autoCheckAppUpdates': autoCheckAppUpdates,
       'autoUpdateRuleset': autoUpdateRuleset,
+      // DNS Advanced
+      'fakeIpEnabled': fakeIpEnabled,
+      'fakeIpRange': fakeIpRange,
+      'dnsHijack': dnsHijack,
+      'dnsStrategy': dnsStrategy,
+      // Inbounds
+      'separateInboundPorts': separateInboundPorts,
+      'httpPort': httpPort,
+      'socksPort': socksPort,
+      // Routing & Rules
+      'blockAds': blockAds,
+      'aiServicesRoute': aiServicesRoute,
+      'streamMediaRoute': streamMediaRoute,
+      // TUN
+      'tunGso': tunGso,
+      'tunIpv6': tunIpv6,
+      'tunMtu': tunMtu,
+      'tunStrictRoute': tunStrictRoute,
+      // Sniffing & Advanced
+      'sniffingEnabled': sniffingEnabled,
+      'sniffingOverrideDestination': sniffingOverrideDestination,
+      'tcpFastOpen': tcpFastOpen,
+      'multiplex': multiplex,
     };
   }
 
@@ -124,6 +198,29 @@ class AppSettings {
       showTelemetryChart: json['showTelemetryChart'] as bool? ?? true,
       autoCheckAppUpdates: json['autoCheckAppUpdates'] as bool? ?? true,
       autoUpdateRuleset: json['autoUpdateRuleset'] as bool? ?? true,
+      // DNS Advanced
+      fakeIpEnabled: json['fakeIpEnabled'] as bool? ?? false,
+      fakeIpRange: json['fakeIpRange'] as String? ?? '198.18.0.0/15',
+      dnsHijack: json['dnsHijack'] as bool? ?? true,
+      dnsStrategy: json['dnsStrategy'] as String? ?? 'prefer_ipv4',
+      // Inbounds
+      separateInboundPorts: json['separateInboundPorts'] as bool? ?? false,
+      httpPort: json['httpPort'] as int? ?? 7890,
+      socksPort: json['socksPort'] as int? ?? 7891,
+      // Routing & Rules
+      blockAds: json['blockAds'] as bool? ?? false,
+      aiServicesRoute: json['aiServicesRoute'] as String? ?? 'proxy',
+      streamMediaRoute: json['streamMediaRoute'] as String? ?? 'proxy',
+      // TUN
+      tunGso: json['tunGso'] as bool? ?? false,
+      tunIpv6: json['tunIpv6'] as bool? ?? false,
+      tunMtu: json['tunMtu'] as int? ?? 9000,
+      tunStrictRoute: json['tunStrictRoute'] as bool? ?? true,
+      // Sniffing & Advanced
+      sniffingEnabled: json['sniffingEnabled'] as bool? ?? true,
+      sniffingOverrideDestination: json['sniffingOverrideDestination'] as bool? ?? true,
+      tcpFastOpen: json['tcpFastOpen'] as bool? ?? false,
+      multiplex: json['multiplex'] as String? ?? 'none',
     );
   }
 
@@ -151,6 +248,29 @@ class AppSettings {
     bool? showTelemetryChart,
     bool? autoCheckAppUpdates,
     bool? autoUpdateRuleset,
+    // DNS Advanced
+    bool? fakeIpEnabled,
+    String? fakeIpRange,
+    bool? dnsHijack,
+    String? dnsStrategy,
+    // Inbounds
+    bool? separateInboundPorts,
+    int? httpPort,
+    int? socksPort,
+    // Routing & Rules
+    bool? blockAds,
+    String? aiServicesRoute,
+    String? streamMediaRoute,
+    // TUN
+    bool? tunGso,
+    bool? tunIpv6,
+    int? tunMtu,
+    bool? tunStrictRoute,
+    // Sniffing & Advanced
+    bool? sniffingEnabled,
+    bool? sniffingOverrideDestination,
+    bool? tcpFastOpen,
+    String? multiplex,
   }) {
     return AppSettings(
       mixedPort: mixedPort ?? this.mixedPort,
@@ -176,6 +296,29 @@ class AppSettings {
       showTelemetryChart: showTelemetryChart ?? this.showTelemetryChart,
       autoCheckAppUpdates: autoCheckAppUpdates ?? this.autoCheckAppUpdates,
       autoUpdateRuleset: autoUpdateRuleset ?? this.autoUpdateRuleset,
+      // DNS Advanced
+      fakeIpEnabled: fakeIpEnabled ?? this.fakeIpEnabled,
+      fakeIpRange: fakeIpRange ?? this.fakeIpRange,
+      dnsHijack: dnsHijack ?? this.dnsHijack,
+      dnsStrategy: dnsStrategy ?? this.dnsStrategy,
+      // Inbounds
+      separateInboundPorts: separateInboundPorts ?? this.separateInboundPorts,
+      httpPort: httpPort ?? this.httpPort,
+      socksPort: socksPort ?? this.socksPort,
+      // Routing & Rules
+      blockAds: blockAds ?? this.blockAds,
+      aiServicesRoute: aiServicesRoute ?? this.aiServicesRoute,
+      streamMediaRoute: streamMediaRoute ?? this.streamMediaRoute,
+      // TUN
+      tunGso: tunGso ?? this.tunGso,
+      tunIpv6: tunIpv6 ?? this.tunIpv6,
+      tunMtu: tunMtu ?? this.tunMtu,
+      tunStrictRoute: tunStrictRoute ?? this.tunStrictRoute,
+      // Sniffing & Advanced
+      sniffingEnabled: sniffingEnabled ?? this.sniffingEnabled,
+      sniffingOverrideDestination: sniffingOverrideDestination ?? this.sniffingOverrideDestination,
+      tcpFastOpen: tcpFastOpen ?? this.tcpFastOpen,
+      multiplex: multiplex ?? this.multiplex,
     );
   }
 

@@ -268,6 +268,47 @@ class Translations {
   String get langZh => '简体中文';
   String get langEn => 'English';
 
+  // Settings Tabs
+  String get tabGeneral => isZh ? '常规偏好' : 'General';
+  String get tabInbounds => isZh ? '网络入站' : 'Inbounds';
+  String get tabDns => isZh ? 'DNS 架构' : 'DNS';
+  String get tabRouting => isZh ? '分流规则' : 'Routing';
+  String get tabTun => isZh ? 'TUN 核心' : 'TUN Core';
+  String get tabAdvanced => isZh ? '高级实验' : 'Advanced';
+
+  // Settings New Options
+  String get fakeIpTitle => isZh ? 'Fake-IP 模式' : 'Fake-IP Mode';
+  String get fakeIpDesc => isZh ? '为所有代理域名分配 198.18.x.x 虚拟 IP 地址，加速 DNS 响应并防止 DNS 污染' : 'Assign 198.18.x.x synthetic IPs to proxied domains to boost lookup speed and avoid DNS poisoning';
+  String get dnsHijackTitle => isZh ? 'DNS 53 端口劫持' : 'DNS Hijack (Port 53)';
+  String get dnsHijackDesc => isZh ? '强制拦截本机发出的 UDP/TCP 53 端口 DNS 请求并交由 sing-box 智能调度' : 'Intercept local port 53 DNS queries and route via sing-box DNS engine';
+  String get dnsStrategyTitle => isZh ? 'DNS 域名解析策略' : 'DNS Resolution Strategy';
+  String get separateInboundTitle => isZh ? '分离 HTTP / SOCKS5 端口' : 'Separate HTTP / SOCKS5 Ports';
+  String get separateInboundDesc => isZh ? '分别监听独立的 HTTP 代理端口与 SOCKS5 代理端口' : 'Listen on dedicated ports for HTTP proxy and SOCKS5 proxy individually';
+  String get httpPortLabel => isZh ? 'HTTP 代理端口' : 'HTTP Proxy Port';
+  String get socksPortLabel => isZh ? 'SOCKS5 代理端口' : 'SOCKS5 Proxy Port';
+  String get blockAdsTitle => isZh ? '拦截广告与跟踪器 (AdBlock)' : 'Block Advertisements & Trackers';
+  String get blockAdsDesc => isZh ? '基于内置广告域名规则库直接拦截各类常见弹窗广告与追踪 SDK' : 'Automatically drop traffic to common advertisement and telemetry domains';
+  String get aiServicesTitle => isZh ? 'AI 平台分流 (OpenAI / Claude / Gemini)' : 'AI Platforms Routing (OpenAI / Claude / Gemini)';
+  String get streamMediaTitle => isZh ? '国际流媒体分流 (YouTube / Netflix / Disney+)' : 'Streaming Media Routing (YouTube / Netflix / Disney+)';
+  String get routeProxy => isZh ? '节点代理 (Proxy)' : 'Proxy Outbound';
+  String get routeDirect => isZh ? '国内直连 (Direct)' : 'Direct Outbound';
+  String get tunGsoTitle => isZh ? 'TUN GSO 硬件分段卸载加速' : 'TUN Generic Segmentation Offload (GSO)';
+  String get tunGsoDesc => isZh ? '利用网卡硬件分段加速，显著提升大流量吞吐性能并降低 CPU 占用' : 'Leverage hardware segmentation offload to increase throughput and reduce CPU overhead';
+  String get tunIpv6Title => isZh ? 'TUN IPv6 虚拟网卡支持' : 'TUN IPv6 Virtual Stack';
+  String get tunIpv6Desc => isZh ? '默认禁用 IPv6 可彻底避免因宽带 IPv6 旁路导致的真实 IP 泄露' : 'Disabled by default to prevent IP leaks via direct IPv6 bypass routes';
+  String get tunStrictRouteTitle => isZh ? '严格路由 (Strict Route)' : 'Strict Route';
+  String get tunStrictRouteDesc => isZh ? '强制所有网络流量必须经过 TUN 虚拟网卡，杜绝 WebRTC 等旁路泄露' : 'Prevent direct traffic bypass via alternative interfaces or WebRTC';
+  String get sniffingTitle => isZh ? '协议嗅探 (Protocol Sniffing)' : 'Protocol Sniffing (TLS / HTTP / QUIC)';
+  String get sniffingDesc => isZh ? '从连接握手报文中自动识别真实访问域名（如 TLS SNI、HTTP Host、QUIC）' : 'Extract target hostname from TLS SNI, HTTP Host, or QUIC handshake packets';
+  String get sniffOverrideTitle => isZh ? '嗅探域名覆写 (Override Destination)' : 'Override Destination by Sniffed Domain';
+  String get sniffOverrideDesc => isZh ? '使用嗅探提取到的真实域名替换目标 IP，解决纯 IP 请求的精准分流' : 'Replace destination IP with sniffed domain for accurate routing rules matching';
+  String get tcpFastOpenTitle => isZh ? 'TCP Fast Open (TFO)' : 'TCP Fast Open (TFO)';
+  String get tcpFastOpenDesc => isZh ? '在 TCP 三次握手 SYN 包中附带数据，减少连接 RTT 延迟' : 'Send data in TCP SYN packet to eliminate one round-trip time';
+  String get multiplexTitle => isZh ? 'Multiplex 连接多路复用' : 'Multiplex Connection Sharing';
+  String get multiplexDesc => isZh ? '在单条 TCP/TLS 连接中复用多个数据流，降低频繁握手延迟并改善并发' : 'Multiplex multiple concurrent streams over a single TCP/TLS connection';
+  String get btnPreviewConfig => isZh ? '预览实时 Config.json' : 'Preview Live Config.json';
+  String get previewConfigTitle => isZh ? '当前生成的 sing-box 运行时配置' : 'Generated sing-box Runtime Config';
+
   // Tray Menu
   String get trayOpen => isZh ? '打开主面板' : 'Open Dashboard';
   String get trayToggle => isZh ? '开关网络连接' : 'Toggle Connection';

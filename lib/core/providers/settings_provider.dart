@@ -104,6 +104,83 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   Future<void> toggleAutoUpdateRuleset(bool enabled) async {
     await updateSettings(state.copyWith(autoUpdateRuleset: enabled));
   }
+
+  // DNS Advanced
+  Future<void> toggleFakeIp(bool enabled) async {
+    await updateSettings(state.copyWith(fakeIpEnabled: enabled));
+  }
+
+  Future<void> updateFakeIpRange(String range) async {
+    await updateSettings(state.copyWith(fakeIpRange: range));
+  }
+
+  Future<void> toggleDnsHijack(bool enabled) async {
+    await updateSettings(state.copyWith(dnsHijack: enabled));
+  }
+
+  Future<void> setDnsStrategy(String strategy) async {
+    await updateSettings(state.copyWith(dnsStrategy: strategy));
+  }
+
+  // Inbounds
+  Future<void> toggleSeparateInboundPorts(bool separate) async {
+    await updateSettings(state.copyWith(separateInboundPorts: separate));
+  }
+
+  Future<void> updateHttpPort(int port) async {
+    await updateSettings(state.copyWith(httpPort: port));
+  }
+
+  Future<void> updateSocksPort(int port) async {
+    await updateSettings(state.copyWith(socksPort: port));
+  }
+
+  // Routing & Scenario Rules
+  Future<void> toggleBlockAds(bool enabled) async {
+    await updateSettings(state.copyWith(blockAds: enabled));
+  }
+
+  Future<void> setAiServicesRoute(String route) async {
+    await updateSettings(state.copyWith(aiServicesRoute: route));
+  }
+
+  Future<void> setStreamMediaRoute(String route) async {
+    await updateSettings(state.copyWith(streamMediaRoute: route));
+  }
+
+  // TUN & Kernel
+  Future<void> toggleTunGso(bool enabled) async {
+    await updateSettings(state.copyWith(tunGso: enabled));
+  }
+
+  Future<void> toggleTunIpv6(bool enabled) async {
+    await updateSettings(state.copyWith(tunIpv6: enabled));
+  }
+
+  Future<void> updateTunMtu(int mtu) async {
+    await updateSettings(state.copyWith(tunMtu: mtu));
+  }
+
+  Future<void> toggleTunStrictRoute(bool enabled) async {
+    await updateSettings(state.copyWith(tunStrictRoute: enabled));
+  }
+
+  // Sniffing & Advanced
+  Future<void> toggleSniffing(bool enabled) async {
+    await updateSettings(state.copyWith(sniffingEnabled: enabled));
+  }
+
+  Future<void> toggleSniffingOverrideDestination(bool enabled) async {
+    await updateSettings(state.copyWith(sniffingOverrideDestination: enabled));
+  }
+
+  Future<void> toggleTcpFastOpen(bool enabled) async {
+    await updateSettings(state.copyWith(tcpFastOpen: enabled));
+  }
+
+  Future<void> setMultiplex(String multiplex) async {
+    await updateSettings(state.copyWith(multiplex: multiplex));
+  }
 }
 
 final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((ref) {
