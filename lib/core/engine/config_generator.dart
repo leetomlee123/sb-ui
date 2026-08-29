@@ -549,13 +549,6 @@ class ConfigGenerator {
       {'clash_mode': 'Global', 'server': settings.fakeIpEnabled ? 'fakeip-dns' : 'remote-dns'},
     ]);
 
-    final String geoipPath = (configDir != null && configDir.isNotEmpty)
-        ? p.join(configDir, 'geoip-cn.srs').replaceAll(r'\', '/')
-        : 'geoip-cn.srs';
-    final String geositePath = (configDir != null && configDir.isNotEmpty)
-        ? p.join(configDir, 'geosite-cn.srs').replaceAll(r'\', '/')
-        : 'geosite-cn.srs';
-
     final String? logPath = (configDir != null && configDir.isNotEmpty)
         ? p.join(configDir, 'sing-box.log').replaceAll(r'\', '/')
         : null;
@@ -584,16 +577,20 @@ class ConfigGenerator {
         'rules': routeRules,
         'rule_set': [
           {
-            'type': 'local',
+            'type': 'remote',
             'tag': 'geoip-cn',
             'format': 'binary',
-            'path': geoipPath,
+            'url': 'https://fastly.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs',
+            'download_detour': 'direct',
+            'update_interval': '1d',
           },
           {
-            'type': 'local',
+            'type': 'remote',
             'tag': 'geosite-cn',
             'format': 'binary',
-            'path': geositePath,
+            'url': 'https://fastly.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs',
+            'download_detour': 'direct',
+            'update_interval': '1d',
           },
         ],
         'final': primaryProxyTag,
