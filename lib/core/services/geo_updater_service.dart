@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import '../models/geo_asset.dart';
 import '../utils/proxy_dio_helper.dart';
@@ -14,7 +15,7 @@ class GeoUpdaterService {
       'tag': 'geoip-cn',
       'displayName': '中国大陆 IP 规则集 (geoip-cn.srs)',
       'description': 'sing-box 原生 SRS 二进制规则集，精准匹配中国大陆 IP 范围用于国内直连',
-      'primaryUrl': 'https://testingcf.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs',
+      'primaryUrl': 'https://fastly.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs',
       'fallbackUrl': 'https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs',
     },
     {
@@ -22,7 +23,7 @@ class GeoUpdaterService {
       'tag': 'geosite-cn',
       'displayName': '中国大陆域名规则集 (geosite-cn.srs)',
       'description': 'sing-box 原生 SRS 二进制规则集，覆盖国内主流网站与服务域名用于直连与 DNS 加速',
-      'primaryUrl': 'https://testingcf.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs',
+      'primaryUrl': 'https://fastly.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs',
       'fallbackUrl': 'https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs',
     },
   ];
@@ -31,8 +32,8 @@ class GeoUpdaterService {
       : _dio = dio ??
             Dio(
               BaseOptions(
-                connectTimeout: const Duration(seconds: 12),
-                receiveTimeout: const Duration(seconds: 25),
+                connectTimeout: const Duration(seconds: 10),
+                receiveTimeout: const Duration(seconds: 20),
                 headers: {
                   'User-Agent': 'sing-box-ui-geo-updater',
                 },
@@ -88,52 +89,64 @@ class GeoUpdaterService {
 
     List<int>? fileBytes;
 
-    // 1. Try primary URL (jsdelivr CDN)
-    try {
-      final response = await _dio.get<List<int>>(
-        asset.primaryUrl,
-        options: Options(responseType: ResponseType.bytes),
-        onReceiveProgress: (received, total) {
-          if (total > 0 && onProgress != null) {
-            onProgress((received / total).clamp(0.1, 0.85), 'Downloading ${asset.name}...');
-          }
-        },
-      );
-      if (response.statusCode == 200 && response.data != null && response.data!.isNotEmpty) {
-        fileBytes = response.data;
-      }
-    } catch (_) {}
+    final repo = asset.name.startsWith('geosite') ? 'sing-geosite' : 'sing-geoip';
+    final candidateUrls = [
+      'https://fastly.jsdelivr.net/gh/SagerNet/$repo@rule-set/${asset.name}',
+      'https://cdn.jsdelivr.net/gh/SagerNet/$repo@rule-set/${asset.name}',
+      'https://gcore.jsdelivr.net/gh/SagerNet/$repo@rule-set/${asset.name}',
+      'https://testingcf.jsdelivr.net/gh/SagerNet/$repo@rule-set/${asset.name}',
+      'https://raw.gitmirror.com/SagerNet/$repo/rule-set/${asset.name}',
+      'https://ghproxy.net/https://raw.githubusercontent.com/SagerNet/$repo/rule-set/${asset.name}',
+      'https://mirror.ghproxy.com/https://raw.githubusercontent.com/SagerNet/$repo/rule-set/${asset.name}',
+      asset.primaryUrl,
+      asset.fallbackUrl,
+    ];
 
-    // 2. Fallback to secondary URL (GitHub Raw) if primary failed
-    if (fileBytes == null || fileBytes.isEmpty) {
-      onProgress?.call(0.2, 'Retrying from secondary mirror...');
+    for (int i = 0; i < candidateUrls.length; i++) {
+      final url = candidateUrls[i];
       try {
         final response = await _dio.get<List<int>>(
-          asset.fallbackUrl,
-          options: Options(responseType: ResponseType.bytes),
+          url,
+          options: Options(
+            responseType: ResponseType.bytes,
+            sendTimeout: const Duration(seconds: 8),
+            receiveTimeout: const Duration(seconds: 15),
+          ),
           onReceiveProgress: (received, total) {
             if (total > 0 && onProgress != null) {
-              onProgress((received / total).clamp(0.2, 0.85), 'Downloading ${asset.name}...');
+              onProgress((received / total).clamp(0.1, 0.85), 'Downloading ${asset.name}...');
             }
           },
         );
         if (response.statusCode == 200 && response.data != null && response.data!.isNotEmpty) {
           fileBytes = response.data;
+          break;
         }
-      } catch (_) {}
+      } catch (_) {
+        continue;
+      }
     }
-
-    if (fileBytes == null || fileBytes.isEmpty) {
-      throw Exception('Failed to download ${asset.name} from all mirrors.');
-    }
-
-    onProgress?.call(0.9, 'Saving ${asset.name}...');
 
     final configDir = await StorageService.getAppConfigDir();
     final targetFile = File(p.join(configDir.path, asset.name));
-    await targetFile.writeAsBytes(fileBytes);
 
-    onProgress?.call(1.0, '${asset.name} updated successfully.');
-    return true;
+    if (fileBytes != null && fileBytes.isNotEmpty) {
+      onProgress?.call(0.9, 'Saving ${asset.name}...');
+      await targetFile.writeAsBytes(fileBytes);
+      onProgress?.call(1.0, '${asset.name} updated successfully.');
+      return true;
+    }
+
+    // Fallback: If offline and local target file does not exist or is empty, copy from bundled assets/rules
+    if (!await targetFile.exists() || await targetFile.length() == 0) {
+      try {
+        final byteData = await rootBundle.load('assets/rules/${asset.name}');
+        await targetFile.writeAsBytes(byteData.buffer.asUint8List());
+        onProgress?.call(1.0, '${asset.name} restored from offline bundle.');
+        return true;
+      } catch (_) {}
+    }
+
+    throw Exception('Failed to download ${asset.name} from all mirrors.');
   }
 }

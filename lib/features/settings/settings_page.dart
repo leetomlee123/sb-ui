@@ -1586,17 +1586,364 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with SingleTickerPr
       builder: (dialogCtx) {
         List<DiagnosticItem>? results;
         bool isDiagnosing = true;
+
+        void runChecks(void Function(void Function()) setStateFn) {
+          setStateFn(() {
+            isDiagnosing = true;
+            results = null;
+          });
+          NetworkDoctorService.runDiagnostics(
+            settings: settings,
+            isCoreRunning: isRunning,
+          ).then((items) {
+            if (dialogCtx.mounted) {
+              setStateFn(() {
+                results = items;
+                isDiagnosing = false;
+              });
+            }
+          });
+        }
+
         return StatefulBuilder(
           builder: (ctx, setState) {
             if (isDiagnosing && results == null) {
-              NetworkDoctorService.runDiagnostics(settings: settings, isCoreRunning: isRunning).then((items) {
-                if (ctx.mounted) setState(() { results = items; isDiagnosing = false; });
-              });
+              runChecks(setState);
             }
+
+            int passCount = 0;
+            int warnCount = 0;
+            int failCount = 0;
+
+            if (results != null) {
+              for (final item in results!) {
+                switch (item.status) {
+                  case DiagnosticStatus.pass:
+                    passCount++;
+                    break;
+                  case DiagnosticStatus.warn:
+                    warnCount++;
+                    break;
+                  case DiagnosticStatus.fail:
+                    failCount++;
+                    break;
+                  case DiagnosticStatus.checking:
+                    break;
+                }
+              }
+            }
+
             return AlertDialog(
-              title: Text(tr.isZh ? '诊断报告' : 'Diagnostic Report'),
-              content: SizedBox(width: 500, child: isDiagnosing ? const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator())) : Column(children: results!.map((i) => Text('${i.title}: ${i.status}')).toList())),
-              actions: [TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: Text(tr.confirm))],
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              titlePadding: const EdgeInsets.fromLTRB(24, 20, 20, 12),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.health_and_safety_rounded,
+                      color: Color(0xFF10B981),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tr.isZh ? '系统与网络体检报告' : 'System & Network Diagnostics',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          tr.isZh
+                              ? '全面检测系统环境、sing-box核心、驱动模块与网络连通性'
+                              : 'Inspect core binary, drivers, DNS and network connectivity',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded, size: 20),
+                    tooltip: tr.refresh,
+                    onPressed: isDiagnosing ? null : () => runChecks(setState),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 600,
+                child: isDiagnosing
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(vertical: 48),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(
+                              width: 38,
+                              height: 38,
+                              child: CircularProgressIndicator(strokeWidth: 3),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              tr.isZh
+                                  ? '正在全面检测核心程序、驱动模块、DNS解析与网络出站链路...'
+                                  : 'Diagnosing system environment, core binaries, and DNS latency...',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 1. Overall Summary Banner
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: failCount > 0
+                                  ? const Color(0xFFEF4444).withValues(alpha: 0.1)
+                                  : (warnCount > 0
+                                      ? const Color(0xFFF59E0B).withValues(alpha: 0.1)
+                                      : const Color(0xFF10B981).withValues(alpha: 0.1)),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: failCount > 0
+                                    ? const Color(0xFFEF4444).withValues(alpha: 0.3)
+                                    : (warnCount > 0
+                                        ? const Color(0xFFF59E0B).withValues(alpha: 0.3)
+                                        : const Color(0xFF10B981).withValues(alpha: 0.3)),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  failCount > 0
+                                      ? Icons.error_outline_rounded
+                                      : (warnCount > 0 ? Icons.warning_amber_rounded : Icons.check_circle_outline_rounded),
+                                  color: failCount > 0
+                                      ? const Color(0xFFEF4444)
+                                      : (warnCount > 0 ? const Color(0xFFF59E0B) : const Color(0xFF10B981)),
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    failCount > 0
+                                        ? (tr.isZh
+                                            ? '发现 $failCount 项异常阻断，请参考下方明细进行修复'
+                                            : 'Found $failCount critical issues, please review below')
+                                        : (warnCount > 0
+                                            ? (tr.isZh
+                                                ? '系统基本正常，但存在 $warnCount 项轻微警告'
+                                                : 'System is functional with $warnCount minor warnings')
+                                            : (tr.isZh
+                                                ? '所有 $passCount 项检测全部通过，运行环境状态极佳！'
+                                                : 'All $passCount checks passed! System environment is optimal.')),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: failCount > 0
+                                          ? const Color(0xFFEF4444)
+                                          : (warnCount > 0 ? const Color(0xFFF59E0B) : const Color(0xFF10B981)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '$passCount 通过',
+                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),
+                                  ),
+                                ),
+                                if (warnCount > 0) ...[
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      '$warnCount 警告',
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFF59E0B)),
+                                    ),
+                                  ),
+                                ],
+                                if (failCount > 0) ...[
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      '$failCount 异常',
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFEF4444)),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+
+                          // 2. Scrollable Check Items List
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 380),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              itemCount: results!.length,
+                              separatorBuilder: (ctx, index) => const SizedBox(height: 8),
+                              itemBuilder: (context, idx) {
+                                final item = results![idx];
+
+                                Color statusColor;
+                                IconData statusIcon;
+                                String statusBadgeText;
+
+                                switch (item.status) {
+                                  case DiagnosticStatus.pass:
+                                    statusColor = const Color(0xFF10B981);
+                                    statusIcon = Icons.check_circle_rounded;
+                                    statusBadgeText = tr.isZh ? '通过' : 'PASS';
+                                    break;
+                                  case DiagnosticStatus.warn:
+                                    statusColor = const Color(0xFFF59E0B);
+                                    statusIcon = Icons.warning_rounded;
+                                    statusBadgeText = tr.isZh ? '警告' : 'WARN';
+                                    break;
+                                  case DiagnosticStatus.fail:
+                                    statusColor = const Color(0xFFEF4444);
+                                    statusIcon = Icons.cancel_rounded;
+                                    statusBadgeText = tr.isZh ? '失败' : 'FAIL';
+                                    break;
+                                  case DiagnosticStatus.checking:
+                                    statusColor = const Color(0xFF38BDF8);
+                                    statusIcon = Icons.hourglass_top_rounded;
+                                    statusBadgeText = tr.isZh ? '检测中' : 'CHECK';
+                                    break;
+                                }
+
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: statusColor.withValues(alpha: 0.3),
+                                      width: 0.8,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Icon(statusIcon, color: statusColor, size: 18),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    item.title,
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 13,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: statusColor.withValues(alpha: 0.15),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Text(
+                                                    statusBadgeText,
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: statusColor,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              item.description,
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                              ),
+                                            ),
+                                            if (item.detail.isNotEmpty) ...[
+                                              const SizedBox(height: 6),
+                                              Container(
+                                                width: double.infinity,
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF0F172A),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(
+                                                    color: const Color(0xFF334155),
+                                                    width: 0.6,
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  item.detail,
+                                                  style: const TextStyle(
+                                                    fontFamily: 'monospace',
+                                                    fontSize: 10,
+                                                    color: Color(0xFF94A3B8),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+              actions: [
+                TextButton.icon(
+                  onPressed: isDiagnosing ? null : () => runChecks(setState),
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: Text(tr.isZh ? '重新诊断' : 'Re-run'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogCtx).pop(),
+                  child: Text(tr.confirm),
+                ),
+              ],
             );
           },
         );
