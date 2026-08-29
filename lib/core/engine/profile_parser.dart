@@ -27,6 +27,132 @@ class ProfileParser {
     _parseCache.clear();
   }
 
+  /// Removes specified node tags from raw configuration (JSON, YAML, or URI list)
+  /// and returns the updated configuration string.
+  static String removeNodesFromContent(String content, Set<String> nodeTagsToRemove) {
+    if (nodeTagsToRemove.isEmpty) return content;
+    final trimmed = content.trim();
+    if (trimmed.isEmpty) return content;
+
+    // 1. JSON (sing-box config or array)
+    if (trimmed.startsWith('{')) {
+      try {
+        final dynamic decoded = jsonDecode(trimmed);
+        if (decoded is Map<String, dynamic>) {
+          if (decoded['outbounds'] is List) {
+            final outboundsList = (decoded['outbounds'] as List<dynamic>).toList();
+            outboundsList.removeWhere((ob) {
+              if (ob is Map) {
+                final tag = ob['tag']?.toString();
+                final type = ob['type']?.toString().toLowerCase();
+                if (['direct', 'block', 'dns'].contains(type)) return false;
+                return tag != null && nodeTagsToRemove.contains(tag);
+              }
+              return false;
+            });
+
+            // Also clean up references inside selector / urltest groups
+            for (final ob in outboundsList) {
+              if (ob is Map && ob['outbounds'] is List) {
+                final list = (ob['outbounds'] as List).map((e) => e.toString()).toList();
+                list.removeWhere((t) => nodeTagsToRemove.contains(t));
+                ob['outbounds'] = list;
+              }
+            }
+
+            decoded['outbounds'] = outboundsList;
+            clearCache();
+            return const JsonEncoder.withIndent('  ').convert(decoded);
+          }
+        }
+      } catch (_) {}
+    } else if (trimmed.startsWith('[')) {
+      try {
+        final dynamic decoded = jsonDecode(trimmed);
+        if (decoded is List) {
+          final list = decoded.where((ob) {
+            if (ob is Map) {
+              final tag = ob['tag']?.toString() ?? ob['name']?.toString();
+              return tag == null || !nodeTagsToRemove.contains(tag);
+            }
+            return true;
+          }).toList();
+          clearCache();
+          return const JsonEncoder.withIndent('  ').convert(list);
+        }
+      } catch (_) {}
+    }
+
+    // 2. YAML (Clash)
+    if (trimmed.contains('proxies:') || trimmed.contains('Proxy:')) {
+      try {
+        final yamlDoc = loadYaml(trimmed);
+        if (yamlDoc is YamlMap) {
+          final map = _deepMutable(yamlDoc) as Map<String, dynamic>;
+          final proxiesKey = map.containsKey('proxies')
+              ? 'proxies'
+              : (map.containsKey('Proxy') ? 'Proxy' : null);
+          if (proxiesKey != null && map[proxiesKey] is List) {
+            final list = (map[proxiesKey] as List).where((p) {
+              if (p is Map) {
+                final name = p['name']?.toString();
+                return name == null || !nodeTagsToRemove.contains(name);
+              }
+              return true;
+            }).toList();
+            map[proxiesKey] = list;
+          }
+
+          final groupsKey = map.containsKey('proxy-groups')
+              ? 'proxy-groups'
+              : (map.containsKey('Proxy Group') ? 'Proxy Group' : null);
+          if (groupsKey != null && map[groupsKey] is List) {
+            for (final g in map[groupsKey]) {
+              if (g is Map && g['proxies'] is List) {
+                final plist = (g['proxies'] as List).map((e) => e.toString()).toList();
+                plist.removeWhere((n) => nodeTagsToRemove.contains(n));
+                g['proxies'] = plist;
+              }
+            }
+          }
+
+          clearCache();
+          return const JsonEncoder.withIndent('  ').convert(map);
+        }
+      } catch (_) {}
+    }
+
+    // 3. URI List (line by line)
+    final lines = content.split('\n');
+    final remainingLines = <String>[];
+    for (final line in lines) {
+      final lineTrim = line.trim();
+      if (lineTrim.isEmpty || lineTrim.startsWith('#')) {
+        remainingLines.add(line);
+        continue;
+      }
+      final parsed = _parseUri(lineTrim);
+      if (parsed != null) {
+        final tag = parsed['tag']?.toString();
+        if (tag != null && nodeTagsToRemove.contains(tag)) {
+          continue;
+        }
+      }
+      remainingLines.add(line);
+    }
+    clearCache();
+    return remainingLines.join('\n');
+  }
+
+  static dynamic _deepMutable(dynamic value) {
+    if (value is Map) {
+      return value.map((k, v) => MapEntry(k.toString(), _deepMutable(v)));
+    } else if (value is List) {
+      return value.map(_deepMutable).toList();
+    }
+    return value;
+  }
+
   static ProfileParserResult parse(String content) {
     final trimmed = content.trim();
     if (trimmed.isEmpty) {
@@ -74,6 +200,31 @@ class ProfileParser {
               customDns: customDns,
               count: list.length,
               format: 'sing-box',
+            );
+          } else if (decoded.containsKey('proxies') || decoded.containsKey('Proxy')) {
+            final proxies = decoded['proxies'] ?? decoded['Proxy'];
+            final List<Map<String, dynamic>> outbounds = [];
+            if (proxies is List) {
+              for (final p in proxies) {
+                if (p is Map) {
+                  final converted = _convertClashProxyToSingbox(p);
+                  if (converted != null) outbounds.add(converted);
+                }
+              }
+            }
+            final groups = decoded['proxy-groups'] ?? decoded['Proxy Group'];
+            if (groups is List) {
+              for (final g in groups) {
+                if (g is Map) {
+                  final groupOutbound = _convertClashGroupToSingbox(g);
+                  if (groupOutbound != null) outbounds.add(groupOutbound);
+                }
+              }
+            }
+            return ProfileParserResult(
+              outbounds: outbounds,
+              count: outbounds.length,
+              format: 'clash-json',
             );
           }
         } else if (decoded is List) {
@@ -190,13 +341,13 @@ class ProfileParser {
     return ProfileParserResult(outbounds: [], count: 0, format: 'unknown');
   }
 
-  static Map<String, dynamic>? _convertClashGroupToSingbox(YamlMap group) {
+  static Map<String, dynamic>? _convertClashGroupToSingbox(Map group) {
     final name = (group['name'] ?? '').toString();
     final type = (group['type'] ?? 'select').toString().toLowerCase();
     final proxiesList = group['proxies'];
-    if (name.isEmpty || proxiesList is! YamlList) return null;
+    if (name.isEmpty || (proxiesList is! List && proxiesList is! YamlList)) return null;
 
-    final List<String> outbounds = proxiesList.map((e) => e.toString()).toList();
+    final List<String> outbounds = (proxiesList as Iterable).map((e) => e.toString()).toList();
 
     if (type == 'url-test' || type == 'urltest') {
       return {
@@ -333,7 +484,7 @@ class ProfileParser {
     return null;
   }
 
-  static Map<String, dynamic>? _convertClashProxyToSingbox(YamlMap proxy) {
+  static Map<String, dynamic>? _convertClashProxyToSingbox(Map proxy) {
     final type = (proxy['type'] ?? '').toString().toLowerCase();
     final name = (proxy['name'] ?? 'Proxy').toString();
     final server = (proxy['server'] ?? '').toString();
@@ -359,7 +510,9 @@ class ProfileParser {
         if (proxy['ws-opts'] != null && proxy['ws-opts']['path'] != null)
           'path': proxy['ws-opts']['path'].toString(),
         if (proxy['ws-opts'] != null && proxy['ws-opts']['headers'] != null)
-          'headers': (proxy['ws-opts']['headers'] as YamlMap).value,
+          'headers': proxy['ws-opts']['headers'] is YamlMap
+              ? (proxy['ws-opts']['headers'] as YamlMap).value
+              : Map<String, dynamic>.from(proxy['ws-opts']['headers']),
       };
     } else if (network == 'grpc' || proxy['grpc-opts'] != null) {
       transport = {
@@ -373,7 +526,9 @@ class ProfileParser {
         if (proxy['http-opts'] != null && proxy['http-opts']['path'] != null)
           'path': proxy['http-opts']['path'].toString(),
         if (proxy['http-opts'] != null && proxy['http-opts']['headers'] != null)
-          'headers': (proxy['http-opts']['headers'] as YamlMap).value,
+          'headers': proxy['http-opts']['headers'] is YamlMap
+              ? (proxy['http-opts']['headers'] as YamlMap).value
+              : Map<String, dynamic>.from(proxy['http-opts']['headers']),
       };
     }
 
@@ -390,7 +545,9 @@ class ProfileParser {
           if (iface != null) 'bind_interface': iface.toString(),
           if (proxy['plugin'] != null) 'plugin': proxy['plugin'].toString(),
           if (proxy['plugin-opts'] != null)
-            'plugin_opts': (proxy['plugin-opts'] as YamlMap).value,
+            'plugin_opts': proxy['plugin-opts'] is YamlMap
+                ? (proxy['plugin-opts'] as YamlMap).value
+                : Map<String, dynamic>.from(proxy['plugin-opts']),
         };
 
       case 'vmess':

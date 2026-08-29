@@ -203,6 +203,50 @@ proxy-groups:
     expect(result3.count, result1.count);
   });
 
+  test('ProfileParser removeNodesFromContent removes dead nodes from JSON and Clash YAML', () {
+    const jsonConfig = '''{
+      "outbounds": [
+        {"type": "hysteria2", "tag": "Node-OK", "server": "1.1.1.1"},
+        {"type": "hysteria2", "tag": "Node-Dead", "server": "2.2.2.2"},
+        {"type": "selector", "tag": "Proxy", "outbounds": ["Node-OK", "Node-Dead"]}
+      ]
+    }''';
+
+    final cleanedJson = ProfileParser.removeNodesFromContent(jsonConfig, {'Node-Dead'});
+    final parsedJson = ProfileParser.parse(cleanedJson);
+    final tags = parsedJson.outbounds.map((o) => o['tag']).toList();
+    expect(tags.contains('Node-OK'), isTrue);
+    expect(tags.contains('Node-Dead'), isFalse);
+
+    const yamlConfig = '''
+proxies:
+  - name: YAML-OK
+    type: ss
+    server: 1.1.1.1
+    port: 8388
+    cipher: aes-128-gcm
+    password: pwd
+  - name: YAML-Dead
+    type: ss
+    server: 2.2.2.2
+    port: 8388
+    cipher: aes-128-gcm
+    password: pwd
+proxy-groups:
+  - name: Proxy
+    type: select
+    proxies:
+      - YAML-OK
+      - YAML-Dead
+''';
+
+    final cleanedYaml = ProfileParser.removeNodesFromContent(yamlConfig, {'YAML-Dead'});
+    final parsedYaml = ProfileParser.parse(cleanedYaml);
+    final yamlTags = parsedYaml.outbounds.map((o) => o['tag']).toList();
+    expect(yamlTags.contains('YAML-OK'), isTrue);
+    expect(yamlTags.contains('YAML-Dead'), isFalse);
+  });
+
   test('Clash Dual-NIC interface binding, process rules, and DNS policy test', () {
     const yamlContent = '''
 dns:

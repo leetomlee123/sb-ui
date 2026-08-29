@@ -252,18 +252,71 @@ class _ProxiesPageState extends ConsumerState<ProxiesPage> {
 
               const SizedBox(width: 12),
 
-              // Filter Unavailable Toggle
-              FilterChip(
-                label: Text(tr.hideUnavailableNodes, style: const TextStyle(fontSize: 11)),
-                selected: proxiesState.hideUnavailable,
-                onSelected: (val) {
-                  ref.read(proxiesProvider.notifier).toggleHideUnavailable(val);
+              // Delete Unavailable Nodes Button
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final unavailableCount = proxiesState.nodes.values
+                      .where((n) => n.delay != null && n.delay! <= 0)
+                      .length;
+
+                  if (unavailableCount == 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(tr.noUnavailableNodesFound),
+                        duration: const Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: Text(tr.deleteUnavailableNodes),
+                      content: Text(
+                        tr.isZh
+                            ? '当前共检测到 $unavailableCount 个不可用（超时）节点。\n确定要从当前配置文件中彻底删除这些节点吗？'
+                            : 'Found $unavailableCount unavailable (timeout) nodes.\nDelete them permanently from config?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(false),
+                          child: Text(tr.cancel),
+                        ),
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFEF4444),
+                          ),
+                          onPressed: () => Navigator.of(ctx).pop(true),
+                          child: Text(tr.isZh ? '确认删除' : 'Delete'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirm == true && context.mounted) {
+                    final deleted = await ref.read(proxiesProvider.notifier).removeUnavailableNodes();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(tr.deletedUnavailableNodesCount(deleted)),
+                          duration: const Duration(seconds: 3),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  }
                 },
-                avatar: Icon(
-                  proxiesState.hideUnavailable ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                  size: 14,
+                icon: const Icon(Icons.delete_sweep_rounded, size: 14, color: Color(0xFFEF4444)),
+                label: Text(
+                  tr.deleteUnavailableNodes,
+                  style: const TextStyle(fontSize: 11, color: Color(0xFFEF4444), fontWeight: FontWeight.w600),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: const Color(0xFFEF4444).withValues(alpha: 0.35)),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                ),
               ),
 
               const SizedBox(width: 8),

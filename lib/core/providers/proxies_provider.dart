@@ -296,6 +296,61 @@ class ProxiesNotifier extends StateNotifier<ProxiesState> {
     state = state.copyWith(hideUnavailable: hide);
   }
 
+  Future<int> removeUnavailableNodes() async {
+    // 1. Identify all unavailable nodes (delay != null && delay <= 0)
+    final deadNodeNames = state.nodes.entries
+        .where((e) => e.value.delay != null && e.value.delay! <= 0)
+        .map((e) => e.key)
+        .toSet();
+
+    if (deadNodeNames.isEmpty) {
+      return 0;
+    }
+
+    // 2. Remove dead nodes from in-memory state
+    final updatedNodes = Map<String, ProxyNode>.from(state.nodes)
+      ..removeWhere((key, _) => deadNodeNames.contains(key));
+
+    final updatedGroups = <String, ProxyGroup>{};
+    for (final entry in state.groups.entries) {
+      final grp = entry.value;
+      final newAll = grp.all.where((name) => !deadNodeNames.contains(name)).toList();
+      final newCurrent = deadNodeNames.contains(grp.current)
+          ? (newAll.isNotEmpty ? newAll.first : '')
+          : grp.current;
+      updatedGroups[entry.key] = grp.copyWith(
+        all: newAll,
+        current: newCurrent,
+      );
+    }
+
+    state = state.copyWith(
+      nodes: updatedNodes,
+      groups: updatedGroups,
+    );
+
+    // 3. Update the active profile's rawConfig on disk and in ProfilesState
+    final activeProfile = _ref.read(profilesProvider).activeProfile;
+    if (activeProfile != null && activeProfile.rawConfig.isNotEmpty) {
+      final newRawConfig = ProfileParser.removeNodesFromContent(
+        activeProfile.rawConfig,
+        deadNodeNames,
+      );
+      await _ref.read(profilesProvider.notifier).updateProfileContent(
+        activeProfile.id,
+        newRawConfig,
+      );
+    }
+
+    // 4. If core is running, restart core to apply updated node list immediately
+    final isRunning = _ref.read(coreProvider).isRunning;
+    if (isRunning) {
+      await _ref.read(coreProvider.notifier).restartCore();
+    }
+
+    return deadNodeNames.length;
+  }
+
   Future<bool> selectNode(String groupName, String nodeName) async {
     // 1. Save user node preference in persistent settings
     _ref.read(settingsProvider.notifier).setSelectedProxyNode(nodeName);

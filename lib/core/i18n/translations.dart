@@ -87,6 +87,9 @@ class Translations {
   String get sortDelayAsc => isZh ? '延迟优先' : 'Lowest Latency';
   String get sortNameAsc => isZh ? '名称排序' : 'Name (A-Z)';
   String get hideUnavailableNodes => isZh ? '隐藏不可用' : 'Hide Timeout';
+  String get deleteUnavailableNodes => isZh ? '删除不可用' : 'Delete Timeout';
+  String get noUnavailableNodesFound => isZh ? '当前暂无可删除的不可用节点（请先进行测速）' : 'No unavailable nodes to delete (run speed test first)';
+  String deletedUnavailableNodesCount(int count) => isZh ? '已成功删除 $count 个不可用节点' : 'Successfully deleted $count unavailable nodes';
   String get quickSelectNode => isZh ? '快捷切换出口节点' : 'Quick Switch Outbound Node';
   String get nodeSwitchedTo => isZh ? '已切换出口节点: ' : 'Active node switched to: ';
 
