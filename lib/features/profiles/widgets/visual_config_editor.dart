@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'network_interface_selector.dart';
 
 class VisualConfigEditor extends StatefulWidget {
   final Map<String, dynamic> config;
@@ -738,14 +739,7 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                     // Bind Interface (Optional: Wi-Fi, Ethernet, etc.)
                     if (!['block', 'dns'].contains(selectedType)) ...[
                       const SizedBox(height: 12),
-                      TextField(
-                        controller: bindInterfaceCtrl,
-                        decoration: const InputDecoration(
-                          labelText: '绑定网卡/Wi-Fi 接口 (bind_interface，可选)',
-                          hintText: '例如: Wi-Fi、Wi-Fi 2、WLAN 或以太网 (留空默认跟随系统)',
-                          helperText: '可将此出口或直连通道绑定至指定 Wi-Fi 网卡',
-                        ),
-                      ),
+                      NetworkInterfaceSelector(controller: bindInterfaceCtrl),
                     ],
                   ],
                 ),

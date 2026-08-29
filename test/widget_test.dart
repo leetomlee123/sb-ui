@@ -12,9 +12,11 @@ import 'package:singular/core/models/proxy_node.dart';
 import 'package:singular/core/providers/profiles_provider.dart';
 import 'package:singular/core/providers/proxies_provider.dart';
 import 'package:singular/core/providers/storage_provider.dart';
+import 'package:singular/core/services/network_interface_helper.dart';
 import 'package:singular/core/services/storage_service.dart';
 import 'package:singular/core/utils/proxy_flag_helper.dart';
 import 'package:singular/features/profiles/widgets/config_editor_dialog.dart';
+import 'package:singular/features/profiles/widgets/network_interface_selector.dart';
 import 'package:singular/features/profiles/widgets/visual_config_editor.dart';
 import 'package:singular/features/shell/main_shell_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -898,6 +900,38 @@ rules:
     await tester.tap(find.text('日志与通用 (General)'));
     await tester.pumpAndSettle();
     expect(find.text('日志输出设置 (Log):'), findsOneWidget);
+  });
+
+  test('NetworkInterfaceHelper detects local active interfaces', () async {
+    final interfaces = await NetworkInterfaceHelper.getActiveInterfaces();
+    expect(interfaces, isNotNull);
+    // Each interface should have a non-empty name
+    for (final iface in interfaces) {
+      expect(iface.name, isNotEmpty);
+      expect(iface.displayName, isNotEmpty);
+    }
+  });
+
+  testWidgets('NetworkInterfaceSelector renders and interacts properly', (tester) async {
+    final controller = TextEditingController(text: '');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: NetworkInterfaceSelector(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.runAsync(() async {
+      await Future.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pump();
+
+    // Verify default dropdown exists
+    expect(find.byType(NetworkInterfaceSelector), findsOneWidget);
+    expect(find.byIcon(Icons.refresh_rounded), findsOneWidget);
   });
 }
 

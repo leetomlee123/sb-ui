@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/i18n/translations.dart';
 import '../../../core/providers/profiles_provider.dart';
+import 'network_interface_selector.dart';
 
 enum ProtocolOption {
   shadowsocks('Shadowsocks (SS)', 'shadowsocks', Icons.security_rounded),
@@ -506,19 +507,10 @@ class _ManualNodeFormDialogState extends ConsumerState<ManualNodeFormDialog> {
               ],
 
               // 5. Interface & Wi-Fi Binding
-              Text(
-                tr.isZh ? '出口网卡与 Wi-Fi 绑定 (可选)' : 'INTERFACE & WI-FI BINDING (OPTIONAL)',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: Color(0xFF64748B)),
-              ),
-              const SizedBox(height: 8),
-              TextField(
+              NetworkInterfaceSelector(
                 controller: _bindInterfaceCtrl,
-                decoration: InputDecoration(
-                  labelText: tr.isZh ? '绑定物理网卡 / Wi-Fi 名称 (bind_interface)' : 'Bind Network Interface (e.g. Wi-Fi 2)',
-                  hintText: tr.isZh ? '例如：Wi-Fi、Wi-Fi 2、WLAN 或以太网 (留空默认跟随系统)' : 'e.g. Wi-Fi, Wi-Fi 2, eth0, wlan0',
-                  helperText: tr.isZh ? '指定此节点流量仅通过特定的 Wi-Fi 或物理网卡出口发送' : 'Direct this node traffic through a specific physical NIC / Wi-Fi',
-                  prefixIcon: const Icon(Icons.wifi_rounded, size: 18),
-                ),
+                labelText: tr.isZh ? '绑定物理网卡 / Wi-Fi 名称 (bind_interface)' : 'Bind Network Interface (e.g. Wi-Fi 2)',
+                helperText: tr.isZh ? '自动识别已连接的 Wi-Fi 与物理网卡，指定此节点从此通道发出' : 'Auto-detects active Wi-Fi & NICs to route node traffic through',
               ),
             ],
           ),
