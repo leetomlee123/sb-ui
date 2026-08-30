@@ -1,4 +1,6 @@
 import 'dart:convert';
+import '../engine/mixin_engine.dart';
+import '../engine/script_engine.dart';
 
 enum RoutingMode {
   rule,
@@ -70,6 +72,12 @@ class AppSettings {
   final bool tcpFastOpen;
   final String multiplex; // 'none', 'smux', 'yamux', 'h2mux'
 
+  // Mixin & Script Preprocessing
+  final bool mixinEnabled;
+  final String mixinContent;
+  final bool scriptEnabled;
+  final String scriptContent;
+
   const AppSettings({
     this.mixedPort = 7890,
     this.clashApiPort = 9090,
@@ -117,6 +125,11 @@ class AppSettings {
     this.sniffingOverrideDestination = true,
     this.tcpFastOpen = false,
     this.multiplex = 'none',
+    // Mixin & Script Preprocessing
+    this.mixinEnabled = false,
+    this.mixinContent = MixinEngine.defaultTemplate,
+    this.scriptEnabled = false,
+    this.scriptContent = ScriptEngine.defaultTemplate,
   });
 
   Map<String, dynamic> toJson() {
@@ -167,6 +180,11 @@ class AppSettings {
       'sniffingOverrideDestination': sniffingOverrideDestination,
       'tcpFastOpen': tcpFastOpen,
       'multiplex': multiplex,
+      // Mixin & Script
+      'mixinEnabled': mixinEnabled,
+      'mixinContent': mixinContent,
+      'scriptEnabled': scriptEnabled,
+      'scriptContent': scriptContent,
     };
   }
 
@@ -221,6 +239,11 @@ class AppSettings {
       sniffingOverrideDestination: json['sniffingOverrideDestination'] as bool? ?? true,
       tcpFastOpen: json['tcpFastOpen'] as bool? ?? false,
       multiplex: json['multiplex'] as String? ?? 'none',
+      // Mixin & Script
+      mixinEnabled: json['mixinEnabled'] as bool? ?? false,
+      mixinContent: json['mixinContent'] as String? ?? MixinEngine.defaultTemplate,
+      scriptEnabled: json['scriptEnabled'] as bool? ?? false,
+      scriptContent: json['scriptContent'] as String? ?? ScriptEngine.defaultTemplate,
     );
   }
 
@@ -271,6 +294,11 @@ class AppSettings {
     bool? sniffingOverrideDestination,
     bool? tcpFastOpen,
     String? multiplex,
+    // Mixin & Script
+    bool? mixinEnabled,
+    String? mixinContent,
+    bool? scriptEnabled,
+    String? scriptContent,
   }) {
     return AppSettings(
       mixedPort: mixedPort ?? this.mixedPort,
@@ -319,6 +347,11 @@ class AppSettings {
       sniffingOverrideDestination: sniffingOverrideDestination ?? this.sniffingOverrideDestination,
       tcpFastOpen: tcpFastOpen ?? this.tcpFastOpen,
       multiplex: multiplex ?? this.multiplex,
+      // Mixin & Script
+      mixinEnabled: mixinEnabled ?? this.mixinEnabled,
+      mixinContent: mixinContent ?? this.mixinContent,
+      scriptEnabled: scriptEnabled ?? this.scriptEnabled,
+      scriptContent: scriptContent ?? this.scriptContent,
     );
   }
 

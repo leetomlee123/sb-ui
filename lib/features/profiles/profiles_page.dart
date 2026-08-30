@@ -15,6 +15,7 @@ import '../../core/utils/native_file_dialog.dart';
 import '../../shared/widgets/double_bezel_card.dart';
 import 'widgets/config_editor_dialog.dart';
 import 'widgets/manual_node_form_dialog.dart';
+import '../mixin/mixin_script_dialog.dart';
 
 class ProfilesPage extends ConsumerStatefulWidget {
   const ProfilesPage({super.key});
@@ -145,6 +146,12 @@ class _ProfilesPageState extends ConsumerState<ProfilesPage> with WidgetsBinding
                     },
                     icon: const Icon(Icons.code_rounded, size: 16),
                     label: Text(tr.isZh ? '编辑 config.json' : 'Edit config.json'),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: () => MixinScriptDialog.show(context),
+                    icon: const Icon(Icons.auto_fix_high_rounded, size: 16, color: Color(0xFF818CF8)),
+                    label: Text(tr.isZh ? '混入与脚本' : 'Mixin & Script'),
                   ),
                   const SizedBox(width: 10),
                   OutlinedButton.icon(

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:path/path.dart' as p;
 
 import '../models/app_settings.dart';
+import 'mixin_engine.dart';
+import 'script_engine.dart';
 
 class ConfigGenerator {
   static const Set<String> _groupTypes = {'selector', 'urltest', 'loadbalance'};
@@ -607,7 +609,25 @@ class ConfigGenerator {
       },
     };
 
-    return config;
+    Map<String, dynamic> finalConfig = config;
+
+    // 1. Apply Declarative Mixin (if enabled)
+    if (settings.mixinEnabled && settings.mixinContent.trim().isNotEmpty) {
+      final mixinRes = MixinEngine.apply(finalConfig, settings.mixinContent);
+      if (mixinRes.success) {
+        finalConfig = mixinRes.config;
+      }
+    }
+
+    // 2. Apply Preprocessing Script (if enabled)
+    if (settings.scriptEnabled && settings.scriptContent.trim().isNotEmpty) {
+      final scriptRes = ScriptEngine.execute(finalConfig, settings.scriptContent);
+      if (scriptRes.success) {
+        finalConfig = scriptRes.outputConfig;
+      }
+    }
+
+    return finalConfig;
   }
 
   /// Builds a sing-box 1.12+ compliant DNS server object (type + server).

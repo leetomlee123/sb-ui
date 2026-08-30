@@ -15,6 +15,9 @@ import 'package:singular/core/providers/storage_provider.dart';
 import 'package:singular/core/services/network_interface_helper.dart';
 import 'package:singular/core/services/storage_service.dart';
 import 'package:singular/core/utils/proxy_flag_helper.dart';
+import 'package:singular/core/engine/mixin_engine.dart';
+import 'package:singular/core/engine/script_engine.dart';
+import 'package:singular/features/mixin/mixin_script_dialog.dart';
 import 'package:singular/features/profiles/widgets/config_editor_dialog.dart';
 import 'package:singular/features/profiles/widgets/network_interface_selector.dart';
 import 'package:singular/features/profiles/widgets/visual_config_editor.dart';
@@ -955,5 +958,190 @@ rules:
     expect(find.byType(NetworkInterfaceSelector), findsOneWidget);
     expect(find.byIcon(Icons.refresh_rounded), findsOneWidget);
   });
+
+  test('MixinEngine correctly merges YAML and JSON declarative rules and servers', () {
+    final base = {
+      'log': {'level': 'info'},
+      'dns': {
+        'servers': [
+          {'tag': 'local-dns', 'address': '223.5.5.5'},
+        ],
+      },
+      'route': {
+        'rules': [
+          {'domain_suffix': ['.cn'], 'outbound': 'direct'},
+        ],
+      },
+      'outbounds': [
+        {'type': 'direct', 'tag': 'direct'},
+      ],
+    };
+
+    const yamlMixin = '''
+dns:
+  servers:
+    - tag: nextdns
+      address: https://dns.nextdns.io/test
+route:
+  rules:
+    - domain_suffix:
+        - openai.com
+      outbound: proxy
+outbounds:
+  - type: direct
+    tag: wifi-out
+    bind_interface: Wi-Fi
+''';
+
+    final res = MixinEngine.apply(base, yamlMixin);
+    expect(res.success, isTrue);
+
+    final merged = res.config;
+    // Verify DNS server appended
+    final dnsServers = merged['dns']['servers'] as List;
+    expect(dnsServers.length, 2);
+    expect(dnsServers.any((s) => s['tag'] == 'nextdns'), isTrue);
+
+    // Verify user rule was PREPENDED to top
+    final routeRules = merged['route']['rules'] as List;
+    expect(routeRules.length, 2);
+    expect((routeRules.first['domain_suffix'] as List).contains('openai.com'), isTrue);
+
+    // Verify outbound was added
+    final outbounds = merged['outbounds'] as List;
+    expect(outbounds.length, 2);
+    expect(outbounds.any((o) => o['tag'] == 'wifi-out' && o['bind_interface'] == 'Wi-Fi'), isTrue);
+  });
+
+  test('ScriptEngine filters invalid keywords and prepends rules dynamically', () {
+    final base = {
+      'log': {'level': 'info'},
+      'outbounds': [
+        {'type': 'direct', 'tag': 'direct'},
+        {'type': 'shadowsocks', 'tag': '香港 01 优质节点'},
+        {'type': 'shadowsocks', 'tag': '美国 02 [官网/剩余流量50G]'},
+      ],
+      'route': {
+        'rules': [
+          {'domain_suffix': ['.cn'], 'outbound': 'direct'},
+        ],
+      },
+    };
+
+    const script = r'''
+function main(config, profileName) {
+  const invalidKeywords = ["官网", "剩余"];
+  config.outbounds = config.outbounds.filter(node => {
+    if (node.type === "direct") return true;
+    for (const kw of invalidKeywords) {
+      if ((node.tag || "").includes(kw)) return false;
+    }
+    return true;
+  });
+
+  config.route.rules.unshift({
+    domain_suffix: ["company.internal"],
+    outbound: "direct"
+  });
+
+  config.log.level = "debug";
+  return config;
 }
+''';
+
+    final res = ScriptEngine.execute(base, script, profileName: 'Test Profile');
+    expect(res.success, isTrue);
+    expect(res.logs.isNotEmpty, isTrue);
+
+    final transformed = res.outputConfig;
+    // Invalid node filtered out
+    final outbounds = transformed['outbounds'] as List;
+    expect(outbounds.length, 2);
+    expect(outbounds.any((n) => n['tag'].contains('剩余流量')), isFalse);
+    expect(outbounds.any((n) => n['tag'] == '香港 01 优质节点'), isTrue);
+
+    // Custom internal rule inserted
+    final rules = transformed['route']['rules'] as List;
+    expect(rules.length, 2);
+    expect((rules.first['domain_suffix'] as List).contains('company.internal'), isTrue);
+
+    // Log level updated
+    expect(transformed['log']['level'], 'debug');
+  });
+
+  test('ConfigGenerator integrates Mixin and Script preprocessors', () {
+    final settings = const AppSettings().copyWith(
+      mixinEnabled: true,
+      mixinContent: '''
+dns:
+  servers:
+    - tag: custom-doh
+      address: https://dns.google/dns-query
+''',
+      scriptEnabled: true,
+      scriptContent: '''
+function main(config, profileName) {
+  config.log.level = "warn";
+  return config;
+}
+''',
+    );
+
+    final generated = ConfigGenerator.generate(
+      settings: settings,
+      parsedOutbounds: [
+        {'type': 'direct', 'tag': 'direct'},
+        {'type': 'shadowsocks', 'tag': 'HK-Node', 'server': '1.1.1.1', 'server_port': 443, 'password': 'pass', 'method': 'aes-128-gcm'},
+      ],
+    );
+
+    expect(generated['log']['level'], 'warn');
+    final servers = (generated['dns']['servers'] as List);
+    expect(servers.any((s) => s['tag'] == 'custom-doh'), isTrue);
+  });
+
+  testWidgets('MixinScriptDialog renders tabs, loads templates, and runs dry-run test', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final storage = StorageService(prefs);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          storageServiceProvider.overrideWithValue(storage),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: MixinScriptDialog(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify Title & Tabs
+    expect(find.text('混入与预处理脚本 (Mixin & Scripts)'), findsOneWidget);
+    expect(find.text('全局混入 (Mixin)'), findsOneWidget);
+    expect(find.text('预处理脚本 (Script)'), findsOneWidget);
+    expect(find.text('实时测试 (Dry Run)'), findsOneWidget);
+
+    // Switch to Script Tab
+    await tester.tap(find.text('预处理脚本 (Script)'));
+    await tester.pumpAndSettle();
+    expect(find.text('载入脚本模板'), findsOneWidget);
+
+    // Switch to Dry Run Tab
+    await tester.tap(find.text('实时测试 (Dry Run)'));
+    await tester.pumpAndSettle();
+    expect(find.text('运行测试 (Dry Run)'), findsOneWidget);
+
+    // Run Dry Run Test
+    await tester.tap(find.text('运行测试 (Dry Run)'));
+    await tester.pumpAndSettle();
+
+    // Verify logs and generated JSON rendered
+    expect(find.textContaining('准备测试基底配置'), findsOneWidget);
+  });
+}
+
 

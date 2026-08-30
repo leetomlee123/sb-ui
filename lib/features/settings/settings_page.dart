@@ -20,6 +20,7 @@ import '../../core/utils/byte_formatter.dart';
 import '../../core/utils/version_utils.dart';
 import '../../shared/widgets/double_bezel_card.dart';
 import '../profiles/widgets/config_editor_dialog.dart';
+import '../mixin/mixin_script_dialog.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -1046,6 +1047,66 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with SingleTickerPr
                         }
                       }
                     },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          _buildSectionHeader(tr.isZh ? '混入与预处理脚本 (Mixin & Scripts)' : 'Mixin & Script Preprocessing'),
+          DoubleBezelCard(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            tr.isZh ? '全局混入与脚本预处理' : 'Global Mixin & Script Preprocessor',
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          ),
+                          const SizedBox(width: 8),
+                          if (settings.mixinEnabled || settings.scriptEnabled)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                              ),
+                              child: Text(
+                                [
+                                  if (settings.mixinEnabled) 'Mixin',
+                                  if (settings.scriptEnabled) 'Script',
+                                ].join(' + '),
+                                style: const TextStyle(fontSize: 10, color: Color(0xFF10B981), fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        tr.isZh
+                            ? '支持声明式 YAML/JSON 深度合并混入与 JavaScript 节点过滤、路由规则动态注入'
+                            : 'Declarative YAML/JSON mixin and JavaScript programmatic preprocessing hooks',
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                ElevatedButton.icon(
+                  onPressed: () => MixinScriptDialog.show(context),
+                  icon: const Icon(Icons.auto_fix_high_rounded, size: 16),
+                  label: Text(tr.isZh ? '配置混入与脚本' : 'Configure Mixin/Script', style: const TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6366F1),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   ),
                 ),
               ],
