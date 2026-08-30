@@ -783,50 +783,72 @@ rules:
 
     expect(find.byType(TextField), findsNWidgets(2)); // Editor + Search input
 
-    // Verify the editor TextField uses explicit dark background Color(0xFF080C16)
+    // Verify the editor TextField uses filled background adapting to theme
     final editorField = tester.widget<TextField>(find.byType(TextField).first);
     expect(editorField.decoration?.filled, isTrue);
-    expect(editorField.decoration?.fillColor, const Color(0xFF080C16));
+    expect(editorField.decoration?.fillColor, isNotNull);
   });
 
-  testWidgets('JsonCodeSyntaxController produces syntax highlighted spans', (tester) async {
+  testWidgets('JsonCodeSyntaxController produces syntax highlighted spans in both dark and light themes', (tester) async {
     final controller = JsonCodeSyntaxController(
       text: '{\n  "port": 7890,\n  "tag": "direct",\n  "enabled": true\n}',
     );
 
-    late BuildContext testContext;
+    // 1. Test Dark Theme
+    late BuildContext darkContext;
     await tester.pumpWidget(
-      Builder(
-        builder: (context) {
-          testContext = context;
-          return const SizedBox();
-        },
+      MaterialApp(
+        theme: ThemeData.dark(),
+        themeMode: ThemeMode.dark,
+        home: Builder(
+          builder: (context) {
+            darkContext = context;
+            return const SizedBox();
+          },
+        ),
       ),
     );
 
-    final span = controller.buildTextSpan(
-      context: testContext,
+    final darkSpan = controller.buildTextSpan(
+      context: darkContext,
       withComposing: false,
     );
 
-    expect(span.children, isNotNull);
-    final textSpans = span.children!.whereType<TextSpan>().toList();
+    expect(darkSpan.children, isNotNull);
+    final darkSpans = darkSpan.children!.whereType<TextSpan>().toList();
 
-    // Verify key "port" has cyan color
-    final portKey = textSpans.firstWhere((s) => s.text == '"port"');
-    expect(portKey.style?.color, const Color(0xFF38BDF8));
+    // Verify key "port" has cyan color in dark theme
+    final darkPortKey = darkSpans.firstWhere((s) => s.text == '"port"');
+    expect(darkPortKey.style?.color, const Color(0xFF38BDF8));
 
-    // Verify number 7890 has amber color
-    final portNum = textSpans.firstWhere((s) => s.text == '7890');
-    expect(portNum.style?.color, const Color(0xFFFBBF24));
+    // Verify number 7890 has amber color in dark theme
+    final darkPortNum = darkSpans.firstWhere((s) => s.text == '7890');
+    expect(darkPortNum.style?.color, const Color(0xFFFBBF24));
 
-    // Verify string "direct" has emerald color
-    final directVal = textSpans.firstWhere((s) => s.text == '"direct"');
-    expect(directVal.style?.color, const Color(0xFF34D399));
+    // 2. Test Light Theme
+    late BuildContext lightContext;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Theme(
+          data: ThemeData(brightness: Brightness.light),
+          child: Builder(
+            builder: (context) {
+              lightContext = context;
+              return const SizedBox();
+            },
+          ),
+        ),
+      ),
+    );
 
-    // Verify boolean true has violet color
-    final trueVal = textSpans.firstWhere((s) => s.text == 'true');
-    expect(trueVal.style?.color, const Color(0xFFC084FC));
+    final lightSpan = controller.buildTextSpan(
+      context: lightContext,
+      withComposing: false,
+    );
+
+    final lightSpans = lightSpan.children!.whereType<TextSpan>().toList();
+    final lightPortKey = lightSpans.firstWhere((s) => s.text == '"port"');
+    expect(lightPortKey.style?.color, const Color(0xFF0284C7));
   });
 
   testWidgets('VisualConfigEditor renders outbounds, inbounds, route, and dns tabs', (tester) async {

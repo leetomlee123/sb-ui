@@ -57,6 +57,15 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
     setState(() {});
   }
 
+  bool get isDark => Theme.of(context).brightness == Brightness.dark;
+  Color get cardBg => isDark ? const Color(0xFF0F172A) : Colors.white;
+  Color get headerBg => isDark ? const Color(0xFF0D1322) : const Color(0xFFF1F5F9);
+  Color get borderCol => isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0);
+  Color get textPrimary => isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+  Color get textSecondary => isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+  Color get inputBg => isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
+  Color get badgeBg => isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0);
+
   // --- Outbounds Helpers ---
   List<Map<String, dynamic>> get _outbounds {
     if (_config['outbounds'] is List) {
@@ -209,9 +218,9 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
         // Visual Module Tab Bar
         Container(
           height: 48,
-          decoration: const BoxDecoration(
-            color: Color(0xFF0D1322),
-            border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+          decoration: BoxDecoration(
+            color: headerBg,
+            border: Border(bottom: BorderSide(color: borderCol)),
           ),
           child: TabBar(
             controller: _tabController,
@@ -219,7 +228,7 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
             indicatorColor: const Color(0xFF6366F1),
             indicatorWeight: 3,
             labelColor: const Color(0xFF818CF8),
-            unselectedLabelColor: const Color(0xFF94A3B8),
+            unselectedLabelColor: textSecondary,
             labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
             unselectedLabelStyle: const TextStyle(fontSize: 13),
             tabs: [
@@ -301,12 +310,12 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: badgeBg,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         '$count',
-        style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace', color: Color(0xFF94A3B8)),
+        style: TextStyle(fontSize: 10.5, fontFamily: 'monospace', color: textSecondary),
       ),
     );
   }
@@ -352,17 +361,17 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                 SizedBox(
                   width: 220,
                   child: TextField(
-                    style: const TextStyle(fontSize: 13, color: Colors.white),
+                    style: TextStyle(fontSize: 13, color: textPrimary),
                     decoration: InputDecoration(
                       hintText: '搜索出站节点标签...',
-                      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      hintStyle: TextStyle(fontSize: 12, color: textSecondary),
                       prefixIcon: const Icon(Icons.search_rounded, size: 16, color: Color(0xFF818CF8)),
                       filled: true,
-                      fillColor: const Color(0xFF0F172A),
+                      fillColor: inputBg,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFF1E293B)),
+                        borderSide: BorderSide(color: borderCol),
                       ),
                       isDense: true,
                     ),
@@ -405,7 +414,7 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                       children: [
                         Icon(Icons.flight_takeoff_rounded, size: 48, color: const Color(0xFF64748B).withValues(alpha: 0.4)),
                         const SizedBox(height: 12),
-                        const Text('暂无匹配的出站配置', style: TextStyle(fontSize: 14, color: Color(0xFF94A3B8))),
+                        Text('暂无匹配的出站配置', style: TextStyle(fontSize: 14, color: textSecondary)),
                       ],
                     ),
                   )
@@ -454,9 +463,9 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: cardBg,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: borderCol),
       ),
       child: Row(
         children: [
@@ -492,7 +501,7 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                     Flexible(
                       child: Text(
                         tag,
-                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFFF8FAFC)),
+                        style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: textPrimary),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -520,7 +529,7 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                     ],
                     if (ob['default'] != null) ...[
                       const SizedBox(width: 8),
-                      Text('默认: ${ob['default']}', style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                      Text('默认: ${ob['default']}', style: TextStyle(fontSize: 11, color: textSecondary)),
                     ],
                   ],
                 ),
@@ -528,12 +537,12 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                 if (server.isNotEmpty)
                   Text(
                     '$server${port.toString().isNotEmpty ? ':$port' : ''}',
-                    style: const TextStyle(fontSize: 11.5, fontFamily: 'monospace', color: Color(0xFF94A3B8)),
+                    style: TextStyle(fontSize: 11.5, fontFamily: 'monospace', color: textSecondary),
                   )
                 else if (outboundsList.isNotEmpty)
                   Text(
                     '包含 ${outboundsList.length} 个子节点: ${outboundsList.take(4).join(', ')}${outboundsList.length > 4 ? '...' : ''}',
-                    style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8)),
+                    style: TextStyle(fontSize: 11.5, color: textSecondary),
                     overflow: TextOverflow.ellipsis,
                   )
                 else
@@ -547,7 +556,7 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
 
           // Action Buttons
           IconButton(
-            icon: const Icon(Icons.copy_rounded, size: 16, color: Color(0xFF94A3B8)),
+            icon: Icon(Icons.copy_rounded, size: 16, color: textSecondary),
             tooltip: '复制节点',
             onPressed: () {
               final newOb = Map<String, dynamic>.from(ob);
@@ -719,10 +728,10 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                         children: _allOutboundTags.where((t) => t != tagCtrl.text).map((tagItem) {
                           final isSelected = selectedGroupOutbounds.contains(tagItem);
                           return FilterChip(
-                            label: Text(tagItem, style: TextStyle(fontSize: 11.5, color: isSelected ? Colors.white : const Color(0xFF94A3B8))),
+                            label: Text(tagItem, style: TextStyle(fontSize: 11.5, color: isSelected ? Colors.white : textSecondary)),
                             selected: isSelected,
                             selectedColor: const Color(0xFF6366F1),
-                            backgroundColor: const Color(0xFF0F172A),
+                            backgroundColor: inputBg,
                             onSelected: (checked) {
                               setDialogState(() {
                                 if (checked) {
@@ -830,9 +839,9 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 '本地入站监听端口与系统代理劫持配置',
-                style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                style: TextStyle(fontSize: 13, color: textSecondary),
               ),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1), foregroundColor: Colors.white),
@@ -851,7 +860,7 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                       children: [
                         Icon(Icons.flight_land_rounded, size: 48, color: const Color(0xFF64748B).withValues(alpha: 0.4)),
                         const SizedBox(height: 12),
-                        const Text('暂无入站监听配置', style: TextStyle(fontSize: 14, color: Color(0xFF94A3B8))),
+                        Text('暂无入站监听配置', style: TextStyle(fontSize: 14, color: textSecondary)),
                       ],
                     ),
                   )
@@ -868,9 +877,9 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF1E293B)),
+                          border: Border.all(color: borderCol),
                         ),
                         child: Row(
                           children: [
@@ -891,13 +900,13 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(tag, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFFF8FAFC))),
+                                  Text(tag, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: textPrimary)),
                                   const SizedBox(height: 2),
                                   Text(
                                     type == 'tun'
                                         ? '虚拟网卡 TUN 模式 (Stack: ${ib['stack'] ?? 'system'}, Auto Route: ${ib['auto_route'] ?? true})'
                                         : '监听地址: $listen:$port',
-                                    style: const TextStyle(fontSize: 11.5, fontFamily: 'monospace', color: Color(0xFF94A3B8)),
+                                    style: TextStyle(fontSize: 11.5, fontFamily: 'monospace', color: textSecondary),
                                   ),
                                 ],
                               ),
@@ -1028,9 +1037,9 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: cardBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: borderCol),
             ),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -1038,13 +1047,13 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                 children: [
                   const Icon(Icons.alt_route_rounded, size: 18, color: Color(0xFF818CF8)),
                   const SizedBox(width: 10),
-                  const Text('默认出站 (Final):', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFFF8FAFC))),
+                  Text('默认出站 (Final):', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: textPrimary)),
                   const SizedBox(width: 8),
                   DropdownButton<String>(
                     value: (route['final'] ?? (_allOutboundTags.isNotEmpty ? _allOutboundTags.first : 'direct')).toString(),
-                    dropdownColor: const Color(0xFF0F172A),
+                    dropdownColor: cardBg,
                     underline: const SizedBox(),
-                    items: _allOutboundTags.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12.5)))).toList(),
+                    items: _allOutboundTags.map((t) => DropdownMenuItem(value: t, child: Text(t, style: TextStyle(fontSize: 12.5, color: textPrimary)))).toList(),
                     onChanged: (val) {
                       if (val != null) {
                         final r = _routeMap;
@@ -1055,7 +1064,7 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                     },
                   ),
                   const SizedBox(width: 20),
-                  const Text('自动探测网卡:', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                  Text('自动探测网卡:', style: TextStyle(fontSize: 12, color: textSecondary)),
                   Switch(
                     value: route['auto_detect_interface'] ?? true,
                     activeTrackColor: const Color(0xFF6366F1),
@@ -1095,16 +1104,16 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF1E293B)),
+                          border: Border.all(color: borderCol),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             const Icon(Icons.shield_outlined, size: 14, color: Color(0xFF38BDF8)),
                             const SizedBox(width: 6),
-                            Text('$tag ($type)', style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Color(0xFFF8FAFC))),
+                            Text('$tag ($type)', style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: textPrimary)),
                             const SizedBox(width: 6),
                             InkWell(
                               onTap: () {
@@ -1124,10 +1133,10 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                 const Text('分流匹配规则 (Rules):', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF818CF8))),
                 const SizedBox(height: 8),
                 if (rules.isEmpty)
-                  const Center(
+                  Center(
                     child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Text('暂无路由分流规则', style: TextStyle(fontSize: 14, color: Color(0xFF94A3B8))),
+                      padding: const EdgeInsets.all(32),
+                      child: Text('暂无路由分流规则', style: TextStyle(fontSize: 14, color: textSecondary)),
                     ),
                   )
                 else
@@ -1166,9 +1175,9 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: cardBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: borderCol),
       ),
       child: Row(
         children: [
@@ -1178,10 +1187,10 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
             height: 24,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
+              color: badgeBg,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Text('${index + 1}', style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Color(0xFF94A3B8))),
+            child: Text('${index + 1}', style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: textSecondary)),
           ),
           const SizedBox(width: 10),
 
@@ -1197,7 +1206,7 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: badgeBg,
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(c, style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Color(0xFF38BDF8))),
@@ -1205,7 +1214,7 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                   }).toList(),
                 ),
                 if (criteria.isEmpty)
-                  Text('动作: $action', style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                  Text('动作: $action', style: TextStyle(fontSize: 12, color: textSecondary)),
               ],
             ),
           ),
@@ -1232,7 +1241,7 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
 
           // Move Up / Down
           IconButton(
-            icon: const Icon(Icons.arrow_upward_rounded, size: 15, color: Color(0xFF94A3B8)),
+            icon: Icon(Icons.arrow_upward_rounded, size: 15, color: textSecondary),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             onPressed: index > 0
@@ -1245,7 +1254,7 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                 : null,
           ),
           IconButton(
-            icon: const Icon(Icons.arrow_downward_rounded, size: 15, color: Color(0xFF94A3B8)),
+            icon: Icon(Icons.arrow_downward_rounded, size: 15, color: textSecondary),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             onPressed: index < total - 1
@@ -1408,9 +1417,9 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: cardBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: borderCol),
             ),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -1418,17 +1427,17 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                 children: [
                   const Icon(Icons.dns_rounded, size: 18, color: Color(0xFF818CF8)),
                   const SizedBox(width: 10),
-                  const Text('解析策略 (Strategy):', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFFF8FAFC))),
+                  Text('解析策略 (Strategy):', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: textPrimary)),
                   const SizedBox(width: 8),
                   DropdownButton<String>(
                     value: (dns['strategy'] ?? 'prefer_ipv4').toString(),
-                    dropdownColor: const Color(0xFF0F172A),
+                    dropdownColor: cardBg,
                     underline: const SizedBox(),
-                    items: const [
-                      DropdownMenuItem(value: 'prefer_ipv4', child: Text('优先 IPv4 (prefer_ipv4)')),
-                      DropdownMenuItem(value: 'prefer_ipv6', child: Text('优先 IPv6 (prefer_ipv6)')),
-                      DropdownMenuItem(value: 'ipv4_only', child: Text('仅 IPv4 (ipv4_only)')),
-                      DropdownMenuItem(value: 'ipv6_only', child: Text('仅 IPv6 (ipv6_only)')),
+                    items: [
+                      DropdownMenuItem(value: 'prefer_ipv4', child: Text('优先 IPv4 (prefer_ipv4)', style: TextStyle(color: textPrimary))),
+                      DropdownMenuItem(value: 'prefer_ipv6', child: Text('优先 IPv6 (prefer_ipv6)', style: TextStyle(color: textPrimary))),
+                      DropdownMenuItem(value: 'ipv4_only', child: Text('仅 IPv4 (ipv4_only)', style: TextStyle(color: textPrimary))),
+                      DropdownMenuItem(value: 'ipv6_only', child: Text('仅 IPv6 (ipv6_only)', style: TextStyle(color: textPrimary))),
                     ],
                     onChanged: (val) {
                       if (val != null) {
@@ -1459,14 +1468,14 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                 const Text('DNS 上游解析服务器 (Servers):', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF818CF8))),
                 const SizedBox(height: 8),
                 if (servers.isEmpty)
-                  const Text('暂无 DNS 服务器配置', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)))
+                  Text('暂无 DNS 服务器配置', style: TextStyle(fontSize: 12, color: textSecondary))
                 else
                   ...servers.map((s) => _buildDnsServerCard(s)),
                 const SizedBox(height: 20),
                 const Text('DNS 分流规则 (Rules):', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF818CF8))),
                 const SizedBox(height: 8),
                 if (rules.isEmpty)
-                  const Text('暂无 DNS 分流规则', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)))
+                  Text('暂无 DNS 分流规则', style: TextStyle(fontSize: 12, color: textSecondary))
                 else
                   ...rules.map((r) => _buildDnsRuleCard(r)),
               ],
@@ -1486,9 +1495,9 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: cardBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: borderCol),
       ),
       child: Row(
         children: [
@@ -1503,9 +1512,9 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(address, style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Color(0xFFF8FAFC))),
+            child: Text(address, style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: textPrimary)),
           ),
-          Text('出站通道: $detour', style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8))),
+          Text('出站通道: $detour', style: TextStyle(fontSize: 11.5, color: textSecondary)),
           IconButton(
             icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFF43F5E)),
             onPressed: () {
@@ -1528,9 +1537,9 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: cardBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: borderCol),
       ),
       child: Row(
         children: [
@@ -1631,27 +1640,27 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: cardBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: borderCol),
             ),
             child: Column(
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('日志等级 (Level):', style: TextStyle(fontSize: 13)),
+                    Text('日志等级 (Level):', style: TextStyle(fontSize: 13, color: textPrimary)),
                     DropdownButton<String>(
                       value: (log['level'] ?? 'info').toString(),
-                      dropdownColor: const Color(0xFF0F172A),
+                      dropdownColor: cardBg,
                       underline: const SizedBox(),
-                      items: const [
-                        DropdownMenuItem(value: 'trace', child: Text('Trace (最详尽)')),
-                        DropdownMenuItem(value: 'debug', child: Text('Debug (调试)')),
-                        DropdownMenuItem(value: 'info', child: Text('Info (标准信息)')),
-                        DropdownMenuItem(value: 'warn', child: Text('Warn (警告)')),
-                        DropdownMenuItem(value: 'error', child: Text('Error (仅错误)')),
-                        DropdownMenuItem(value: 'fatal', child: Text('Fatal (严重致命)')),
+                      items: [
+                        DropdownMenuItem(value: 'trace', child: Text('Trace (最详尽)', style: TextStyle(color: textPrimary))),
+                        DropdownMenuItem(value: 'debug', child: Text('Debug (调试)', style: TextStyle(color: textPrimary))),
+                        DropdownMenuItem(value: 'info', child: Text('Info (标准信息)', style: TextStyle(color: textPrimary))),
+                        DropdownMenuItem(value: 'warn', child: Text('Warn (警告)', style: TextStyle(color: textPrimary))),
+                        DropdownMenuItem(value: 'error', child: Text('Error (仅错误)', style: TextStyle(color: textPrimary))),
+                        DropdownMenuItem(value: 'fatal', child: Text('Fatal (严重致命)', style: TextStyle(color: textPrimary))),
                       ],
                       onChanged: (val) {
                         if (val != null) {
@@ -1663,11 +1672,11 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
                     ),
                   ],
                 ),
-                const Divider(color: Color(0xFF1E293B)),
+                Divider(color: borderCol),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('显示时间戳 (Timestamp):', style: TextStyle(fontSize: 13)),
+                    Text('显示时间戳 (Timestamp):', style: TextStyle(fontSize: 13, color: textPrimary)),
                     Switch(
                       value: log['timestamp'] ?? true,
                       activeTrackColor: const Color(0xFF6366F1),
@@ -1688,27 +1697,27 @@ class _VisualConfigEditorState extends State<VisualConfigEditor> with SingleTick
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: cardBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: borderCol),
             ),
             child: Column(
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('控制器监听地址 (external_controller):', style: TextStyle(fontSize: 13)),
+                    Text('控制器监听地址 (external_controller):', style: TextStyle(fontSize: 13, color: textPrimary)),
                     Text(
                       clashApi['external_controller']?.toString() ?? '127.0.0.1:9090',
                       style: const TextStyle(fontSize: 12.5, fontFamily: 'monospace', color: Color(0xFF38BDF8)),
                     ),
                   ],
                 ),
-                const Divider(color: Color(0xFF1E293B)),
+                Divider(color: borderCol),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('默认运行模式 (default_mode):', style: TextStyle(fontSize: 13)),
+                    Text('默认运行模式 (default_mode):', style: TextStyle(fontSize: 13, color: textPrimary)),
                     Text(
                       clashApi['default_mode']?.toString() ?? 'Rule',
                       style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),

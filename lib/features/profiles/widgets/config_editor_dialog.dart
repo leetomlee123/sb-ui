@@ -4,7 +4,6 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../app/theme.dart';
 import '../../../core/engine/default_config_template.dart';
 import '../../../core/engine/profile_parser.dart';
 import '../../../core/i18n/translations.dart';
@@ -31,12 +30,21 @@ class JsonCodeSyntaxController extends TextEditingController {
     required bool withComposing,
   }) {
     final text = this.text;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final defaultTextColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+    final punctuationColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    final keyColor = isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7);
+    final stringColor = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
+    final numberColor = isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+    final keywordColor = isDark ? const Color(0xFFC084FC) : const Color(0xFF7C3AED);
+    final commentColor = isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8);
+
     final baseStyle = style ??
-        const TextStyle(
+        TextStyle(
           fontFamily: 'monospace',
           fontSize: 13.0,
           height: 1.5,
-          color: Color(0xFFF8FAFC),
+          color: defaultTextColor,
         );
 
     if (text.isEmpty) {
@@ -55,7 +63,7 @@ class JsonCodeSyntaxController extends TextEditingController {
       if (match.start > lastEnd) {
         spans.add(TextSpan(
           text: text.substring(lastEnd, match.start),
-          style: baseStyle.copyWith(color: const Color(0xFF94A3B8)), // Punctuation & symbols
+          style: baseStyle.copyWith(color: punctuationColor), // Punctuation & symbols
         ));
       }
 
@@ -69,7 +77,7 @@ class JsonCodeSyntaxController extends TextEditingController {
         spans.add(TextSpan(
           text: key,
           style: baseStyle.copyWith(
-            color: const Color(0xFF38BDF8), // Cyan / Sky blue for keys
+            color: keyColor, // Cyan / Sky blue for keys
             fontWeight: FontWeight.w600,
           ),
         ));
@@ -77,21 +85,21 @@ class JsonCodeSyntaxController extends TextEditingController {
         spans.add(TextSpan(
           text: string,
           style: baseStyle.copyWith(
-            color: const Color(0xFF34D399), // Emerald green for string values
+            color: stringColor, // Emerald green for string values
           ),
         ));
       } else if (number != null) {
         spans.add(TextSpan(
           text: number,
           style: baseStyle.copyWith(
-            color: const Color(0xFFFBBF24), // Amber gold for numbers/ports
+            color: numberColor, // Amber gold for numbers/ports
           ),
         ));
       } else if (keyword != null) {
         spans.add(TextSpan(
           text: keyword,
           style: baseStyle.copyWith(
-            color: const Color(0xFFC084FC), // Violet purple for true/false/null
+            color: keywordColor, // Violet purple for true/false/null
             fontWeight: FontWeight.bold,
           ),
         ));
@@ -99,7 +107,7 @@ class JsonCodeSyntaxController extends TextEditingController {
         spans.add(TextSpan(
           text: comment,
           style: baseStyle.copyWith(
-            color: const Color(0xFF64748B), // Slate muted for comments
+            color: commentColor, // Slate muted for comments
             fontStyle: FontStyle.italic,
           ),
         ));
@@ -110,7 +118,7 @@ class JsonCodeSyntaxController extends TextEditingController {
     if (lastEnd < text.length) {
       spans.add(TextSpan(
         text: text.substring(lastEnd),
-        style: baseStyle.copyWith(color: const Color(0xFF94A3B8)),
+        style: baseStyle.copyWith(color: punctuationColor),
       ));
     }
 
@@ -622,83 +630,71 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   @override
   Widget build(BuildContext context) {
     final tr = ref.watch(translationsProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dialogBg = isDark ? const Color(0xFF080C16) : Colors.white;
+    final outerBorderColor = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+
     final screenSize = MediaQuery.of(context).size;
     final dialogWidth = _isMaximized ? screenSize.width : min(1080.0, screenSize.width * 0.92);
     final dialogHeight = _isMaximized ? screenSize.height : min(760.0, screenSize.height * 0.88);
 
-    return Theme(
-      data: AppTheme.darkTheme.copyWith(
-        dialogTheme: DialogThemeData(
-          backgroundColor: const Color(0xFF080C16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(_isMaximized ? 0 : 16),
-            side: const BorderSide(color: Color(0xFF334155), width: 1),
-          ),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true): _saveConfig,
+        const SingleActivator(LogicalKeyboardKey.keyS, meta: true): _saveConfig,
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true): _toggleSearch,
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): _toggleSearch,
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true, shift: true): _formatJson,
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true, shift: true): _formatJson,
+      },
+      child: Dialog(
+        insetPadding: _isMaximized ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(_isMaximized ? 0 : 16),
         ),
-        inputDecorationTheme: const InputDecorationTheme(
-          filled: false,
-          fillColor: Colors.transparent,
-          border: InputBorder.none,
-        ),
-      ),
-      child: CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.keyS, control: true): _saveConfig,
-          const SingleActivator(LogicalKeyboardKey.keyS, meta: true): _saveConfig,
-          const SingleActivator(LogicalKeyboardKey.keyF, control: true): _toggleSearch,
-          const SingleActivator(LogicalKeyboardKey.keyF, meta: true): _toggleSearch,
-          const SingleActivator(LogicalKeyboardKey.keyF, control: true, shift: true): _formatJson,
-          const SingleActivator(LogicalKeyboardKey.keyF, meta: true, shift: true): _formatJson,
-        },
-        child: Dialog(
-          insetPadding: _isMaximized ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          shape: RoundedRectangleBorder(
+        backgroundColor: dialogBg,
+        child: Container(
+          width: dialogWidth,
+          height: dialogHeight,
+          decoration: BoxDecoration(
+            color: dialogBg,
             borderRadius: BorderRadius.circular(_isMaximized ? 0 : 16),
+            border: Border.all(color: outerBorderColor, width: 1),
           ),
-          backgroundColor: const Color(0xFF080C16),
-          child: Container(
-            width: dialogWidth,
-            height: dialogHeight,
-            decoration: BoxDecoration(
-              color: const Color(0xFF080C16),
-              borderRadius: BorderRadius.circular(_isMaximized ? 0 : 16),
-              border: Border.all(color: const Color(0xFF334155), width: 1),
-            ),
-            child: Column(
-              children: [
-                // Header Toolbar
-                _buildHeader(tr),
+          child: Column(
+            children: [
+              // Header Toolbar
+              _buildHeader(tr),
 
-                // Search Bar (if activated)
-                if (_showSearch) _buildSearchBar(tr),
+              // Search Bar (if activated)
+              if (_showSearch) _buildSearchBar(tr),
 
-                // Error alert banner if syntax is invalid
-                if (_syntaxError != null) _buildSyntaxErrorBanner(tr),
+              // Error alert banner if syntax is invalid
+              if (_syntaxError != null) _buildSyntaxErrorBanner(tr),
 
-                // Main Code Editor with Line Numbers Gutter OR Visual Config Editor
-                if (_editorMode == 0 && _parsedVisualMap != null)
-                  Expanded(
-                    child: VisualConfigEditor(
-                      config: _parsedVisualMap!,
-                      onChanged: (updatedMap) {
-                        _parsedVisualMap = updatedMap;
-                        final jsonStr = const JsonEncoder.withIndent('  ').convert(updatedMap);
-                        _textCtrl.text = jsonStr;
-                        _hasUnsavedChanges = true;
-                        _validateSyntax(jsonStr);
-                        setState(() {});
-                      },
-                    ),
-                  )
-                else
-                  Expanded(
-                    child: _buildEditorBody(),
+              // Main Code Editor with Line Numbers Gutter OR Visual Config Editor
+              if (_editorMode == 0 && _parsedVisualMap != null)
+                Expanded(
+                  child: VisualConfigEditor(
+                    config: _parsedVisualMap!,
+                    onChanged: (updatedMap) {
+                      _parsedVisualMap = updatedMap;
+                      final jsonStr = const JsonEncoder.withIndent('  ').convert(updatedMap);
+                      _textCtrl.text = jsonStr;
+                      _hasUnsavedChanges = true;
+                      _validateSyntax(jsonStr);
+                      setState(() {});
+                    },
                   ),
+                )
+              else
+                Expanded(
+                  child: _buildEditorBody(),
+                ),
 
-                // Footer Status Bar
-                _buildFooter(tr),
-              ],
-            ),
+              // Footer Status Bar
+              _buildFooter(tr),
+            ],
           ),
         ),
       ),
@@ -707,12 +703,18 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
 
   Widget _buildHeader(Translations tr) {
     final hasFilePath = _effectiveFilePath != null;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final headerBg = isDark ? const Color(0xFF131B2E) : const Color(0xFFF1F5F9);
+    final borderColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0);
+    final titleColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+    final iconColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    final hoverColor = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: const BoxDecoration(
-        color: Color(0xFF131B2E),
-        border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+      decoration: BoxDecoration(
+        color: headerBg,
+        border: Border(bottom: BorderSide(color: borderColor)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -725,10 +727,10 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
               Flexible(
                 child: Text(
                   _displayTitle,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFFF8FAFC),
+                    color: titleColor,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -805,15 +807,15 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
               IconButton(
                 icon: Icon(_isMaximized ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded, size: 18),
                 tooltip: _isMaximized ? tr.restore : tr.maximize,
-                color: const Color(0xFF94A3B8),
-                hoverColor: const Color(0xFF334155),
+                color: iconColor,
+                hoverColor: hoverColor,
                 onPressed: () => setState(() => _isMaximized = !_isMaximized),
               ),
               IconButton(
                 icon: const Icon(Icons.close_rounded, size: 18),
                 tooltip: tr.close,
-                color: const Color(0xFF94A3B8),
-                hoverColor: const Color(0xFF334155),
+                color: iconColor,
+                hoverColor: hoverColor,
                 onPressed: () => Navigator.pop(context),
               ),
             ],
@@ -877,42 +879,42 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
               IconButton(
                 icon: const Icon(Icons.add_circle_outline_rounded, size: 17),
                 tooltip: '载入标准模板',
-                color: const Color(0xFF94A3B8),
-                hoverColor: const Color(0xFF334155),
+                color: iconColor,
+                hoverColor: hoverColor,
                 onPressed: _loadStandardTemplate,
               ),
               IconButton(
                 icon: const Icon(Icons.format_indent_increase_rounded, size: 17),
                 tooltip: '${tr.formatJson} (Ctrl+Shift+F)',
-                color: const Color(0xFF94A3B8),
-                hoverColor: const Color(0xFF334155),
+                color: iconColor,
+                hoverColor: hoverColor,
                 onPressed: _formatJson,
               ),
               IconButton(
                 icon: const Icon(Icons.compress_rounded, size: 17),
                 tooltip: tr.minifyJson,
-                color: const Color(0xFF94A3B8),
-                hoverColor: const Color(0xFF334155),
+                color: iconColor,
+                hoverColor: hoverColor,
                 onPressed: _minifyJson,
               ),
               IconButton(
-                icon: Icon(Icons.search_rounded, size: 17, color: _showSearch ? const Color(0xFF818CF8) : const Color(0xFF94A3B8)),
+                icon: Icon(Icons.search_rounded, size: 17, color: _showSearch ? const Color(0xFF818CF8) : iconColor),
                 tooltip: '${tr.findText} (Ctrl+F)',
-                hoverColor: const Color(0xFF334155),
+                hoverColor: hoverColor,
                 onPressed: _toggleSearch,
               ),
               IconButton(
-                icon: Icon(Icons.wrap_text_rounded, size: 17, color: _wordWrap ? const Color(0xFF818CF8) : const Color(0xFF94A3B8)),
+                icon: Icon(Icons.wrap_text_rounded, size: 17, color: _wordWrap ? const Color(0xFF818CF8) : iconColor),
                 tooltip: tr.wordWrap,
-                hoverColor: const Color(0xFF334155),
+                hoverColor: hoverColor,
                 onPressed: () => setState(() => _wordWrap = !_wordWrap),
               ),
               if (hasFilePath)
                 IconButton(
                   icon: const Icon(Icons.file_open_outlined, size: 17),
                   tooltip: tr.reloadFromFile,
-                  color: const Color(0xFF94A3B8),
-                  hoverColor: const Color(0xFF334155),
+                  color: iconColor,
+                  hoverColor: hoverColor,
                   onPressed: _reloadFromDisk,
                 ),
             ],
@@ -923,11 +925,18 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   }
 
   Widget _buildSearchBar(Translations tr) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final searchBarBg = isDark ? const Color(0xFF0D1322) : const Color(0xFFF8FAFC);
+    final borderColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0);
+    final inputFill = isDark ? const Color(0xFF080C16) : Colors.white;
+    final textColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+    final iconColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+      decoration: BoxDecoration(
+        color: searchBarBg,
+        border: Border(bottom: BorderSide(color: borderColor)),
       ),
       child: Row(
         children: [
@@ -937,17 +946,17 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
             child: TextField(
               controller: _searchCtrl,
               focusNode: _searchFocusNode,
-              style: const TextStyle(fontSize: 13, color: Color(0xFFF8FAFC)),
+              style: TextStyle(fontSize: 13, color: textColor),
               decoration: InputDecoration(
                 hintText: '${tr.findText}...',
                 hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
                 isDense: true,
                 filled: true,
-                fillColor: const Color(0xFF080C16),
+                fillColor: inputFill,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),
-                  borderSide: const BorderSide(color: Color(0xFF334155)),
+                  borderSide: BorderSide(color: borderColor),
                 ),
               ),
               onSubmitted: (_) => _nextMatch(),
@@ -958,7 +967,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
                 '${_currentMatchIndex + 1} / ${_matches.length}',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8), fontFamily: 'monospace'),
+                style: TextStyle(fontSize: 12, color: iconColor, fontFamily: 'monospace'),
               ),
             )
           else if (_searchCtrl.text.isNotEmpty)
@@ -972,19 +981,19 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
           IconButton(
             icon: const Icon(Icons.arrow_upward_rounded, size: 16),
             tooltip: tr.findPrevious,
-            color: const Color(0xFF94A3B8),
+            color: iconColor,
             onPressed: _prevMatch,
           ),
           IconButton(
             icon: const Icon(Icons.arrow_downward_rounded, size: 16),
             tooltip: tr.findNext,
-            color: const Color(0xFF94A3B8),
+            color: iconColor,
             onPressed: _nextMatch,
           ),
           IconButton(
             icon: const Icon(Icons.close_rounded, size: 16),
             tooltip: tr.close,
-            color: const Color(0xFF94A3B8),
+            color: iconColor,
             onPressed: _toggleSearch,
           ),
         ],
@@ -1023,15 +1032,20 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   }
 
   Widget _buildEditorBody() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final editorBg = isDark ? const Color(0xFF080C16) : Colors.white;
+    final gutterBg = isDark ? const Color(0xFF0B101E) : const Color(0xFFF8FAFC);
+    final codeTextColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+
     return Container(
-      color: const Color(0xFF080C16),
+      color: editorBg,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Gutter: Line numbers
           Container(
             width: 56,
-            color: const Color(0xFF0B101E),
+            color: gutterBg,
             child: ListView.builder(
               controller: _gutterCtrl,
               physics: const NeverScrollableScrollPhysics(),
@@ -1042,7 +1056,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
                 final isCurrent = lineNum == _cursorLine;
                 final isError = lineNum == _syntaxErrorLine;
 
-                Color numColor = const Color(0xFF475569);
+                Color numColor = isDark ? const Color(0xFF475569) : const Color(0xFF94A3B8);
                 if (isError) {
                   numColor = const Color(0xFFF43F5E);
                 } else if (isCurrent) {
@@ -1055,7 +1069,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
                     padding: const EdgeInsets.only(right: 12),
                     alignment: Alignment.centerRight,
                     color: isCurrent
-                        ? const Color(0xFF1E293B).withValues(alpha: 0.3)
+                        ? (isDark ? const Color(0xFF1E293B).withValues(alpha: 0.3) : const Color(0xFFCBD5E1).withValues(alpha: 0.4))
                         : (isError ? const Color(0xFFF43F5E).withValues(alpha: 0.15) : null),
                     child: Text(
                       '$lineNum',
@@ -1085,17 +1099,17 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
                       focusNode: _editorFocusNode,
                       maxLines: null,
                       keyboardType: TextInputType.multiline,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'monospace',
                         fontSize: _fontSize,
                         height: _lineHeightFactor,
-                        color: Color(0xFFF8FAFC),
+                        color: codeTextColor,
                       ),
                       cursorColor: const Color(0xFF818CF8),
                       cursorWidth: 2.0,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         filled: true,
-                        fillColor: Color(0xFF080C16),
+                        fillColor: editorBg,
                         border: InputBorder.none,
                         isDense: true,
                         contentPadding: EdgeInsets.zero,
@@ -1114,17 +1128,17 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
                           focusNode: _editorFocusNode,
                           maxLines: null,
                           keyboardType: TextInputType.multiline,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'monospace',
                             fontSize: _fontSize,
                             height: _lineHeightFactor,
-                            color: Color(0xFFF8FAFC),
+                            color: codeTextColor,
                           ),
                           cursorColor: const Color(0xFF818CF8),
                           cursorWidth: 2.0,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             filled: true,
-                            fillColor: Color(0xFF080C16),
+                            fillColor: editorBg,
                             border: InputBorder.none,
                             isDense: true,
                             contentPadding: EdgeInsets.zero,
@@ -1142,12 +1156,16 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
   Widget _buildFooter(Translations tr) {
     final fileSizeKb = (_textCtrl.text.length / 1024).toStringAsFixed(1);
     final path = _effectiveFilePath;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final footerBg = isDark ? const Color(0xFF131B2E) : const Color(0xFFF1F5F9);
+    final borderColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0);
+    final textMuted = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      decoration: const BoxDecoration(
-        color: Color(0xFF131B2E),
-        border: Border(top: BorderSide(color: Color(0xFF1E293B))),
+      decoration: BoxDecoration(
+        color: footerBg,
+        border: Border(top: BorderSide(color: borderColor)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1158,9 +1176,9 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  _buildStatusChip('行: $_cursorLine, 列: $_cursorCol'),
+                  _buildStatusChip('行: $_cursorLine, 列: $_cursorCol', textMuted),
                   const SizedBox(width: 14),
-                  _buildStatusChip('$_lineCount 行 | ${_textCtrl.text.length} 字符 | $fileSizeKb KB'),
+                  _buildStatusChip('$_lineCount 行 | ${_textCtrl.text.length} 字符 | $fileSizeKb KB', textMuted),
                   if (path != null) ...[
                     const SizedBox(width: 16),
                     Row(
@@ -1176,7 +1194,7 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
                         const SizedBox(width: 4),
                         Text(
                           '${tr.syncToFile} ($path)',
-                          style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                          style: TextStyle(fontSize: 11, color: textMuted),
                         ),
                       ],
                     ),
@@ -1212,13 +1230,13 @@ class _ConfigEditorDialogState extends ConsumerState<ConfigEditorDialog> {
     );
   }
 
-  Widget _buildStatusChip(String text) {
+  Widget _buildStatusChip(String text, Color color) {
     return Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11,
         fontFamily: 'monospace',
-        color: Color(0xFF94A3B8),
+        color: color,
       ),
     );
   }

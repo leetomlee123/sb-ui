@@ -63,14 +63,18 @@ class _NetworkInterfaceSelectorState extends State<NetworkInterfaceSelector> {
   Widget build(BuildContext context) {
     final currentText = widget.controller.text.trim();
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryTextColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+    final mutedTextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+
     if (_isLoading) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        child: const Row(
+        child: Row(
           children: [
-            SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-            SizedBox(width: 10),
-            Text('正在自动扫描本机网卡与 Wi-Fi 接口...', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+            const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: 10),
+            Text('正在自动扫描本机网卡与 Wi-Fi 接口...', style: TextStyle(fontSize: 12, color: mutedTextColor)),
           ],
         ),
       );
@@ -156,7 +160,7 @@ class _NetworkInterfaceSelectorState extends State<NetworkInterfaceSelector> {
                               overflow: TextOverflow.ellipsis,
                               text: TextSpan(
                                 text: iface.name,
-                                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFFF8FAFC)),
+                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: primaryTextColor),
                                 children: [
                                   TextSpan(
                                     text: ' [$typeLabel${iface.primaryIp.isNotEmpty ? ' • ${iface.primaryIp}' : ''}]',
