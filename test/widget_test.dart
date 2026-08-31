@@ -18,6 +18,7 @@ import 'package:singular/core/utils/proxy_flag_helper.dart';
 import 'package:singular/core/engine/mixin_engine.dart';
 import 'package:singular/core/engine/script_engine.dart';
 import 'package:singular/core/engine/singbox_config_validator.dart';
+import 'package:singular/core/providers/core_updater_provider.dart';
 import 'package:singular/features/mixin/mixin_script_dialog.dart';
 import 'package:singular/features/profiles/widgets/config_editor_dialog.dart';
 import 'package:singular/features/profiles/widgets/network_interface_selector.dart';
@@ -1329,6 +1330,27 @@ function main(config, profileName) {
     // Close report dialog
     await tester.tap(find.text('知道了'));
     await tester.pumpAndSettle();
+  });
+
+  test('CoreUpdaterState correctly identifies busy states and copyWith updates', () {
+    final defaultState = CoreUpdaterState();
+    expect(defaultState.status, UpdateStatus.idle);
+    expect(defaultState.isBusy, isFalse);
+    expect(defaultState.hasUpdate, isFalse);
+
+    final downloadingState = defaultState.copyWith(
+      status: UpdateStatus.downloading,
+      progress: 0.5,
+      statusMessage: 'Downloading: 10.0 MB / 20.0 MB',
+    );
+    expect(downloadingState.isBusy, isTrue);
+    expect(downloadingState.progress, 0.5);
+
+    final installingState = defaultState.copyWith(
+      status: UpdateStatus.installing,
+      statusMessage: 'Installing binary...',
+    );
+    expect(installingState.isBusy, isTrue);
   });
 }
 

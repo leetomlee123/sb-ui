@@ -109,6 +109,7 @@ class CoreUpdaterService {
   Future<String> downloadAndInstall({
     required String downloadUrl,
     required void Function(double progress, String status) onProgress,
+    Future<void> Function()? onBeforeInstall,
   }) async {
     onProgress(0.05, 'Connecting to download server...');
 
@@ -128,7 +129,7 @@ class CoreUpdaterService {
       throw Exception('Downloaded binary archive is empty.');
     }
 
-    onProgress(0.90, 'Extracting core executable...');
+    onProgress(0.88, 'Extracting core executable...');
 
     // Extract sing-box binary from downloaded archive
     List<int>? extractedBinaryBytes;
@@ -157,24 +158,59 @@ class CoreUpdaterService {
       throw Exception('Could not locate $binaryName inside the release archive.');
     }
 
-    onProgress(0.95, 'Installing binary...');
+    onProgress(0.92, 'Preparing to install binary...');
 
     // Determine target location (prefer application data/core directory or ./config)
     final exeDir = File(Platform.resolvedExecutable).parent.path;
     final primaryTargetDir = Directory(p.join(exeDir, 'data', 'core'));
 
     String targetFilePath;
-    try {
-      if (!await primaryTargetDir.exists()) {
-        await primaryTargetDir.create(recursive: true);
-      }
+    if (await primaryTargetDir.exists()) {
       targetFilePath = p.join(primaryTargetDir.path, binaryName);
-      await File(targetFilePath).writeAsBytes(extractedBinaryBytes);
+    } else {
+      try {
+        await primaryTargetDir.create(recursive: true);
+        targetFilePath = p.join(primaryTargetDir.path, binaryName);
+      } catch (_) {
+        final configDir = await StorageService.getAppConfigDir();
+        targetFilePath = p.join(configDir.path, binaryName);
+      }
+    }
+
+    // Write to a temporary file first so that the running core is unaffected during download and write
+    final tempFilePath = '$targetFilePath.tmp_${DateTime.now().millisecondsSinceEpoch}';
+    final tempFile = File(tempFilePath);
+    await tempFile.writeAsBytes(extractedBinaryBytes);
+
+    // Call onBeforeInstall hook (e.g. stop core right before replacing the file)
+    onProgress(0.96, 'Applying new core binary...');
+    if (onBeforeInstall != null) {
+      await onBeforeInstall();
+    }
+
+    // Replace target binary
+    final targetFile = File(targetFilePath);
+    try {
+      if (await targetFile.exists()) {
+        try {
+          await targetFile.delete();
+        } catch (_) {
+          // On Windows if still locked or in use, rename old file to .old
+          final oldBackupPath = '$targetFilePath.old_${DateTime.now().millisecondsSinceEpoch}';
+          try {
+            await targetFile.rename(oldBackupPath);
+          } catch (_) {}
+        }
+      }
+      await tempFile.rename(targetFilePath);
     } catch (_) {
-      // Fallback to app config dir
-      final configDir = await StorageService.getAppConfigDir();
-      targetFilePath = p.join(configDir.path, binaryName);
-      await File(targetFilePath).writeAsBytes(extractedBinaryBytes);
+      // If rename fails, try direct byte copy
+      await targetFile.writeAsBytes(extractedBinaryBytes);
+      if (await tempFile.exists()) {
+        try {
+          await tempFile.delete();
+        } catch (_) {}
+      }
     }
 
     // Set executable permission on Unix

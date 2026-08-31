@@ -130,19 +130,22 @@ class CoreUpdaterNotifier extends StateNotifier<CoreUpdaterState> {
     final wasRunning = _ref.read(coreProvider).isRunning;
 
     try {
-      // Temporarily stop core if running to release binary lock
-      if (wasRunning) {
-        await coreNotifier.stopCore();
-      }
-
+      // NOTE: Do NOT stop core during download so that network/proxy continues to run smoothly!
       await _updaterService.downloadAndInstall(
         downloadUrl: release.downloadUrl,
         onProgress: (progress, status) {
           state = state.copyWith(
             progress: progress,
             statusMessage: status,
-            status: progress >= 0.90 ? UpdateStatus.installing : UpdateStatus.downloading,
+            status: progress >= 0.92 ? UpdateStatus.installing : UpdateStatus.downloading,
           );
+        },
+        onBeforeInstall: () async {
+          // Stop core ONLY right before replacing the binary file
+          if (wasRunning) {
+            state = state.copyWith(statusMessage: 'Applying update: stopping core temporarily...');
+            await coreNotifier.stopCore();
+          }
         },
       );
 
@@ -154,6 +157,7 @@ class CoreUpdaterNotifier extends StateNotifier<CoreUpdaterState> {
 
       // Restart core if it was running previously
       if (wasRunning) {
+        state = state.copyWith(statusMessage: 'Restarting sing-box core with new version...');
         await coreNotifier.startCore();
       }
 
@@ -163,7 +167,8 @@ class CoreUpdaterNotifier extends StateNotifier<CoreUpdaterState> {
         status: UpdateStatus.error,
         errorMessage: 'Update failed: $e',
       );
-      if (wasRunning) {
+      // If core was stopped right before install failure, resume it
+      if (wasRunning && !_ref.read(coreProvider).isRunning) {
         await coreNotifier.startCore();
       }
       return false;
