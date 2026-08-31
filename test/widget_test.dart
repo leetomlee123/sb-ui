@@ -17,6 +17,7 @@ import 'package:singular/core/services/storage_service.dart';
 import 'package:singular/core/utils/proxy_flag_helper.dart';
 import 'package:singular/core/engine/mixin_engine.dart';
 import 'package:singular/core/engine/script_engine.dart';
+import 'package:singular/core/engine/singbox_config_validator.dart';
 import 'package:singular/features/mixin/mixin_script_dialog.dart';
 import 'package:singular/features/profiles/widgets/config_editor_dialog.dart';
 import 'package:singular/features/profiles/widgets/network_interface_selector.dart';
@@ -1142,6 +1143,140 @@ function main(config, profileName) {
     // Verify logs and generated JSON rendered
     expect(find.textContaining('准备测试基底配置'), findsOneWidget);
   });
+
+  test('SingboxConfigValidator static and semantic validation test suite', () {
+    // 1. Valid standard config
+    const validConfig = '''{
+      "log": {"level": "info"},
+      "outbounds": [
+        {"type": "direct", "tag": "direct"},
+        {"type": "shadowsocks", "tag": "HK-Node", "server": "1.2.3.4", "server_port": 8388, "method": "aes-128-gcm", "password": "pwd"}
+      ],
+      "route": {
+        "final": "direct",
+        "rules": [
+          {"domain_suffix": [".cn"], "outbound": "direct"}
+        ]
+      }
+    }''';
+    final resValid = SingboxConfigValidator.lint(validConfig);
+    expect(resValid.isValid, isTrue);
+    expect(resValid.errors, isEmpty);
+
+    // 2. Syntax error (broken JSON)
+    const brokenJson = '{"outbounds": [}';
+    final resSyntax = SingboxConfigValidator.lint(brokenJson);
+    expect(resSyntax.isValid, isFalse);
+    expect(resSyntax.errors.isNotEmpty, isTrue);
+    expect(resSyntax.errors.first.line, isNotNull);
+
+    // 3. Duplicate outbound tags
+    const dupTags = '''{
+      "outbounds": [
+        {"type": "direct", "tag": "proxy"},
+        {"type": "direct", "tag": "proxy"}
+      ]
+    }''';
+    final resDup = SingboxConfigValidator.lint(dupTags);
+    expect(resDup.isValid, isFalse);
+    expect(resDup.errors.any((e) => e.message.contains('重复的出站标签')), isTrue);
+
+    // 4. Missing referenced outbound in selector group
+    const missingRef = '''{
+      "outbounds": [
+        {"type": "direct", "tag": "direct"},
+        {"type": "selector", "tag": "ProxyGroup", "outbounds": ["NonExistentNode"]}
+      ]
+    }''';
+    final resRef = SingboxConfigValidator.lint(missingRef);
+    expect(resRef.isValid, isFalse);
+    expect(resRef.errors.any((e) => e.message.contains('NonExistentNode')), isTrue);
+
+    // 5. Invalid port number (>65535)
+    const invalidPort = '''{
+      "outbounds": [
+        {"type": "shadowsocks", "tag": "node", "server": "1.1.1.1", "server_port": 99999, "method": "aes-128-gcm", "password": "p"}
+      ]
+    }''';
+    final resPort = SingboxConfigValidator.lint(invalidPort);
+    expect(resPort.isValid, isFalse);
+    expect(resPort.errors.any((e) => e.message.contains('端口无效')), isTrue);
+
+    // 6. Non-existent route.final
+    const invalidRouteFinal = '''{
+      "outbounds": [
+        {"type": "direct", "tag": "direct"}
+      ],
+      "route": {
+        "final": "missing-outbound"
+      }
+    }''';
+    final resFinal = SingboxConfigValidator.lint(invalidRouteFinal);
+    expect(resFinal.isValid, isFalse);
+    expect(resFinal.errors.any((e) => e.message.contains('route.final')), isTrue);
+  });
+
+  testWidgets('ConfigEditorDialog displays real-time validation badge and deep validate modal', (tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final storage = StorageService(prefs);
+
+    final profile = Profile(
+      id: 'test-validate',
+      name: 'Validation Test Profile',
+      type: ProfileType.local,
+      filePath: '/dummy/validate.json',
+      updatedAt: DateTime.now(),
+      rawConfig: '''{
+        "log": {"level": "info"},
+        "outbounds": [
+          {"type": "direct", "tag": "direct"}
+        ]
+      }''',
+      nodeCount: 1,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          storageServiceProvider.overrideWithValue(storage),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: ConfigEditorDialog(profile: profile),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify live validation chip is rendered in footer
+    expect(find.text('配置结构完整，校验通过'), findsOneWidget);
+
+    // Switch to JSON code mode
+    await tester.tap(find.text('JSON 源码'));
+    await tester.pumpAndSettle();
+
+    // Verify deep validate button exists in toolbar
+    expect(find.byIcon(Icons.fact_check_rounded), findsOneWidget);
+
+    // Tap live validation chip in footer to open validation report dialog
+    await tester.tap(find.text('配置结构完整，校验通过'));
+    await tester.pumpAndSettle();
+
+    // Verify validation report dialog is displayed
+    expect(find.text('配置校验通过'), findsOneWidget);
+    expect(find.text('知道了'), findsOneWidget);
+
+    // Close report dialog
+    await tester.tap(find.text('知道了'));
+    await tester.pumpAndSettle();
+  });
 }
+
 
 
