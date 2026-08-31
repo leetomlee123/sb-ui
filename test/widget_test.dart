@@ -1214,6 +1214,60 @@ function main(config, profileName) {
     final resFinal = SingboxConfigValidator.lint(invalidRouteFinal);
     expect(resFinal.isValid, isFalse);
     expect(resFinal.errors.any((e) => e.message.contains('route.final')), isTrue);
+
+    // 7. Array clash_mode must be flagged as error
+    const arrayClashMode = '''{
+      "outbounds": [
+        {"type": "direct", "tag": "direct"}
+      ],
+      "route": {
+        "rules": [
+          {"clash_mode": ["Direct"], "outbound": "direct"}
+        ]
+      }
+    }''';
+    final resClashMode = SingboxConfigValidator.lint(arrayClashMode);
+    expect(resClashMode.isValid, isFalse);
+    expect(resClashMode.errors.any((e) => e.message.contains('clash_mode')), isTrue);
+  });
+
+  test('ConfigGenerator correctly preserves clash_mode as String and ip_is_private as bool in customRules', () {
+    final customRules = [
+      {'clash_mode': 'Direct', 'outbound': 'direct'},
+      {'clash_mode': 'Global', 'outbound': 'direct'},
+      {'ip_is_private': true, 'outbound': 'direct'},
+      {'domain_suffix': 'google.com', 'outbound': 'direct'},
+      {'domain_suffix': 'youtube.com', 'outbound': 'direct'},
+    ];
+
+    final generated = ConfigGenerator.generate(
+      settings: const AppSettings(),
+      parsedOutbounds: [
+        {'type': 'direct', 'tag': 'direct'},
+      ],
+      customRules: customRules,
+    );
+
+    final routeRules = generated['route']['rules'] as List;
+
+    // Verify clash_mode rules are strings, NOT arrays
+    final clashModeRules = routeRules.where((r) => r['clash_mode'] != null).toList();
+    expect(clashModeRules.isNotEmpty, isTrue);
+    for (final r in clashModeRules) {
+      expect(r['clash_mode'], isA<String>());
+    }
+
+    // Verify ip_is_private is boolean, NOT array
+    final ipPrivateRules = routeRules.where((r) => r['ip_is_private'] != null).toList();
+    expect(ipPrivateRules.isNotEmpty, isTrue);
+    for (final r in ipPrivateRules) {
+      expect(r['ip_is_private'], isA<bool>());
+    }
+
+    // Verify domain_suffix rules were merged
+    final domainSuffixRules = routeRules.where((r) => r['domain_suffix'] != null).toList();
+    expect(domainSuffixRules.isNotEmpty, isTrue);
+    expect(domainSuffixRules.first['domain_suffix'], containsAll(['google.com', 'youtube.com']));
   });
 
   testWidgets('ConfigEditorDialog displays real-time validation badge and deep validate modal', (tester) async {

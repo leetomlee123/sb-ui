@@ -409,6 +409,32 @@ class SingboxConfigValidator {
               ));
             }
           }
+
+          if (rule.containsKey('clash_mode')) {
+            final cm = rule['clash_mode'];
+            if (cm is List) {
+              issues.add(ConfigIssue(
+                severity: ConfigIssueSeverity.error,
+                message: '路由规则 `route.rules[$r]` 中的 `clash_mode` 必须是字符串 (如 "Direct" 或 "Global")，不能是数组列表',
+                suggestion: '将 ["${cm.isNotEmpty ? cm.first : "Direct"}"] 修改为 "${cm.isNotEmpty ? cm.first : "Direct"}"',
+              ));
+            } else if (cm is! String) {
+              issues.add(ConfigIssue(
+                severity: ConfigIssueSeverity.error,
+                message: '路由规则 `route.rules[$r]` 中的 `clash_mode` 必须是字符串类型',
+              ));
+            }
+          }
+
+          if (rule.containsKey('ip_is_private')) {
+            final priv = rule['ip_is_private'];
+            if (priv is! bool) {
+              issues.add(ConfigIssue(
+                severity: ConfigIssueSeverity.error,
+                message: '路由规则 `route.rules[$r]` 中的 `ip_is_private` 必须是布尔值 (true/false)，不能是数组或字符串',
+              ));
+            }
+          }
         }
       }
     }

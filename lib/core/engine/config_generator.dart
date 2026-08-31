@@ -319,44 +319,117 @@ class ConfigGenerator {
       if (settings.dnsHijack) {'protocol': 'dns', 'action': 'hijack-dns'},
     ];
 
-    // Inject custom profile rules (e.g. Clash PROCESS-NAME, DOMAIN-SUFFIX, IP-CIDR) with highest priority
+    // Inject custom profile rules (e.g. Clash PROCESS-NAME, DOMAIN-SUFFIX, IP-CIDR, or sing-box route rules) with highest priority
     if (customRules.isNotEmpty) {
+      const mergeableListKeys = {
+        'domain',
+        'domain_suffix',
+        'domain_keyword',
+        'domain_regex',
+        'geosite',
+        'geoip',
+        'ip_cidr',
+        'source_ip_cidr',
+        'port',
+        'port_range',
+        'source_port',
+        'source_port_range',
+        'process_name',
+        'process_path',
+        'process_path_regex',
+        'package_name',
+        'rule_set',
+        'inbound',
+      };
+
       final List<Map<String, dynamic>> mergedCustomRules = [];
-      for (final rule in customRules) {
+      for (final rawRule in customRules) {
+        final rule = Map<String, dynamic>.from(rawRule);
         final target = rule['outbound']?.toString();
-        final hasCondition = rule.keys.any((k) => k != 'outbound');
-        if (target == null ||
-            !allExistingTags.contains(target) ||
-            !hasCondition) {
+        final action = rule['action']?.toString();
+
+        // Must have at least one condition or clash_mode
+        final conditionKeys = rule.keys.where((k) => k != 'outbound' && k != 'action').toList();
+        if (conditionKeys.isEmpty && rule['clash_mode'] == null && action == null) {
           continue;
         }
 
-        final matchKey = rule.keys.firstWhere((k) => k != 'outbound');
-        final matchVal = rule[matchKey];
-
-        if (mergedCustomRules.isNotEmpty &&
-            mergedCustomRules.last['outbound'] == target &&
-            mergedCustomRules.last.containsKey(matchKey)) {
-          final prevList = mergedCustomRules.last[matchKey] as List<dynamic>;
-          if (matchVal is List) {
-            for (final item in matchVal) {
-              if (!prevList.contains(item)) {
-                prevList.add(item);
-              }
-            }
-          } else if (!prevList.contains(matchVal)) {
-            prevList.add(matchVal);
+        // Validate outbound target if action is route or not specified
+        if (action == null || action == 'route') {
+          if (target != null && !allExistingTags.contains(target)) {
+            continue;
           }
-        } else {
-          final newRule = <String, dynamic>{};
-          if (matchVal is List) {
-            newRule[matchKey] = List<dynamic>.from(matchVal);
-          } else {
-            newRule[matchKey] = [matchVal];
-          }
-          newRule['outbound'] = target;
-          mergedCustomRules.add(newRule);
         }
+
+        // Fix scalar fields: clash_mode must ALWAYS be String
+        if (rule.containsKey('clash_mode')) {
+          final cm = rule['clash_mode'];
+          if (cm is List && cm.isNotEmpty) {
+            rule['clash_mode'] = cm.first.toString();
+          } else {
+            rule['clash_mode'] = cm.toString();
+          }
+        }
+
+        // Fix scalar fields: ip_is_private must ALWAYS be bool
+        if (rule.containsKey('ip_is_private')) {
+          final priv = rule['ip_is_private'];
+          if (priv is List && priv.isNotEmpty) {
+            rule['ip_is_private'] = priv.first == true || priv.first.toString().toLowerCase() == 'true';
+          } else if (priv is! bool) {
+            rule['ip_is_private'] = priv == true || priv.toString().toLowerCase() == 'true';
+          }
+        }
+
+        // Fix scalar fields: invert must ALWAYS be bool
+        if (rule.containsKey('invert')) {
+          final inv = rule['invert'];
+          if (inv is List && inv.isNotEmpty) {
+            rule['invert'] = inv.first == true || inv.first.toString().toLowerCase() == 'true';
+          } else if (inv is! bool) {
+            rule['invert'] = inv == true || inv.toString().toLowerCase() == 'true';
+          }
+        }
+
+        // If it's a single mergeable list key rule without special scalar keys
+        if (conditionKeys.length == 1 &&
+            mergeableListKeys.contains(conditionKeys.first) &&
+            !rule.containsKey('clash_mode') &&
+            !rule.containsKey('ip_is_private') &&
+            !rule.containsKey('invert')) {
+          final matchKey = conditionKeys.first;
+          final matchVal = rule[matchKey];
+
+          if (mergedCustomRules.isNotEmpty &&
+              mergedCustomRules.last['outbound'] == target &&
+              mergedCustomRules.last['action'] == action &&
+              mergedCustomRules.last.length == (action != null ? (target != null ? 3 : 2) : 2) &&
+              mergedCustomRules.last.containsKey(matchKey)) {
+            final prevList = mergedCustomRules.last[matchKey] as List<dynamic>;
+            if (matchVal is List) {
+              for (final item in matchVal) {
+                if (!prevList.contains(item)) {
+                  prevList.add(item);
+                }
+              }
+            } else if (!prevList.contains(matchVal)) {
+              prevList.add(matchVal);
+            }
+            continue;
+          } else {
+            final newRule = Map<String, dynamic>.from(rule);
+            if (matchVal is List) {
+              newRule[matchKey] = List<dynamic>.from(matchVal);
+            } else {
+              newRule[matchKey] = [matchVal];
+            }
+            mergedCustomRules.add(newRule);
+            continue;
+          }
+        }
+
+        // For all other rules (clash_mode, multi-condition, ip_is_private, etc.), add directly
+        mergedCustomRules.add(rule);
       }
       routeRules.addAll(mergedCustomRules);
     }
